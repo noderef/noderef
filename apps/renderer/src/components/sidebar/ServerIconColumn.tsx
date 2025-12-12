@@ -48,9 +48,9 @@ export function ServerIconColumn({
   const handleSelectServer = async (serverId: number) => {
     const isAlreadySelected = selectedServerId === serverId;
     onSelectServer(serverId);
-    
+
     const server = servers.find(s => s.id === serverId);
-    
+
     // If the server is already selected, navigate to the appropriate default page
     // instead of 'repo'/'dashboard' which would show NotFoundPage
     if (isAlreadySelected && server?.serverType === 'alfresco') {
@@ -77,7 +77,7 @@ export function ServerIconColumn({
         navigate('dashboard');
       }
     }
-    
+
     // Update last accessed (fire-and-forget)
     backendRpc.servers.updateLastAccessed(serverId).catch(err => {
       console.error('Failed to update last accessed:', err);

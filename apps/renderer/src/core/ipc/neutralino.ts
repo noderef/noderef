@@ -43,10 +43,10 @@ export async function ensureNeutralinoReady(): Promise<void> {
     events.on('ready', () => {
       clearTimeout(timeout);
       ready = true;
-      
+
       // Set up minimize on close behavior
       setupMinimizeOnClose();
-      
+
       resolve();
     });
 
