@@ -1,0 +1,58 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+resources/
+resources/build-meta.json
+node-src/
+bin/
+build-scripts/
+.deploy-backend/
+apps/backend/src/ai/.generated/
+*stats.html
+
+# Keep scripts/bin
+!scripts/bin/
+
+# Keep assets (source files, not build output)
+!assets/
+!assets/icons/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDEs
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Prisma / SQLite
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Encryption keys (auto-generated)
+master.key
+
+# Turbo
+.turbo/
+
+# Neutralino
+.storage/
+.tmp/
+_app_scaffolds

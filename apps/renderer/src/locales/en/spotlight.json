@@ -1,0 +1,18 @@
+{
+  "dashboard": "Dashboard",
+  "settings": "Settings",
+  "browseRepositories": "Browse repositories",
+  "browseRepositoriesDesc": "Navigate server folders and files",
+  "dashboardDesc": "Go to dashboard",
+  "settingsDesc": "Open application settings",
+  "addServerDesc": "Add a new Alfresco server",
+  "goBack": "Go back",
+  "goBackDesc": "Navigate to parent folder",
+  "folder": "Folder",
+  "fetchingContents": "Fetching contents",
+  "loadMore": "Load more…",
+  "loadMoreDesc": "Show more items from this folder",
+  "openFolder": "Open \"{{name}}\"",
+  "openFolderDesc": "Open this folder in File Browser",
+  "searchError": "Failed to load results"
+}

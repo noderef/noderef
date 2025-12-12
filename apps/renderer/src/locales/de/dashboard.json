@@ -1,0 +1,25 @@
+{
+  "activity": "Letzte Aktivität",
+  "activityDescription": "Kürzlich geöffnete Nodes, nach Tag gruppiert",
+  "noActivity": "Noch keine Aktivität",
+  "noActivityDescription": "Durchsuchen Sie Nodes, um den Verlauf im Dashboard zu füllen.",
+  "heatmap": {
+    "noActivityLegend": "Keine Aktivität",
+    "legendRange": "{{min}}-{{max}} Nodes",
+    "legendRangePlus": "{{min}}+ Nodes",
+    "tooltipCount_one": "{{count}} Node angesehen",
+    "tooltipCount_other": "{{count}} Nodes angesehen",
+    "tooltipDate": "{{date}}",
+    "jumpToDate": "Zeitleiste ab {{date}} starten"
+  },
+  "timeline": {
+    "unknownLocation": "Unbekannter Speicherort",
+    "filteredFrom": "Zeitleiste beginnt ab {{date}}",
+    "clearFilter": "Auswahl aufheben",
+    "noEntriesForSelection": "Keine Einträge am oder vor {{date}}.",
+    "tryLoadingMore": "Laden Sie mehr Verlauf oder heben Sie die Auswahl auf, um aktuelle Nodes zu sehen."
+  },
+  "errors": {
+    "activityLoadFailed": "Aktivität konnte nicht geladen werden"
+  }
+}

@@ -1,0 +1,66 @@
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+:root[data-mantine-color-scheme='light'] .icon {
+  --sidebar-icon-bg: var(--mantine-color-gray-1);
+  --sidebar-icon-color: var(--mantine-color-dark-6);
+}
+
+:root[data-mantine-color-scheme='dark'] .icon {
+  --sidebar-icon-bg: var(--mantine-color-dark-6);
+  --sidebar-icon-color: var(--mantine-color-gray-2);
+}
+
+.icon {
+  background-color: var(--sidebar-icon-bg, var(--mantine-color-gray-1));
+  color: var(--sidebar-icon-color, var(--mantine-color-dark-6));
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    transform 120ms ease;
+}
+
+.icon:hover,
+.icon[data-hovered='true'],
+.icon[data-hovered] {
+  background-color: var(--mantine-color-slate-6);
+  color: var(--mantine-color-white);
+}
+
+:root[data-mantine-color-scheme='dark'] .icon:hover,
+:root[data-mantine-color-scheme='dark'] .icon[data-hovered='true'],
+:root[data-mantine-color-scheme='dark'] .icon[data-hovered] {
+  background-color: var(--mantine-color-slate-7);
+}
+
+.icon:active,
+.icon[data-pressed='true'],
+.icon[data-pressed] {
+  background-color: var(--mantine-color-slate-7);
+  color: var(--mantine-color-white);
+}
+
+:root[data-mantine-color-scheme='dark'] .icon:active,
+:root[data-mantine-color-scheme='dark'] .icon[data-pressed='true'],
+:root[data-mantine-color-scheme='dark'] .icon[data-pressed] {
+  background-color: var(--mantine-color-slate-8);
+}
+
+.icon[data-variant='filled'] {
+  background-color: var(--mantine-color-slate-6);
+  color: var(--mantine-color-white);
+}
+
+.settingsIcon {
+  transition: transform 0.2s ease;
+}
+
+.icon:hover .settingsIcon {
+  animation: spin 1.5s linear infinite;
+}

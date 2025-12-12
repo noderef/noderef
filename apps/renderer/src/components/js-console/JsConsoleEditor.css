@@ -1,0 +1,61 @@
+/* AI Command Line - Margin Glyph (left side indicator) */
+.monaco-editor .margin-view-overlays .ai-command-glyph {
+  background: linear-gradient(90deg, rgba(14, 165, 233, 0.3), transparent) !important;
+  width: 100% !important;
+}
+
+.monaco-editor.vs-dark .margin-view-overlays .ai-command-glyph {
+  background: linear-gradient(90deg, rgba(56, 189, 248, 0.35), transparent) !important;
+}
+
+/* AI Command Line - Full-width background using beforeContentClassName */
+.monaco-editor .ai-command-background {
+  position: relative !important;
+}
+
+.monaco-editor .ai-command-background::before {
+  content: '' !important;
+  position: absolute !important;
+  left: -1000px !important;
+  right: -1000px !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  background-color: rgba(14, 165, 233, 0.12) !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+}
+
+.monaco-editor.vs-dark .ai-command-background::before {
+  background-color: rgba(56, 189, 248, 0.15) !important;
+}
+
+/* AI Command Text - Color styling */
+.monaco-editor .ai-command-text {
+  color: #0369a1 !important;
+  font-weight: 500 !important;
+}
+
+.monaco-editor.vs-dark .ai-command-text {
+  color: #7dd3fc !important;
+}
+
+/* Hide error squiggles on AI command lines */
+.monaco-editor .view-line.ai-command-line .squiggly-error,
+.monaco-editor .view-line.ai-command-line .squiggly-warning {
+  display: none !important;
+}
+
+.monaco-editor .ai-command-text .squiggly-error,
+.monaco-editor .ai-command-text .squiggly-warning {
+  display: none !important;
+}
+
+/* Spinner animation for AI loading */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,0 +1,316 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*' # e.g. v0.1.0
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  # 1) Build all binaries once on macOS
+  build-binaries:
+    runs-on: macos-14
+    env:
+      PRISMA_CLI_BINARY_TARGETS: darwin,darwin-arm64,windows,debian-openssl-3.0.x,linux-arm64-openssl-3.0.x
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up PNPM
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Prisma client
+        run: |
+          pnpm --filter @app/backend prisma:generate
+
+      - name: Prepare toolchain
+        run: |
+          pnpm install:all
+
+      - name: Ensure build scripts
+        # Downloads the external neutralino-build-scripts repository
+        run: pnpm neu:build-scripts
+
+      - name: Build installers (mac / win / linux)
+        # Neutralino cross-builds mac_*, win_*, linux_* into dist/
+        run: pnpm build:installers
+
+      - name: Upload raw dist outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-binaries
+          path: |
+            dist/
+            resources/
+          include-hidden-files: true
+          if-no-files-found: error
+
+  # 2) Package macOS DMG on macOS
+  package-mac:
+    runs-on: macos-14
+    needs: build-binaries
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download dist from build
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-binaries
+          path: .
+
+      - name: Set up PNPM
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Package mac DMG
+        run: pnpm package:mac
+
+      - name: Upload mac installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-installers
+          path: dist/installers/NodeRef-mac-*.dmg
+          if-no-files-found: error
+
+  # 3) Package Windows installer on Windows (using built win_* from mac job)
+  package-windows:
+    runs-on: windows-2022
+    needs: build-binaries
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download dist from build
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-binaries
+          path: .
+
+      - name: Set up PNPM
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install WiX Toolset
+        run: |
+          $wixUrl = "https://github.com/wixtoolset/wix3/releases/download/wix3111rtm/wix311.exe"
+          $wixInstaller = "$env:TEMP\wix311.exe"
+          Write-Host "Downloading WiX Toolset..."
+          Invoke-WebRequest -Uri $wixUrl -OutFile $wixInstaller -UseBasicParsing
+          Write-Host "Installing WiX Toolset..."
+          Start-Process -FilePath $wixInstaller -ArgumentList "/quiet", "/norestart" -Wait -NoNewWindow
+          Remove-Item -Force $wixInstaller
+          Write-Host "WiX Toolset installed successfully"
+          # Wait a moment for installation to complete
+          Start-Sleep -Seconds 3
+          # Find WiX installation path and add to PATH for subsequent steps
+          $wixPaths = @(
+            "C:\Program Files (x86)\WiX Toolset v3.11\bin",
+            "C:\Program Files\WiX Toolset v3.11\bin"
+          )
+          $wixBinPath = $null
+          foreach ($wixPath in $wixPaths) {
+            if (Test-Path "$wixPath\candle.exe") {
+              $wixBinPath = $wixPath
+              Write-Host "WiX Toolset found at: $wixBinPath"
+              break
+            }
+          }
+          if ($wixBinPath) {
+            # Add to PATH for this step and export for subsequent steps
+            $env:Path = "$wixBinPath;$env:Path"
+            Write-Host "Added WiX to PATH: $wixBinPath"
+            # Set environment variable for subsequent steps
+            echo "WIX=$wixBinPath" >> $env:GITHUB_ENV
+            echo "PATH=$wixBinPath;$env:PATH" >> $env:GITHUB_ENV
+            Write-Host "WiX Toolset verified and configured successfully"
+          } else {
+            Write-Host "Warning: WiX Toolset verification failed, but continuing. The package script will attempt to find it."
+          }
+
+      - name: Package Windows (ZIP with exe + MSI)
+        # Uses dist/win_*/NodeRef.exe to create NodeRef-win-<arch>.zip and .msi
+        run: pnpm package:win
+
+      - name: Upload Windows installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: win-installers
+          path: |
+            dist/installers/NodeRef-win-*.zip
+            dist/installers/NodeRef-win-*.msi
+          if-no-files-found: error
+
+  # 4) Package Linux installer on Ubuntu (using built linux_* from mac job)
+  package-linux:
+    runs-on: ubuntu-22.04
+    needs: build-binaries
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download dist from build
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-binaries
+          path: .
+
+      - name: Set up PNPM
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Package Linux (tar.gz + AppImage)
+        # Uses dist/linux_*/NodeRef and NodeRef.AppImage
+        run: pnpm package:linux
+
+      - name: Upload Linux installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-installers
+          path: |
+            dist/installers/NodeRef-linux-*.tar.gz
+            dist/installers/NodeRef-linux-*.AppImage
+          if-no-files-found: error
+
+  # 5) Build and push Docker image to GHCR
+  docker:
+    runs-on: ubuntu-22.04
+    env:
+      DOCKER_PLATFORMS: 'linux/amd64,linux/arm64' # change to "linux/amd64,linux/arm64" when you want multi-arch
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        if: contains(env.DOCKER_PLATFORMS, 'arm')
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ env.DOCKER_PLATFORMS }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=docker
+          cache-to: type=gha,mode=max,scope=docker
+          provenance: false
+          sbom: false
+
+  # 6) Create the GitHub Release with all installers + RELEASE_NOTES
+  release:
+    runs-on: ubuntu-22.04
+    needs:
+      - package-mac
+      - package-windows
+      - package-linux
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure RELEASE_NOTES.md exists
+        run: |
+          if [ ! -f RELEASE_NOTES.md ]; then
+            echo "# Release ${GITHUB_REF_NAME}" > RELEASE_NOTES.md
+            echo "" >> RELEASE_NOTES.md
+            echo "No custom notes provided." >> RELEASE_NOTES.md
+          fi
+
+      - name: Download mac installers
+        uses: actions/download-artifact@v4
+        with:
+          name: mac-installers
+          path: artifacts/mac
+
+      - name: Download Windows installers
+        uses: actions/download-artifact@v4
+        with:
+          name: win-installers
+          path: artifacts/win
+
+      - name: Download Linux installers
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-installers
+          path: artifacts/linux
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: RELEASE_NOTES.md
+          files: |
+            artifacts/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,22 @@
+{
+  "historyTab": "Historique",
+  "historyEmpty": "Aucun historique. Les scripts ex\u00e9cut\u00e9s appara\u00eetront ici.",
+  "historyCopyToEditor": "Copier dans l'\u00e9diteur",
+  "historyViewResult": "Voir le r\u00e9sultat",
+  "execute": "Ex\u00e9cuter",
+  "serverSelectionPrompt": "S\u00e9lectionner des serveurs",
+  "serverSelectionCount_one": "{{count}} serveur s\u00e9lectionn\u00e9",
+  "serverSelectionCount_other": "{{count}} serveurs s\u00e9lectionn\u00e9s",
+  "serverSelectionAria": "Choisir les serveurs pour l'ex\u00e9cution",
+  "generalTab": "G\u00e9n\u00e9ral",
+  "outputTab": "Sortie",
+  "serverFallback": "Serveur {{id}}",
+  "documentTooltip": "Document\u00a0: {{nodeRef}}",
+  "documentBadge": "Contexte du document",
+  "loadedScriptTooltip": "Script charg\u00e9\u00a0: {{name}}",
+  "executeHint": "Appuyez sur <shortcut>{{shortcut}}</shortcut> pour ex\u00e9cuter",
+  "aiTooltipBusy": "L'IA g\u00e9n\u00e8re du code\u2026",
+  "aiTooltipReady": "IA pr\u00eate \u2013 tapez /ai",
+  "aiTooltipUnavailable": "IA non disponible",
+  "clearConsole": "Vider la console"
+}

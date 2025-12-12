@@ -1,0 +1,88 @@
+.navbar {
+  width: 240px;
+  padding: var(--mantine-spacing-md);
+  padding-left: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--mantine-color-gray-3);
+  flex-shrink: 0;
+  height: 100%;
+  overflow-y: hidden;
+  overflow-x: hidden;
+}
+
+.navbarMain {
+  flex: 1;
+}
+
+.navbarFooter {
+  margin-top: auto;
+}
+
+.link {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
+  padding-left: var(--mantine-spacing-md);
+  border-radius: var(--mantine-radius-sm);
+  text-decoration: none;
+  color: var(--settings-link-text-color);
+  font-size: var(--mantine-font-size-sm);
+  font-weight: 500;
+  transition: background-color 100ms ease;
+  background-color: transparent;
+}
+
+.link:hover {
+  background-color: var(--settings-link-hover-bg);
+  color: var(--settings-link-text-color);
+}
+
+.link[data-active] {
+  background-color: var(--mantine-color-blue-light);
+  color: var(--mantine-color-blue-light-color);
+}
+
+.link[data-active]:hover {
+  background-color: var(--mantine-color-blue-light-hover);
+}
+
+.linkIcon {
+  width: 20px;
+  height: 20px;
+  margin-right: var(--mantine-spacing-sm);
+  flex-shrink: 0;
+}
+
+.languageCard {
+  width: 100%;
+  padding: var(--mantine-spacing-sm);
+  border-radius: var(--mantine-radius-md);
+  border: 1px solid var(--language-card-border, var(--mantine-color-gray-3));
+  background-color: var(--language-card-bg, var(--mantine-color-body));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mantine-spacing-md);
+  cursor: pointer;
+  transition: all 120ms ease;
+  color: var(--mantine-color-text);
+}
+
+.languageCard:hover {
+  border-color: var(--language-card-hover-border, var(--mantine-color-blue-6));
+}
+
+.languageCard[data-active] {
+  border: 2px solid var(--language-card-active-border, var(--mantine-color-blue-6));
+  background-color: var(--language-card-active-bg, rgba(56, 116, 255, 0.1));
+}
+
+.contentArea {
+  flex: 1;
+  padding: var(--mantine-spacing-md);
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: 100%;
+}

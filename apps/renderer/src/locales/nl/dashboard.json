@@ -1,0 +1,25 @@
+{
+  "activity": "Recente activiteit",
+  "activityDescription": "Nodes die je onlangs hebt geopend, gegroepeerd per dag",
+  "noActivity": "Nog geen activiteit",
+  "noActivityDescription": "Blader door nodes om je dashboardgeschiedenis te vullen.",
+  "heatmap": {
+    "noActivityLegend": "Geen activiteit",
+    "legendRange": "{{min}}-{{max}} nodes",
+    "legendRangePlus": "{{min}}+ nodes",
+    "tooltipCount_one": "{{count}} node bekeken",
+    "tooltipCount_other": "{{count}} nodes bekeken",
+    "tooltipDate": "{{date}}",
+    "jumpToDate": "Start tijdlijn vanaf {{date}}"
+  },
+  "timeline": {
+    "unknownLocation": "Onbekende locatie",
+    "filteredFrom": "Tijdlijn start vanaf {{date}}",
+    "clearFilter": "Selectie wissen",
+    "noEntriesForSelection": "Geen items op of v\u00f3\u00f3r {{date}}.",
+    "tryLoadingMore": "Laad meer geschiedenis of wis de selectie om recente nodes te zien."
+  },
+  "errors": {
+    "activityLoadFailed": "Kon activiteit niet laden"
+  }
+}

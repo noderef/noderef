@@ -1,0 +1,53 @@
+{
+  "name": "noderef",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "NodeRef - The desktop app every Alfresco admin deserves",
+  "scripts": {
+    "sync:meta": "node ./scripts/sync-meta.mjs",
+    "predev:app": "pnpm sync:meta && node ./scripts/bin/preflight.mjs && pnpm --filter @app/contracts build && pnpm --filter @app/backend prisma:migrate",
+    "dev:app": "pnpm predev:app && run-p --print-label dev:renderer:open dev:backend dev:neutralino:open",
+    "dev:browser": "pnpm --filter @app/contracts build && run-p --print-label dev:renderer:open dev:backend",
+    "dev:renderer": "pnpm --filter @app/renderer dev",
+    "dev:renderer:open": "pnpm --filter @app/renderer dev:open",
+    "dev:backend": "pnpm --filter @app/backend dev",
+    "dev:neutralino:open": "node -e \"setTimeout(()=>{}, 1000)\" && neu run -- --url=http://127.0.0.1:3000",
+    "build:installers": "rimraf dist/mac_* dist/win_* dist/linux_* dist/*.zip dist/*.AppImage resources/node-src/dist apps/*/dist packages/*/dist .deploy-backend 2>/dev/null || true && node ./scripts/copy-icons.js && node ./scripts/bin/build-installers.mjs",
+    "neu:build-scripts": "node ./scripts/ensure-build-scripts.js",
+    "package": "node ./scripts/package.mjs",
+    "package:mac": "node ./scripts/package.mjs --target=mac",
+    "package:win": "node ./scripts/package.mjs --target=win",
+    "package:linux": "node ./scripts/package.mjs --target=linux",
+    "release": "node ./scripts/release.mjs",
+    "build:runtime": "node ./scripts/bin/copy-runtime.mjs",
+    "preflight": "node ./scripts/bin/preflight.mjs",
+    "docker:build": "docker build -t noderef:latest .",
+    "docker:run": "pnpm run docker:build && docker compose up noderef",
+    "format": "node ./scripts/add-copyright.mjs && prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "migrate:dev": "pnpm --filter @app/backend prisma:migrate",
+    "purge": "rimraf dist bin resources node-src/dist .turbo build-scripts _app_scaffolds '**/*.log' 'apps/**/logs' 'node-src/logs' dev.db 'dev.db*' '**/dev.db' '**/dev.db-*' 'apps/backend/prisma/dev.db' 'apps/backend/prisma/dev.db-*'",
+    "install:all": "pnpm install && node ./scripts/fetch-node-binaries.js && npx @neutralinojs/neu update && pnpm sync:meta",
+    "postinstall": "node ./scripts/postinstall.js"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@neutralinojs/neu": "11.5.0",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "globals": "^16.5.0",
+    "npm-run-all": "^4.1.5",
+    "prettier": "^3.2.4",
+    "rcedit": "^4.0.1",
+    "rimraf": "^5.0.5",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.48.1"
+  },
+  "dependencies": {
+    "@mantine/notifications": "^8.3.7"
+  }
+}

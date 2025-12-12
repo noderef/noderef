@@ -1,0 +1,22 @@
+{
+  "historyTab": "Verlauf",
+  "historyEmpty": "Noch kein Verlauf. Ausgef\u00fchrte Skripte erscheinen hier.",
+  "historyCopyToEditor": "In Editor kopieren",
+  "historyViewResult": "Ergebnis anzeigen",
+  "execute": "Ausf\u00fchren",
+  "serverSelectionPrompt": "Server ausw\u00e4hlen",
+  "serverSelectionCount_one": "{{count}} Server ausgew\u00e4hlt",
+  "serverSelectionCount_other": "{{count}} Server ausgew\u00e4hlt",
+  "serverSelectionAria": "Server f\u00fcr die Ausf\u00fchrung w\u00e4hlen",
+  "generalTab": "Allgemein",
+  "outputTab": "Ausgabe",
+  "serverFallback": "Server {{id}}",
+  "documentTooltip": "Dokument: {{nodeRef}}",
+  "documentBadge": "Dokumentkontext",
+  "loadedScriptTooltip": "Geladenes Skript: {{name}}",
+  "executeHint": "Dr\u00fccken Sie <shortcut>{{shortcut}}</shortcut>, um auszuf\u00fchren",
+  "aiTooltipBusy": "KI generiert Code\u2026",
+  "aiTooltipReady": "KI bereit \u2013 /ai eingeben",
+  "aiTooltipUnavailable": "KI nicht verf\u00fcgbar",
+  "clearConsole": "Konsole leeren"
+}

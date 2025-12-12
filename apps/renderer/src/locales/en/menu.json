@@ -1,0 +1,16 @@
+{
+  "file": "File",
+  "edit": "Edit",
+  "view": "View",
+  "help": "Help",
+  "newFile": "New File",
+  "save": "Save",
+  "cut": "Cut",
+  "copy": "Copy",
+  "formatCode": "Format Code",
+  "saveScript": "Save Script",
+  "loadScript": "Load Script",
+  "clearEditor": "Clear Editor",
+  "enableWordWrap": "Enable word wrap",
+  "disableWordWrap": "Disable word wrap"
+}

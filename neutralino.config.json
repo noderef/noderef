@@ -1,0 +1,88 @@
+{
+  "applicationId": "nl.noderef.desktop",
+  "version": "0.1.0",
+  "defaultMode": "window",
+  "documentRoot": "/resources/",
+  "url": "/",
+  "enableServer": true,
+  "enableNativeAPI": true,
+  "enableExtensions": true,
+  "tokenSecurity": "one-time",
+  "logging": {
+    "enabled": true,
+    "writeToLogFile": true,
+    "level": "warn"
+  },
+  "nativeAllowList": [
+    "app.*",
+    "os.*",
+    "window.*",
+    "events.*",
+    "filesystem.*",
+    "clipboard.*",
+    "debug.log"
+  ],
+  "permissions": {
+    "filesystem": true,
+    "os": true,
+    "process": true
+  },
+  "cli": {
+    "binaryName": "noderef",
+    "resourcesPath": "./resources",
+    "resourcesDir": "./resources",
+    "clientLibrary": "./resources/neutralino.js",
+    "binaryVersion": "6.4.0",
+    "clientVersion": "6.4.0"
+  },
+  "modes": {
+    "window": {
+      "title": "NodeRef",
+      "width": 1200,
+      "height": 800,
+      "minWidth": 800,
+      "minHeight": 600,
+      "resizable": true,
+      "maximize": false,
+      "hidden": false,
+      "exitProcessOnClose": false,
+      "enableInspector": false,
+      "borderless": false,
+      "alwaysOnTop": false,
+      "fullScreen": false
+    }
+  },
+  "buildScript": {
+    "mac": {
+      "architecture": [
+        "arm64",
+        "x64",
+        "universal"
+      ],
+      "minimumOS": "10.15.0",
+      "appName": "NodeRef",
+      "appBundleName": "NodeRef",
+      "appIdentifier": "nl.noderef.desktop",
+      "appIcon": "resources/icons/appIcon.icns"
+    },
+    "win": {
+      "architecture": [
+        "x64"
+      ],
+      "appName": "NodeRef",
+      "appIcon": "resources/icons/appIcon.ico"
+    },
+    "linux": {
+      "architecture": [
+        "x64",
+        "arm64",
+        "armhf"
+      ],
+      "appName": "NodeRef",
+      "appIcon": "resources/icons/appIcon.png",
+      "appPath": "/usr/share/noderef",
+      "appIconPath": "/usr/share/noderef/icon.png",
+      "appIconLocation": "/usr/share/noderef/icon.png"
+    }
+  }
+}

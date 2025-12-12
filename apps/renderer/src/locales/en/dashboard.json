@@ -1,0 +1,25 @@
+{
+  "activity": "Recent activity",
+  "activityDescription": "Nodes you opened recently grouped by day",
+  "noActivity": "No activity yet",
+  "noActivityDescription": "Browse nodes to populate your dashboard history.",
+  "heatmap": {
+    "noActivityLegend": "No activity",
+    "legendRange": "{{min}}-{{max}} nodes",
+    "legendRangePlus": "{{min}}+ nodes",
+    "tooltipCount_one": "{{count}} node viewed",
+    "tooltipCount_other": "{{count}} nodes viewed",
+    "tooltipDate": "{{date}}",
+    "jumpToDate": "Start timeline from {{date}}"
+  },
+  "timeline": {
+    "unknownLocation": "Unknown location",
+    "filteredFrom": "Timeline starts from {{date}}",
+    "clearFilter": "Clear selection",
+    "noEntriesForSelection": "No entries on or before {{date}}.",
+    "tryLoadingMore": "Load more history or clear the selection to view recent nodes."
+  },
+  "errors": {
+    "activityLoadFailed": "Failed to load activity"
+  }
+}

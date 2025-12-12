@@ -1,0 +1,45 @@
+{
+  "name": "@app/renderer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 3000",
+    "dev:open": "vite --port 3000 --open",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "analyze": "ANALYZE=true pnpm build"
+  },
+  "dependencies": {
+    "@app/contracts": "workspace:*",
+    "@mantine/charts": "8.3.7",
+    "@mantine/core": "8.3.7",
+    "@mantine/dropzone": "8.3.7",
+    "@mantine/hooks": "8.3.7",
+    "@mantine/modals": "^8.3.7",
+    "@mantine/notifications": "^8.3.7",
+    "@mantine/spotlight": "^8.3.7",
+    "@neutralinojs/lib": "6.4.0",
+    "@tabler/icons-react": "3.34.0",
+    "file-selector": "^2.1.2",
+    "flag-icons": "^7.2.3",
+    "i18next": "^25.6.1",
+    "monaco-editor": "0.54.0",
+    "prettier": "^3.4.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-dropzone": "^14.3.8",
+    "react-i18next": "^16.2.4",
+    "zustand": "5.0.0"
+  },
+  "devDependencies": {
+    "@rollup/plugin-strip": "^3.0.4",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/react-dropzone": "^5.1.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "rollup-plugin-visualizer": "^6.0.5",
+    "typescript": "^5.9.0",
+    "vite": "^6.0.0"
+  }
+}

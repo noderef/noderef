@@ -1,0 +1,22 @@
+{
+  "historyTab": "History",
+  "historyEmpty": "No history yet. Executed scripts will appear here.",
+  "historyCopyToEditor": "Copy to editor",
+  "historyViewResult": "View result",
+  "execute": "Execute",
+  "serverSelectionPrompt": "Select servers",
+  "serverSelectionCount_one": "{{count}} server selected",
+  "serverSelectionCount_other": "{{count}} servers selected",
+  "serverSelectionAria": "Choose servers to execute against",
+  "generalTab": "General",
+  "outputTab": "Output",
+  "serverFallback": "Server {{id}}",
+  "documentTooltip": "Document: {{nodeRef}}",
+  "documentBadge": "Document set",
+  "loadedScriptTooltip": "Loaded script: {{name}}",
+  "executeHint": "Press <shortcut>{{shortcut}}</shortcut> to execute",
+  "aiTooltipBusy": "AI is generating code…",
+  "aiTooltipReady": "AI ready – type /ai",
+  "aiTooltipUnavailable": "AI unavailable",
+  "clearConsole": "Clear console"
+}

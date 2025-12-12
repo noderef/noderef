@@ -1,0 +1,18 @@
+{
+  "dashboard": "Dashboard",
+  "settings": "Instellingen",
+  "browseRepositories": "Blader repositories",
+  "browseRepositoriesDesc": "Navigeer door mappen en bestanden",
+  "dashboardDesc": "Ga naar dashboard",
+  "settingsDesc": "Open applicatie instellingen",
+  "addServerDesc": "Voeg een nieuwe Alfresco server toe",
+  "goBack": "Ga terug",
+  "goBackDesc": "Navigeer naar bovenliggende map",
+  "folder": "Map",
+  "fetchingContents": "Inhoud ophalen",
+  "loadMore": "Laad meer…",
+  "loadMoreDesc": "Toon meer items uit deze map",
+  "openFolder": "Open \"{{name}}\"",
+  "openFolderDesc": "Open deze map in de Bestandsbrowser",
+  "searchError": "Kon resultaten niet laden"
+}

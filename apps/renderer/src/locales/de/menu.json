@@ -1,0 +1,16 @@
+{
+  "file": "Datei",
+  "edit": "Bearbeiten",
+  "view": "Ansicht",
+  "help": "Hilfe",
+  "newFile": "Neue Datei",
+  "save": "Speichern",
+  "cut": "Ausschneiden",
+  "copy": "Kopieren",
+  "formatCode": "Code formatieren",
+  "saveScript": "Skript speichern",
+  "loadScript": "Skript laden",
+  "clearEditor": "Editor leeren",
+  "enableWordWrap": "Zeilenumbruch aktivieren",
+  "disableWordWrap": "Zeilenumbruch deaktivieren"
+}

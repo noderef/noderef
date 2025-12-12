@@ -1,0 +1,168 @@
+// Prisma schema for NodeRef
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "darwin", "darwin-arm64", "windows", "debian-openssl-3.0.x", "linux-arm64-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  email     String?
+  password  String?
+  fullName  String?
+  thumbnail Bytes?
+  createdAt DateTime @default(now())
+  aiAssistantEnabled Boolean @default(false)
+
+  servers             Server[]
+  savedSearches       SavedSearch[]
+  searchHistory       SearchHistory[]
+  localFiles          LocalFile[]
+  nodeHistory         NodeHistory[]
+  jsconsoleHistory    JsConsoleHistory[]
+  aiSettings          UserAiSettings[]
+
+  @@map("user")
+}
+
+model Server {
+  id                Int       @id @default(autoincrement())
+  userId            Int
+  name              String
+  baseUrl           String
+  serverType        String    @default("alfresco")
+  authType          String?
+  isAdmin           Boolean   @default(true)
+  username          String?
+  token             String?   // Encrypted: password for basic auth OR access_token for OAuth
+  refreshToken      String?   // Encrypted: OAuth refresh token
+  tokenExpiry       DateTime? // OAuth token expiration time
+  oidcHost          String?   // OAuth/OIDC identity provider host
+  oidcRealm         String?   // OAuth/OIDC realm
+  oidcClientId      String?   // OAuth/OIDC client ID
+  jsconsoleEndpoint String?
+  thumbnail         Bytes?
+  color             String?
+  label             String?   // Environment label (e.g., PROD, TEST, ACC)
+  displayOrder      Int       @default(0)
+  lastAccessed      DateTime?
+  createdAt         DateTime  @default(now())
+
+  user              User                @relation(fields: [userId], references: [id])
+  nodeHistory       NodeHistory[]
+  jsconsoleHistory  JsConsoleHistory[]
+  savedSearches     SavedSearch[]
+
+  @@index([userId, displayOrder])
+  @@map("server")
+}
+
+model SavedSearch {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  serverId      Int
+  name          String
+  query         String
+  columns       String?   // YAML string describing visible columns/layout
+  lastAccessed  DateTime?
+  lastDiffCount Int       @default(0)
+  isDefault     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+
+  user          User            @relation(fields: [userId], references: [id])
+  server        Server          @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  searchHistory SearchHistory[]
+
+  @@index([userId, serverId])
+  @@map("saved_search")
+}
+
+model SearchHistory {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  searchId     Int?
+  query        String
+  resultsCount Int?
+  executedAt   DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id])
+  savedSearch  SavedSearch? @relation(fields: [searchId], references: [id], onDelete: SetNull)
+
+  @@index([userId, searchId])
+  @@map("search_history")
+}
+
+model LocalFile {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  name         String
+  type         String?
+  content      String?
+  deletedAt    DateTime?
+  lastModified DateTime  @default(now())
+  createdAt    DateTime  @default(now())
+
+  user         User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("local_file")
+}
+
+model NodeHistory {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  serverId   Int
+  nodeRef    String
+  parentRef  String?
+  name       String?
+  path       String?
+  type       String?
+  mimetype   String?
+  accessedAt DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id])
+  server     Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([userId, serverId])
+  @@map("node_history")
+}
+
+model JsConsoleHistory {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  serverId   Int?
+  script     String
+  output     String?
+  error      String?
+  executedAt DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id])
+  server     Server?  @relation(fields: [serverId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@map("jsconsole_history")
+}
+
+model UserAiSettings {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  provider  String
+  model     String
+  token     String   // Encrypted API token or key
+  label     String?
+  isDefault Boolean  @default(true)
+  metadata  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@index([userId, provider])
+  @@map("user_ai_settings")
+}

@@ -1,0 +1,110 @@
+/* Global styles for NodeRef */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: Monaco, Courier, monospace;
+}
+
+/* Monaco Editor - Adjust line numbers spacing from left border */
+.monaco-editor .margin {
+  padding-left: 4px !important;
+  margin-left: 0 !important;
+}
+
+.monaco-editor .margin-view-overlays {
+  padding-left: 4px !important;
+  margin-left: 0 !important;
+  width: auto !important;
+}
+
+.monaco-editor .margin-view-overlays .line-numbers {
+  padding-left: 0 !important;
+  margin-left: 0 !important;
+  text-align: right !important;
+  left: 4px !important;
+}
+
+.monaco-editor .glyph-margin {
+  left: 0 !important;
+}
+
+/* Submenu menu item variables */
+:root {
+  --submenu-item-text-color: var(--mantine-color-text);
+  --submenu-item-icon-color: var(--mantine-color-dimmed);
+  --submenu-item-hover-bg: var(--mantine-color-gray-0);
+  --submenu-item-active-bg: var(--mantine-color-blue-0);
+  --submenu-item-active-color: var(--mantine-color-blue-6);
+  --submenu-section-hover-bg: var(--mantine-color-gray-0);
+  --submenu-section-background: var(--mantine-color-body);
+  --submenu-section-text-color: var(--mantine-color-dark-9);
+  --submenu-section-icon-color: var(--mantine-color-dimmed);
+  --submenu-section-border-color: var(--mantine-color-gray-2);
+  --submenu-section-chevron-color: var(--mantine-color-dimmed);
+  --submenu-header-hover-bg: var(--mantine-color-gray-1);
+  --settings-link-text-color: var(--mantine-color-text);
+  --settings-link-hover-bg: var(--mantine-color-gray-0);
+  --language-card-border: var(--mantine-color-gray-3);
+  --language-card-bg: var(--mantine-color-body);
+  --language-card-hover-border: var(--mantine-color-blue-6);
+  --language-card-active-border: var(--mantine-color-blue-6);
+  --language-card-active-bg: rgba(56, 116, 255, 0.08);
+  --layout-divider-color: var(--mantine-color-gray-3);
+}
+
+:root[data-mantine-color-scheme='dark'] {
+  --submenu-item-text-color: var(--mantine-color-gray-2);
+  --submenu-item-icon-color: var(--mantine-color-gray-5);
+  --submenu-item-hover-bg: rgba(255, 255, 255, 0.14);
+  --submenu-item-active-bg: rgba(59, 130, 246, 0.25);
+  --submenu-item-active-color: var(--mantine-color-blue-2);
+  --submenu-section-hover-bg: rgba(255, 255, 255, 0.08);
+  --submenu-section-background: var(--mantine-color-dark-6);
+  --submenu-section-text-color: var(--mantine-color-gray-2);
+  --submenu-section-icon-color: var(--mantine-color-gray-5);
+  --submenu-section-border-color: var(--mantine-color-dark-4);
+  --submenu-section-chevron-color: var(--mantine-color-gray-5);
+  --submenu-header-hover-bg: rgba(255, 255, 255, 0.08);
+  --settings-link-text-color: var(--mantine-color-gray-2);
+  --settings-link-hover-bg: rgba(255, 255, 255, 0.08);
+  --language-card-border: var(--mantine-color-dark-4);
+  --language-card-bg: var(--mantine-color-dark-6);
+  --language-card-hover-border: var(--mantine-color-blue-4);
+  --language-card-active-border: var(--mantine-color-blue-4);
+  --language-card-active-bg: rgba(56, 116, 255, 0.16);
+  --layout-divider-color: var(--mantine-color-dark-4);
+}
+
+/* Combobox dropdown options - make keyboard selection match hover style */
+[data-combobox-option][data-combobox-selected],
+[data-combobox-option][data-combobox-hovered],
+[data-combobox-option]:hover {
+  background-color: var(--mantine-color-gray-1) !important;
+  color: var(--mantine-color-gray-9) !important;
+}
+
+[data-mantine-color-scheme='dark'] [data-combobox-option][data-combobox-selected],
+[data-mantine-color-scheme='dark'] [data-combobox-option][data-combobox-hovered],
+[data-mantine-color-scheme='dark'] [data-combobox-option]:hover {
+  background-color: var(--mantine-color-dark-4) !important;
+  color: var(--mantine-color-gray-0) !important;
+}

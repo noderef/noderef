@@ -1,0 +1,15 @@
+services:
+  noderef:
+    build:
+      context: .
+    image: noderef:latest
+    ports:
+      - '5111:5111'
+    environment:
+      PORT: 5111
+      EXPOSE_DEBUG: '1'
+    volumes:
+      - noderef_data:/data
+
+volumes:
+  noderef_data:

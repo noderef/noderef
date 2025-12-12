@@ -1,0 +1,22 @@
+{
+  "historyTab": "Geschiedenis",
+  "historyEmpty": "Nog geen geschiedenis. Uitgevoerde scripts verschijnen hier.",
+  "historyCopyToEditor": "Kopi\u00ebren naar editor",
+  "historyViewResult": "Resultaat bekijken",
+  "execute": "Uitvoeren",
+  "serverSelectionPrompt": "Servers selecteren",
+  "serverSelectionCount_one": "{{count}} server geselecteerd",
+  "serverSelectionCount_other": "{{count}} servers geselecteerd",
+  "serverSelectionAria": "Servers kiezen om op uit te voeren",
+  "generalTab": "Algemeen",
+  "outputTab": "Uitvoer",
+  "serverFallback": "Server {{id}}",
+  "documentTooltip": "Document: {{nodeRef}}",
+  "documentBadge": "Documentcontext",
+  "loadedScriptTooltip": "Geladen script: {{name}}",
+  "executeHint": "Druk op <shortcut>{{shortcut}}</shortcut> om uit te voeren",
+  "aiTooltipBusy": "AI genereert code\u2026",
+  "aiTooltipReady": "AI klaar \u2013 typ /ai",
+  "aiTooltipUnavailable": "AI niet beschikbaar",
+  "clearConsole": "Console legen"
+}

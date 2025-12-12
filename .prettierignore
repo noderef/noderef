@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+resources/
+node-src/
+bin/
+build-scripts/
+
+# Generated/vendor files
+**/neutralino.js
+**/*neutralino*.js
+**/.generated/**
+neutralino.config.json
+
+# Logs
+*.log
+
+# Database files
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Lock files
+pnpm-lock.yaml
+
+# Docs
+*.md
+

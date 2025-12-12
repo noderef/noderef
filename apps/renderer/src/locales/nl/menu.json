@@ -1,0 +1,16 @@
+{
+  "file": "Bestand",
+  "edit": "Bewerken",
+  "view": "Weergave",
+  "help": "Help",
+  "newFile": "Nieuw bestand",
+  "save": "Opslaan",
+  "cut": "Knippen",
+  "copy": "Kopiëren",
+  "formatCode": "Code formatteren",
+  "saveScript": "Script opslaan",
+  "loadScript": "Script laden",
+  "clearEditor": "Editor wissen",
+  "enableWordWrap": "Tekstterugloop inschakelen",
+  "disableWordWrap": "Tekstterugloop uitschakelen"
+}

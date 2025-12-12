@@ -1,0 +1,18 @@
+{
+  "dashboard": "Dashboard",
+  "settings": "Einstellungen",
+  "browseRepositories": "Repositories durchsuchen",
+  "browseRepositoriesDesc": "Durch Serverordner und -dateien navigieren",
+  "dashboardDesc": "Zum Dashboard",
+  "settingsDesc": "Anwendungseinstellungen öffnen",
+  "addServerDesc": "Neuen Alfresco-Server hinzufügen",
+  "goBack": "Zurück",
+  "goBackDesc": "Zum übergeordneten Ordner navigieren",
+  "folder": "Ordner",
+  "fetchingContents": "Inhalte werden abgerufen",
+  "loadMore": "Mehr laden…",
+  "loadMoreDesc": "Weitere Elemente aus diesem Ordner anzeigen",
+  "openFolder": "\"{{name}}\" öffnen",
+  "openFolderDesc": "Diesen Ordner im Datei-Browser öffnen",
+  "searchError": "Ergebnisse konnten nicht geladen werden"
+}

@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="NodeRef icon dark">
+  <defs>
+    <radialGradient id="tileDepth" cx="50%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#1a3558" />
+      <stop offset="100%" stop-color="#0f1f36" />
+    </radialGradient>
+    <linearGradient id="tileGloss" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.20" />
+      <stop offset="28%" stop-color="#ffffff" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="logoBevel" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f7fbff" />
+      <stop offset="60%" stop-color="#e4ebf6" />
+      <stop offset="100%" stop-color="#cdd8e8" />
+    </linearGradient>
+    <filter id="tileShadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="22" stdDeviation="28" flood-color="#050d1a" flood-opacity="0.45" />
+    </filter>
+    <filter id="logoShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000915" flood-opacity="0.45" />
+      <feDropShadow dx="0" dy="-6" stdDeviation="10" flood-color="#ffffff" flood-opacity="0.18" />
+    </filter>
+  </defs>
+
+  <g filter="url(#tileShadow)">
+    <rect width="1024" height="1024" rx="200" fill="#0f1f36" />
+    <rect width="1024" height="1024" rx="200" fill="url(#tileDepth)" />
+    <rect width="1024" height="1024" rx="200" fill="url(#tileGloss)" />
+  </g>
+
+  <g filter="url(#logoShadow)" fill="url(#logoBevel)">
+    <path d="m1895.99989,1900.64037l0,1534.50658l387.99998,-291.65332l0,-520.34664l382.82664,-248.55999l381.17331,245.25332l0,526.95997l387.99998,-283.35998l0,-521.99997l-768.78662,-443.25331l-387.67998,219.54665l-383.53331,-217.09332" transform="translate(189 189.14) scale(0.42) translate(-1896 -1898.19)" />
+  </g>
+</svg>

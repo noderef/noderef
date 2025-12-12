@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NodeRef</title>
+    <link rel="icon" type="image/x-icon" href="/assets/favicon.ico" />
+    <!-- Load neutralino.js synchronously so it's available when main.tsx module loads -->
+    <script src="/neutralino.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- Neutralino dev auth setup - sets NL_PORT, NL_TOKEN, etc. for dev mode -->
+    <script>
+      // Minimal + robust Neutralino detector for dev (external URL)
+      (function () {
+        // If framework globals already exist, we're done
+        if (typeof window.NL_PORT !== 'undefined' && typeof window.NL_TOKEN !== 'undefined') {
+          return;
+        }
+
+        // DEV: always try fetching auth info served by Vite middleware
+        // (safe enough for local dev; this unblocks WKWebView where UA looks like Safari)
+        fetch('/.tmp/auth_info.json')
+          .then(function (r) {
+            return r.ok ? r.json() : Promise.reject();
+          })
+          .then(function (auth) {
+            window.NL_PORT = auth.nlPort;
+            window.NL_TOKEN = auth.nlToken;
+            window.NL_CONNECT_TOKEN = auth.nlConnectToken;
+            // NL_VERSION is set by the framework when present
+          })
+          .catch(function () {
+            /* ignore; neutralino.js is already loaded, auth info may not be needed */
+          });
+      })();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

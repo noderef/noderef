@@ -1,0 +1,25 @@
+{
+  "activity": "Activité récente",
+  "activityDescription": "Nœuds consultés récemment, regroupés par jour",
+  "noActivity": "Aucune activité",
+  "noActivityDescription": "Parcourez des nœuds pour alimenter l'historique du tableau de bord.",
+  "heatmap": {
+    "noActivityLegend": "Aucune activité",
+    "legendRange": "{{min}}-{{max}} nœuds",
+    "legendRangePlus": "{{min}}+ nœuds",
+    "tooltipCount_one": "{{count}} nœud consulté",
+    "tooltipCount_other": "{{count}} nœuds consultés",
+    "tooltipDate": "{{date}}",
+    "jumpToDate": "Démarrer la chronologie à partir du {{date}}"
+  },
+  "timeline": {
+    "unknownLocation": "Emplacement inconnu",
+    "filteredFrom": "La chronologie commence le {{date}}",
+    "clearFilter": "Effacer la sélection",
+    "noEntriesForSelection": "Aucune entrée à cette date ou avant le {{date}}.",
+    "tryLoadingMore": "Chargez plus d'historique ou effacez la sélection pour voir les nœuds récents."
+  },
+  "errors": {
+    "activityLoadFailed": "Impossible de charger l'activité"
+  }
+}

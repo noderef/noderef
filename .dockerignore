@@ -1,0 +1,16 @@
+node_modules
+.pnpm-store
+dist
+resources
+bin
+**/dist
+**/.turbo
+**/.vite
+**/.cache
+**/.DS_Store
+.env
+build-scripts
+_app_scaffolds
+**/*.db
+**/*.db-journal
+.runtime

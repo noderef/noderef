@@ -1,0 +1,18 @@
+{
+  "dashboard": "Tableau de bord",
+  "settings": "Paramètres",
+  "browseRepositories": "Parcourir les repositories",
+  "browseRepositoriesDesc": "Naviguez dans les dossiers et fichiers du serveur",
+  "dashboardDesc": "Accéder au tableau de bord",
+  "settingsDesc": "Ouvrir les paramètres de l'application",
+  "addServerDesc": "Ajouter un nouveau serveur Alfresco",
+  "goBack": "Retour",
+  "goBackDesc": "Revenir au dossier parent",
+  "folder": "Dossier",
+  "fetchingContents": "Chargement du contenu",
+  "loadMore": "Charger plus…",
+  "loadMoreDesc": "Afficher plus d'éléments de ce dossier",
+  "openFolder": "Ouvrir « {{name}} »",
+  "openFolderDesc": "Ouvrir ce dossier dans l'explorateur de fichiers",
+  "searchError": "Impossible de charger les résultats"
+}
