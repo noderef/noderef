@@ -25,7 +25,25 @@ import {
 } from './neutralino';
 
 const DEFAULT_PORT = 5111;
-let baseURL = `http://127.0.0.1:${DEFAULT_PORT}`;
+
+// Detect if we're running in Docker/SERVE_STATIC mode (frontend served by backend)
+// In this case, use the current window location port instead of DEFAULT_PORT
+function getInitialBackendURL(): string {
+  // If running in browser (not Neutralino) and the page is served from a port (not file://),
+  // assume the backend is on the same host:port
+  if (typeof window !== 'undefined' && !isNeutralinoMode()) {
+    const { protocol, hostname, port } = window.location;
+    // Check if we're in a browser with http/https (not file://)
+    if (protocol.startsWith('http') && hostname && port) {
+      console.log(`[RPC] Docker mode detected: using backend at ${protocol}//${hostname}:${port}`);
+      return `${protocol}//${hostname}:${port}`;
+    }
+  }
+  // Default: Neutralino mode or dev mode
+  return `http://127.0.0.1:${DEFAULT_PORT}`;
+}
+
+let baseURL = getInitialBackendURL();
 let started = false;
 let backendReady = false;
 
@@ -355,6 +373,18 @@ export async function readPublishedPortFromFile(): Promise<number | null> {
 async function discoverPort(): Promise<number> {
   const isProd =
     import.meta.env.MODE === 'production' || (window as any).NL_ARGS?.includes('--release');
+
+  // Docker/SERVE_STATIC mode: if frontend is served from backend, use that port
+  if (typeof window !== 'undefined' && !isNeutralinoMode()) {
+    const { protocol, hostname, port } = window.location;
+    if (protocol.startsWith('http') && hostname && port) {
+      const detectedPort = parseInt(port, 10);
+      if (!isNaN(detectedPort)) {
+        debugLog(`[RPC] Docker mode: using port ${detectedPort} from window.location`);
+        return detectedPort;
+      }
+    }
+  }
 
   // Try published port from file first (best signal - only in Neutralino mode)
   if (isNeutralinoMode()) {

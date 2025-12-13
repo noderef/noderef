@@ -24,11 +24,23 @@ import pino from 'pino';
 // Determine environment
 const isDev = process.env.NODE_ENV !== 'production';
 
+// Allow DEBUG (alias) or EXPOSE_DEBUG to influence verbosity when LOG_LEVEL isn't set explicitly.
+// Explicitly turning debug "off" (0/false) will quiet logs to "warn" to avoid
+// noisy startup output in containerized runs.
+// DEBUG is the user-facing alias, EXPOSE_DEBUG is the internal variable (backwards compatible)
+const debugFlag = (process.env.DEBUG ?? process.env.EXPOSE_DEBUG ?? '').toLowerCase();
+const debugEnabled = debugFlag === '1' || debugFlag === 'true' || debugFlag === 'yes';
+const debugDisabled = debugFlag === '0' || debugFlag === 'false' || debugFlag === 'no';
+
+const resolvedLevel =
+  process.env.LOG_LEVEL ||
+  (isDev || debugEnabled ? 'debug' : debugDisabled ? 'warn' : 'info');
+
 /**
  * Shared logger instance with security-aware configuration
  */
 export const log = pino({
-  level: process.env.LOG_LEVEL || (isDev ? 'debug' : 'info'),
+  level: resolvedLevel,
 
   // Redact sensitive fields from logs
   redact: {
