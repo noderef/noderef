@@ -4,10 +4,11 @@ services:
       context: .
     image: noderef:latest
     ports:
-      - '5111:5111'
+      - "5001:5001"
     environment:
-      PORT: 5111
-      EXPOSE_DEBUG: '1'
+      PORT: 5001
+      DEBUG: "0"
+      DATA_DIR: /data
     volumes:
       - noderef_data:/data
 

@@ -493,9 +493,10 @@ async function main() {
   }
 
   // Debug endpoint - expose in dev, Neutralino mode, or when explicitly enabled
+  // DEBUG is the user-facing alias, EXPOSE_DEBUG is internal (backwards compatible)
   const isNeutralino =
     Array.isArray((globalThis as any).NL_ARGS) || process.versions?.electron === undefined;
-  const exposeDebug = process.env.EXPOSE_DEBUG === '1' || isDev || isNeutralino;
+  const exposeDebug = process.env.DEBUG === '1' || process.env.EXPOSE_DEBUG === '1' || isDev || isNeutralino;
   if (exposeDebug) {
     app.get('/debug/rpc-methods', (_req, res) => {
       res.json({

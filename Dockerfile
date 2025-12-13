@@ -124,7 +124,8 @@ RUN find /deploy/node_modules -type f \
 # -------- Runtime image --------
 FROM node:22-alpine AS runtime
 
-ENV NODE_ENV=production PORT=5111 HOST=0.0.0.0 FIXED_PORT=1 SERVE_STATIC=1 DATABASE_URL=file:/data/NodeRef.db
+# Persist app data (DB + master key) under /data so it survives container restarts
+ENV NODE_ENV=production PORT=5111 HOST=0.0.0.0 FIXED_PORT=1 SERVE_STATIC=1 DATABASE_URL=file:/data/NodeRef.db DATA_DIR=/data
 
 RUN addgroup -S app && adduser -S app -G app && mkdir -p /data && chown app:app /data
 
@@ -146,7 +147,10 @@ RUN rm -rf /app/resources/node-src/node_modules/@prisma /app/resources/node-src/
     find /app -type d -empty -delete 2>/dev/null || true
 
 VOLUME ["/data"]
-EXPOSE 5111
+
+# Allow PORT to be overridden at build time via ARG, default to 5111
+ARG PORT=5111
+EXPOSE ${PORT}
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=20s \
   CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 5111) + '/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
