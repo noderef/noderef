@@ -39,7 +39,7 @@ import {
 import { notifications } from '@mantine/notifications';
 import { clipboard, os } from '@neutralinojs/lib';
 import { IconAlertCircle, IconChevronRight, IconInfoCircle, IconServer } from '@tabler/icons-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 type AddServerStep = 'select-type' | 'configure';
@@ -82,6 +82,10 @@ export function AddServerModal() {
   const [loading, setLoading] = useState(false);
   const modalContentRef = useRef<HTMLDivElement | null>(null);
   const passwordInputRef = useRef<HTMLInputElement | null>(null);
+  const isDesktopMode = useMemo(
+    () => typeof window !== 'undefined' && isNeutralinoMode() && !!(window as any).Neutralino,
+    []
+  );
 
   // Reset form when modal closes
   useEffect(() => {
@@ -131,7 +135,10 @@ export function AddServerModal() {
   }, [authType, oidcHost, oidcRealm, oidcClientId, oidcAuthenticated]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !isDesktopMode) {
+      // In browser mode, rely on native paste behavior (no custom handler to avoid double insert).
+      return;
+    }
     const getEditableTarget = (
       target: EventTarget | null
     ): HTMLInputElement | HTMLTextAreaElement | HTMLElement | null => {
@@ -155,12 +162,14 @@ export function AddServerModal() {
       return null;
     };
 
+    let handledByKeydown = false;
+
     const readClipboardText = async (event?: ClipboardEvent): Promise<string | null> => {
       const clipboardData = event?.clipboardData || (window as any).clipboardData;
       const textFromEvent = clipboardData?.getData?.('text/plain');
       if (textFromEvent) return textFromEvent;
 
-      if (isNeutralinoMode()) {
+      if (isDesktopMode) {
         try {
           await ensureNeutralinoReady();
           const neutralinoText = await clipboard.readText();
@@ -207,6 +216,10 @@ export function AddServerModal() {
     };
 
     const handlePaste = async (event: ClipboardEvent) => {
+      if (handledByKeydown) {
+        return;
+      }
+
       const container = modalContentRef.current;
       if (!container) return;
       const editableTarget = getEditableTarget(event.target);
@@ -238,6 +251,10 @@ export function AddServerModal() {
 
       event.preventDefault();
       event.stopPropagation();
+      handledByKeydown = true;
+      setTimeout(() => {
+        handledByKeydown = false;
+      }, 0);
       insertText(editableTarget, text);
     };
 
@@ -248,7 +265,7 @@ export function AddServerModal() {
       window.removeEventListener('paste', handlePaste, true);
       window.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [isOpen]);
+  }, [isOpen, isDesktopMode]);
 
   // Validate Basic Auth credentials with debouncing
   useEffect(() => {
@@ -979,6 +996,10 @@ export function AddServerModal() {
                       value={username}
                       onChange={e => setUsername(e.currentTarget.value)}
                       required
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="none"
+                      spellCheck={false}
                     />
                     <div>
                       <PasswordInput
@@ -988,6 +1009,10 @@ export function AddServerModal() {
                         value={password}
                         onChange={e => setPassword(e.currentTarget.value)}
                         required
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="none"
+                        spellCheck={false}
                         rightSection={
                           credentialsValidating ? (
                             <Text size="xs">⏳</Text>
