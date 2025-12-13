@@ -33,8 +33,7 @@ const debugEnabled = debugFlag === '1' || debugFlag === 'true' || debugFlag === 
 const debugDisabled = debugFlag === '0' || debugFlag === 'false' || debugFlag === 'no';
 
 const resolvedLevel =
-  process.env.LOG_LEVEL ||
-  (isDev || debugEnabled ? 'debug' : debugDisabled ? 'warn' : 'info');
+  process.env.LOG_LEVEL || (isDev || debugEnabled ? 'debug' : debugDisabled ? 'warn' : 'info');
 
 /**
  * Shared logger instance with security-aware configuration

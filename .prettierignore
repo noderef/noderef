@@ -27,6 +27,9 @@ neutralino.config.json
 # Lock files
 pnpm-lock.yaml
 
+# Docker config (preserve manual formatting)
+docker-compose.yml
+
 # Docs
 *.md
 

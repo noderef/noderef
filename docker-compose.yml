@@ -7,7 +7,7 @@ services:
       - "5001:5001"
     environment:
       PORT: 5001
-      DEBUG: "0"
+      DEBUG: "1"
       DATA_DIR: /data
     volumes:
       - noderef_data:/data
