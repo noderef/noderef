@@ -100,7 +100,7 @@ async function main() {
 
   // 4. Commit
   console.log('\nCommitting changes...');
-  run(`git commit -m "Release v${newVersion}"`);
+  run(`git commit -m ":rocket: Release v${newVersion}"`);
 
   // 5. Create tag
   console.log('\nCreating tag...');
