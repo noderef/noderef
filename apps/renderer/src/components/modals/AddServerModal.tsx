@@ -81,7 +81,6 @@ export function AddServerModal() {
 
   const [loading, setLoading] = useState(false);
   const modalContentRef = useRef<HTMLDivElement | null>(null);
-  const passwordInputRef = useRef<HTMLInputElement | null>(null);
   const isDesktopMode = useMemo(
     () => typeof window !== 'undefined' && isNeutralinoMode() && !!(window as any).Neutralino,
     []
@@ -134,9 +133,10 @@ export function AddServerModal() {
     prevOidcConfig.current = { authType, oidcHost, oidcRealm, oidcClientId };
   }, [authType, oidcHost, oidcRealm, oidcClientId, oidcAuthenticated]);
 
+  // Custom paste handling for desktop mode to prevent duplicate pastes on Windows
+  // In browser mode, native paste behavior works correctly without custom handlers
   useEffect(() => {
     if (!isOpen || !isDesktopMode) {
-      // In browser mode, rely on native paste behavior (no custom handler to avoid double insert).
       return;
     }
     const getEditableTarget = (
@@ -162,7 +162,8 @@ export function AddServerModal() {
       return null;
     };
 
-    let handledByKeydown = false;
+    // Use a processing flag to prevent concurrent paste operations
+    let isProcessingPaste = false;
 
     const readClipboardText = async (event?: ClipboardEvent): Promise<string | null> => {
       const clipboardData = event?.clipboardData || (window as any).clipboardData;
@@ -203,20 +204,52 @@ export function AddServerModal() {
         const start = selectionStart ?? value.length;
         const end = selectionEnd ?? value.length;
         const newValue = value.slice(0, start) + text + value.slice(end);
-        editableTarget.value = newValue;
-        const cursor = start + text.length;
-        editableTarget.setSelectionRange(cursor, cursor);
-        editableTarget.dispatchEvent(new Event('input', { bubbles: true }));
-        if (editableTarget === passwordInputRef.current) {
-          setPassword(editableTarget.value);
+        const cursorPos = start + text.length;
+
+        // Identify the field using data-field attribute and update React state
+        const fieldName = editableTarget.getAttribute('data-field') || '';
+
+        switch (fieldName) {
+          case 'name':
+            setName(newValue);
+            break;
+          case 'baseUrl':
+            setBaseUrl(newValue);
+            break;
+          case 'username':
+            setUsername(newValue);
+            break;
+          case 'password':
+            setPassword(newValue);
+            break;
+          case 'oidcHost':
+            setOidcHost(newValue);
+            break;
+          case 'oidcRealm':
+            setOidcRealm(newValue);
+            break;
+          case 'oidcClientId':
+            setOidcClientId(newValue);
+            break;
         }
+
+        // Update cursor position after React updates the DOM
+        // Use setTimeout to ensure React has rendered the new value
+        setTimeout(() => {
+          if (document.activeElement === editableTarget) {
+            editableTarget.setSelectionRange(cursorPos, cursorPos);
+          }
+        }, 0);
       } else if (editableTarget.isContentEditable) {
         document.execCommand('insertText', false, text);
       }
     };
 
     const handlePaste = async (event: ClipboardEvent) => {
-      if (handledByKeydown) {
+      // If already processing a paste, immediately block this one
+      if (isProcessingPaste) {
+        event.preventDefault();
+        event.stopPropagation();
         return;
       }
 
@@ -226,18 +259,36 @@ export function AddServerModal() {
       if (!editableTarget) return;
       if (!container.contains(editableTarget)) return;
 
-      const text = await readClipboardText(event);
-      if (!text) return;
-
+      // Prevent default BEFORE async operations
       event.preventDefault();
       event.stopPropagation();
 
-      insertText(editableTarget, text);
+      // Set flag immediately to block concurrent operations
+      isProcessingPaste = true;
+
+      try {
+        const text = await readClipboardText(event);
+        if (text) {
+          insertText(editableTarget, text);
+        }
+      } finally {
+        // Clear flag after a short delay to prevent rapid duplicate events
+        setTimeout(() => {
+          isProcessingPaste = false;
+        }, 50);
+      }
     };
 
     const handleKeyDown = async (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey)) return;
       if (event.key.toLowerCase() !== 'v') return;
+
+      // If already processing a paste, immediately block this one
+      if (isProcessingPaste) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
 
       const container = modalContentRef.current;
       if (!container) return;
@@ -246,16 +297,24 @@ export function AddServerModal() {
         return;
       }
 
-      const text = await readClipboardText();
-      if (!text) return;
-
+      // Prevent default BEFORE async operations
       event.preventDefault();
       event.stopPropagation();
-      handledByKeydown = true;
-      setTimeout(() => {
-        handledByKeydown = false;
-      }, 0);
-      insertText(editableTarget, text);
+
+      // Set flag immediately to block concurrent operations
+      isProcessingPaste = true;
+
+      try {
+        const text = await readClipboardText();
+        if (text) {
+          insertText(editableTarget, text);
+        }
+      } finally {
+        // Clear flag after a short delay to prevent rapid duplicate events
+        setTimeout(() => {
+          isProcessingPaste = false;
+        }, 50);
+      }
     };
 
     window.addEventListener('paste', handlePaste, true);
@@ -956,6 +1015,7 @@ export function AddServerModal() {
               value={name}
               onChange={e => setName(e.currentTarget.value)}
               required
+              data-field="name"
             />
             <TextInput
               label={t('addServer:serverUrl')}
@@ -965,6 +1025,7 @@ export function AddServerModal() {
               required
               type="url"
               error={baseUrl.trim() && !validateUrl(baseUrl) ? t('addServer:invalidUrl') : null}
+              data-field="baseUrl"
             />
             {serverType === 'alfresco' && (
               <>
@@ -1000,10 +1061,10 @@ export function AddServerModal() {
                       autoCorrect="off"
                       autoCapitalize="none"
                       spellCheck={false}
+                      data-field="username"
                     />
                     <div>
                       <PasswordInput
-                        ref={passwordInputRef}
                         label={t('addServer:password')}
                         placeholder={t('addServer:passwordPlaceholder')}
                         value={password}
@@ -1013,6 +1074,7 @@ export function AddServerModal() {
                         autoCorrect="off"
                         autoCapitalize="none"
                         spellCheck={false}
+                        data-field="password"
                         rightSection={
                           credentialsValidating ? (
                             <Text size="xs">⏳</Text>
@@ -1052,6 +1114,7 @@ export function AddServerModal() {
                       onChange={e => setOidcHost(e.currentTarget.value)}
                       required
                       type="url"
+                      data-field="oidcHost"
                     />
                     <TextInput
                       label={t('addServer:oidcRealm')}
@@ -1059,6 +1122,7 @@ export function AddServerModal() {
                       value={oidcRealm}
                       onChange={e => setOidcRealm(e.currentTarget.value)}
                       required
+                      data-field="oidcRealm"
                     />
                     <TextInput
                       label={t('addServer:oidcClientId')}
@@ -1066,6 +1130,7 @@ export function AddServerModal() {
                       value={oidcClientId}
                       onChange={e => setOidcClientId(e.currentTarget.value)}
                       required
+                      data-field="oidcClientId"
                     />
                     <Button
                       onClick={handleOidcLogin}

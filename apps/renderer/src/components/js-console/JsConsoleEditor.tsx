@@ -311,13 +311,16 @@ export function JsConsoleEditor({ onAiRequest }: JsConsoleEditorProps) {
     };
   }, [editorReady]);
 
-  // Handle clipboard operations for desktop compatibility
+  // Custom clipboard handling for desktop compatibility
+  // Prevents duplicate paste operations on Windows by using a processing flag
   useEffect(() => {
     if (!editorReady || !containerRef.current || !editorRef.current) return;
 
     const editor = editorRef.current;
     const container = containerRef.current;
-    let skipNextPasteEvent = false;
+
+    // Use a processing flag to prevent concurrent paste operations
+    let isProcessingPaste = false;
 
     const handleContainerClick = (event: MouseEvent) => {
       if (event.target === container) {
@@ -428,50 +431,66 @@ export function JsConsoleEditor({ onAiRequest }: JsConsoleEditorProps) {
 
     const pasteText = async (
       event?: ClipboardEvent,
-      source: 'event' | 'action' = 'event'
+      _source: 'event' | 'action' = 'event'
     ): Promise<boolean> => {
-      if (source === 'action') {
-        skipNextPasteEvent = true;
+      // If already processing a paste, immediately block this one
+      if (isProcessingPaste) {
+        if (event) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        return false;
       }
 
-      const text = await readClipboardText(event);
-      if (!text) return false;
-
-      if (!editor.hasTextFocus()) {
-        editor.focus();
-      }
-
+      // Prevent default BEFORE async operations
       if (event) {
         event.preventDefault();
         event.stopPropagation();
       }
 
-      const selection = editor.getSelection();
-      if (!selection || selection.isEmpty()) {
-        const position = editor.getPosition();
-        if (!position) return false;
+      // Set flag immediately to block concurrent operations
+      isProcessingPaste = true;
+
+      try {
+        const text = await readClipboardText(event);
+        if (!text) return false;
+
+        if (!editor.hasTextFocus()) {
+          editor.focus();
+        }
+
+        const selection = editor.getSelection();
+        if (!selection || selection.isEmpty()) {
+          const position = editor.getPosition();
+          if (!position) return false;
+
+          editor.executeEdits('paste', [
+            {
+              range: new monaco.Range(
+                position.lineNumber,
+                position.column,
+                position.lineNumber,
+                position.column
+              ),
+              text,
+            },
+          ]);
+          return true;
+        }
 
         editor.executeEdits('paste', [
           {
-            range: new monaco.Range(
-              position.lineNumber,
-              position.column,
-              position.lineNumber,
-              position.column
-            ),
+            range: selection,
             text,
           },
         ]);
         return true;
+      } finally {
+        // Clear flag after a short delay to prevent rapid duplicate events
+        setTimeout(() => {
+          isProcessingPaste = false;
+        }, 50);
       }
-
-      editor.executeEdits('paste', [
-        {
-          range: selection,
-          text,
-        },
-      ]);
-      return true;
     };
 
     const handlePaste = async (event: ClipboardEvent) => {
@@ -481,13 +500,6 @@ export function JsConsoleEditor({ onAiRequest }: JsConsoleEditorProps) {
       const isContainerTarget = target === container;
 
       if (!isMonacoTarget && !isContainerTarget) {
-        return;
-      }
-
-      if (skipNextPasteEvent) {
-        skipNextPasteEvent = false;
-        event.preventDefault();
-        event.stopPropagation();
         return;
       }
 
