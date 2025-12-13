@@ -50,7 +50,69 @@ process.on('uncaughtException', err => {
   }
 });
 
-process.on('unhandledRejection', reason => {
+function isTransientNetworkFailure(reason: unknown): boolean {
+  const code =
+    (reason as any)?.code || (reason as any)?.error?.code || (reason as any)?.cause?.code;
+  const message = typeof (reason as any)?.message === 'string' ? (reason as any).message : '';
+  const status =
+    (reason as any)?.status ??
+    (reason as any)?.statusCode ??
+    (reason as any)?.response?.status ??
+    (reason as any)?.response?.statusCode;
+
+  const transientCodes = [
+    'ECONNREFUSED',
+    'EHOSTUNREACH',
+    'ENETUNREACH',
+    'ENOTFOUND',
+    'EAI_AGAIN',
+    'ECONNRESET',
+    'ETIMEDOUT',
+  ];
+
+  return (
+    transientCodes.includes(code) ||
+    transientCodes.some(c => message.includes(c)) ||
+    message.includes('connect ECONNREFUSED') ||
+    status === 502 ||
+    status === 503 ||
+    status === 504
+  );
+}
+
+function isExpectedAuthFailure(reason: unknown): boolean {
+  const status =
+    (reason as any)?.status ??
+    (reason as any)?.statusCode ??
+    (reason as any)?.response?.status ??
+    (reason as any)?.response?.statusCode;
+  const message = typeof (reason as any)?.message === 'string' ? (reason as any).message : '';
+  const errorKey =
+    (reason as any)?.error?.errorKey ??
+    (reason as any)?.response?.body?.error?.errorKey ??
+    (reason as any)?.response?.error?.errorKey;
+
+  return (
+    status === 401 ||
+    status === 403 ||
+    /login failed/i.test(message) ||
+    /authentication failed/i.test(message) ||
+    errorKey === 'Login failed'
+  );
+}
+
+process.on('unhandledRejection', (reason: unknown) => {
+  // Connection refusals are expected when user adds an offline server; keep the process alive.
+  if (isTransientNetworkFailure(reason)) {
+    log.warn({ reason }, 'Non-fatal network error (unhandled rejection)');
+    return;
+  }
+
+  if (isExpectedAuthFailure(reason)) {
+    log.warn({ reason }, 'Non-fatal auth error (unhandled rejection)');
+    return;
+  }
+
   log.error({ reason }, 'Unhandled promise rejection - process will exit in production');
   if (!isDev) {
     process.exit(1);
