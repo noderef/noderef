@@ -15,7 +15,13 @@
  */
 
 // Shared Neutralino initialization and utilities
-import { events, init as neutralinoInit, os, window as neutralinoWindow } from '@neutralinojs/lib';
+import {
+  app,
+  events,
+  init as neutralinoInit,
+  window as neutralinoWindow,
+  os,
+} from '@neutralinojs/lib';
 
 let ready = false;
 let initPromise: Promise<void> | null = null;
@@ -83,8 +89,9 @@ export const isNeutralinoMode = (): boolean => {
 };
 
 /**
- * Set up minimize on close behavior
- * When user clicks the close button, minimize the window instead of closing
+ * Set up window close behavior
+ * On Windows: properly exit the app when close button is clicked
+ * On macOS/Linux: minimize to keep app running in background
  */
 function setupMinimizeOnClose(): void {
   if (minimizeOnCloseSetup || !isNeutralinoMode()) {
@@ -92,11 +99,25 @@ function setupMinimizeOnClose(): void {
   }
 
   minimizeOnCloseSetup = true;
+
+  // Detect platform from NL_PATH to determine close behavior
+  const nlPath = (window as any).NL_PATH || '';
+  const isWindows =
+    /^[A-Za-z]:/.test(nlPath) || // Drive letter (C:, D:, etc.)
+    nlPath.includes('\\') || // Backslashes
+    nlPath.toLowerCase().endsWith('.exe'); // .exe extension
+
   events.on('windowClose', async () => {
     try {
-      await neutralinoWindow.minimize();
+      if (isWindows) {
+        // On Windows, exit the app completely
+        await app.exit();
+      } else {
+        // On macOS/Linux, minimize to keep app running in background
+        await neutralinoWindow.minimize();
+      }
     } catch (error) {
-      console.error('[Neutralino] Failed to minimize window:', error);
+      console.error('[Neutralino] Failed to handle window close:', error);
     }
   });
 }
