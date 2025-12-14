@@ -69,6 +69,7 @@ import {
   IconFileSearch,
   IconFolder,
   IconPhoto,
+  IconPlus,
   IconRefresh,
   IconTextWrap,
   IconTrash,
@@ -1959,15 +1960,11 @@ export function FileFolderBrowserView({
               <Menu.Item leftSection={<IconCode size={14} />} onClick={handleOpenInJsConsole}>
                 {t('submenu:jsConsole')}
               </Menu.Item>
-              <Menu.Divider />
             </>
           )}
           {selectedItem?.isFolder && (
             <>
-              <Menu.Item
-                leftSection={<IconFileSearch size={14} />}
-                onClick={handleOpenSelectionInNewTab}
-              >
+              <Menu.Item leftSection={<IconPlus size={14} />} onClick={handleOpenSelectionInNewTab}>
                 {t('submenu:openInNewTab')}
               </Menu.Item>
               <Menu.Item
@@ -2004,6 +2001,7 @@ export function FileFolderBrowserView({
           {selectedItem &&
             !['st:site', 'st:sites', 'rma:rmsite'].includes(selectedItem.nodeType) && (
               <>
+                <Menu.Divider />
                 <Menu.Item
                   leftSection={<IconEdit size={14} />}
                   onClick={handleRenameClick}
