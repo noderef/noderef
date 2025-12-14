@@ -35,9 +35,7 @@ function resolveOutDir(label: string) {
   if (!label || label === 'src') {
     return path.join(aiDir, '.generated');
   }
-  if (label === 'dist') {
-    return path.join(repoRoot, 'resources/node-src/dist/ai/.generated');
-  }
+  return path.join(repoRoot, 'resources/node-src/dist/.generated');
   if (path.isAbsolute(label)) {
     return label;
   }
