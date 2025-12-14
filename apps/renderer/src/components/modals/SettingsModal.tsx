@@ -15,6 +15,7 @@
  */
 
 import { getAiSettings, listAiModels, saveAiSettings } from '@/core/ipc/aiSettings';
+import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
 import { MODAL_KEYS } from '@/core/store/keys';
 import { useUIStore } from '@/core/store/ui';
 import { useModal } from '@/hooks/useModal';
@@ -39,6 +40,7 @@ import {
   useMantineColorScheme,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
+import { clipboard } from '@neutralinojs/lib';
 import {
   IconBrandGithub,
   IconBrandX,
@@ -50,7 +52,7 @@ import {
   IconSettings,
   IconSparkles,
 } from '@tabler/icons-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import classes from './SettingsModal.module.css';
 
@@ -88,6 +90,12 @@ export function SettingsModal() {
   const [aiModelsLoading, setAiModelsLoading] = useState(false);
   const [aiTokenValid, setAiTokenValid] = useState(false);
   const [aiTokenError, setAiTokenError] = useState<string | null>(null);
+
+  const modalContentRef = useRef<HTMLDivElement | null>(null);
+  const isDesktopMode = useMemo(
+    () => typeof window !== 'undefined' && isNeutralinoMode() && !!(window as any).Neutralino,
+    []
+  );
 
   // 🔒 Single source of truth: derive from store with safe fallback
   const languageValue = storeLanguage || 'en';
@@ -131,6 +139,183 @@ export function SettingsModal() {
   ];
 
   const aiProviderOptions = [{ value: 'anthropic', label: 'Anthropic' }];
+
+  // Custom paste handling for desktop mode to prevent duplicate pastes on Windows
+  // and enable paste functionality on Mac
+  useEffect(() => {
+    if (!isOpen || !isDesktopMode) {
+      return;
+    }
+
+    const getEditableTarget = (
+      target: EventTarget | null
+    ): HTMLInputElement | HTMLTextAreaElement | HTMLElement | null => {
+      if (!target) return null;
+      let node: HTMLElement | null = null;
+      if (target instanceof HTMLElement) {
+        node = target;
+      } else if (target instanceof Node && target.parentElement) {
+        node = target.parentElement;
+      }
+      while (node) {
+        if (
+          node instanceof HTMLInputElement ||
+          node instanceof HTMLTextAreaElement ||
+          node.isContentEditable
+        ) {
+          return node;
+        }
+        node = node.parentElement;
+      }
+      return null;
+    };
+
+    // Use a processing flag to prevent concurrent paste operations
+    let isProcessingPaste = false;
+
+    const readClipboardText = async (event?: ClipboardEvent): Promise<string | null> => {
+      const clipboardData = event?.clipboardData || (window as any).clipboardData;
+      const textFromEvent = clipboardData?.getData?.('text/plain');
+      if (textFromEvent) return textFromEvent;
+
+      if (isDesktopMode) {
+        try {
+          await ensureNeutralinoReady();
+          const neutralinoText = await clipboard.readText();
+          if (neutralinoText) return neutralinoText;
+        } catch (error) {
+          console.error('Neutralino clipboard read failed:', error);
+        }
+      }
+
+      if (navigator.clipboard?.readText) {
+        try {
+          const navigatorText = await navigator.clipboard.readText();
+          if (navigatorText) return navigatorText;
+        } catch {
+          // Ignore
+        }
+      }
+
+      return null;
+    };
+
+    const insertText = (
+      editableTarget: HTMLInputElement | HTMLTextAreaElement | HTMLElement,
+      text: string
+    ) => {
+      if (
+        editableTarget instanceof HTMLInputElement ||
+        editableTarget instanceof HTMLTextAreaElement
+      ) {
+        const { selectionStart, selectionEnd, value } = editableTarget;
+        const start = selectionStart ?? value.length;
+        const end = selectionEnd ?? value.length;
+        const newValue = value.slice(0, start) + text + value.slice(end);
+        const cursorPos = start + text.length;
+
+        // Identify the field using data-field attribute and update React state
+        const fieldName = editableTarget.getAttribute('data-field') || '';
+
+        if (fieldName === 'aiToken') {
+          setAiTokenInput(newValue);
+          if (newValue.trim().length > 0) {
+            setAiTokenValid(false);
+            setAiTokenError(null);
+          }
+        }
+
+        // Update cursor position after React updates the DOM
+        setTimeout(() => {
+          if (document.activeElement === editableTarget) {
+            editableTarget.setSelectionRange(cursorPos, cursorPos);
+          }
+        }, 0);
+      } else if (editableTarget.isContentEditable) {
+        document.execCommand('insertText', false, text);
+      }
+    };
+
+    const handlePaste = async (event: ClipboardEvent) => {
+      // If already processing a paste, immediately block this one
+      if (isProcessingPaste) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      const container = modalContentRef.current;
+      if (!container) return;
+      const editableTarget = getEditableTarget(event.target);
+      if (!editableTarget) return;
+      if (!container.contains(editableTarget)) return;
+
+      // Prevent default BEFORE async operations
+      event.preventDefault();
+      event.stopPropagation();
+
+      // Set flag immediately to block concurrent operations
+      isProcessingPaste = true;
+
+      try {
+        const text = await readClipboardText(event);
+        if (text) {
+          insertText(editableTarget, text);
+        }
+      } finally {
+        // Clear flag after a short delay to prevent rapid duplicate events
+        setTimeout(() => {
+          isProcessingPaste = false;
+        }, 50);
+      }
+    };
+
+    const handleKeyDown = async (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey)) return;
+      if (event.key.toLowerCase() !== 'v') return;
+
+      // If already processing a paste, immediately block this one
+      if (isProcessingPaste) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      const container = modalContentRef.current;
+      if (!container) return;
+      const editableTarget = getEditableTarget(event.target);
+      if (!editableTarget || !container.contains(editableTarget)) {
+        return;
+      }
+
+      // Prevent default BEFORE async operations
+      event.preventDefault();
+      event.stopPropagation();
+
+      // Set flag immediately to block concurrent operations
+      isProcessingPaste = true;
+
+      try {
+        const text = await readClipboardText();
+        if (text) {
+          insertText(editableTarget, text);
+        }
+      } finally {
+        // Clear flag after a short delay to prevent rapid duplicate events
+        setTimeout(() => {
+          isProcessingPaste = false;
+        }, 50);
+      }
+    };
+
+    window.addEventListener('paste', handlePaste, true);
+    window.addEventListener('keydown', handleKeyDown, true);
+
+    return () => {
+      window.removeEventListener('paste', handlePaste, true);
+      window.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [isOpen, isDesktopMode]);
 
   const fetchAiModels = useCallback(
     async ({
@@ -329,476 +514,481 @@ export function SettingsModal() {
       transitionProps={{ duration: 300, transition: 'fade' }}
       withCloseButton={true}
     >
-      <Group align="stretch" gap={0} style={{ height: '500px' }}>
-        {/* Navbar on the left */}
-        <nav className={classes.navbar}>
-          <div className={classes.navbarMain}>
-            {mainMenuItems.map(item => {
-              const Icon = item.icon;
-              return (
-                <a
-                  key={item.key}
-                  className={classes.link}
-                  data-active={activeSection === item.key || undefined}
-                  href="#"
-                  onClick={e => {
-                    e.preventDefault();
-                    setActiveSection(item.key);
-                  }}
-                >
-                  <Icon className={classes.linkIcon} stroke={1.5} />
-                  <span>{item.label}</span>
-                </a>
-              );
-            })}
-          </div>
-          <div className={classes.navbarFooter}>
+      <div ref={modalContentRef} style={{ display: 'contents' }}>
+        <Group align="stretch" gap={0} style={{ height: '500px' }}>
+          {/* Navbar on the left */}
+          <nav className={classes.navbar}>
+            <div className={classes.navbarMain}>
+              {mainMenuItems.map(item => {
+                const Icon = item.icon;
+                return (
+                  <a
+                    key={item.key}
+                    className={classes.link}
+                    data-active={activeSection === item.key || undefined}
+                    href="#"
+                    onClick={e => {
+                      e.preventDefault();
+                      setActiveSection(item.key);
+                    }}
+                  >
+                    <Icon className={classes.linkIcon} stroke={1.5} />
+                    <span>{item.label}</span>
+                  </a>
+                );
+              })}
+            </div>
+            <div className={classes.navbarFooter}>
+              {(() => {
+                const AboutIcon = aboutMenuItem.icon;
+                return (
+                  <a
+                    className={classes.link}
+                    data-active={activeSection === aboutMenuItem.key || undefined}
+                    href="#"
+                    onClick={e => {
+                      e.preventDefault();
+                      setActiveSection(aboutMenuItem.key);
+                    }}
+                  >
+                    <AboutIcon className={classes.linkIcon} stroke={1.5} />
+                    <span>{aboutMenuItem.label}</span>
+                  </a>
+                );
+              })()}
+            </div>
+          </nav>
+
+          {/* Content area on the right */}
+          <Box className={classes.contentArea}>
             {(() => {
-              const AboutIcon = aboutMenuItem.icon;
+              const activeItem = menuItems.find(item => item.key === activeSection);
+              if (!activeItem) return null;
+
+              const ActiveIcon = activeItem.icon;
+
               return (
-                <a
-                  className={classes.link}
-                  data-active={activeSection === aboutMenuItem.key || undefined}
-                  href="#"
-                  onClick={e => {
-                    e.preventDefault();
-                    setActiveSection(aboutMenuItem.key);
-                  }}
-                >
-                  <AboutIcon className={classes.linkIcon} stroke={1.5} />
-                  <span>{aboutMenuItem.label}</span>
-                </a>
-              );
-            })()}
-          </div>
-        </nav>
+                <Stack gap="lg">
+                  {/* Title with icon */}
+                  <Group gap="sm">
+                    <ActiveIcon size={24} stroke={1.5} />
+                    <Text size="xl" fw={600}>
+                      {activeItem.label}
+                    </Text>
+                  </Group>
 
-        {/* Content area on the right */}
-        <Box className={classes.contentArea}>
-          {(() => {
-            const activeItem = menuItems.find(item => item.key === activeSection);
-            if (!activeItem) return null;
-
-            const ActiveIcon = activeItem.icon;
-
-            return (
-              <Stack gap="lg">
-                {/* Title with icon */}
-                <Group gap="sm">
-                  <ActiveIcon size={24} stroke={1.5} />
-                  <Text size="xl" fw={600}>
-                    {activeItem.label}
+                  {/* Intro text */}
+                  <Text size="sm" c="dimmed">
+                    {activeItem.description}
                   </Text>
-                </Group>
 
-                {/* Intro text */}
-                <Text size="sm" c="dimmed">
-                  {activeItem.description}
-                </Text>
-
-                {/* Content */}
-                {activeSection === 'view' && (
-                  <Stack gap="lg" mt="md">
-                    <div>
-                      <Text fw={500} size="sm" mb="xs">
-                        {t('common:theme')}
-                      </Text>
-                      <Group gap="md">
-                        <Tooltip label={t('common:light')} position="top" withArrow>
-                          <UnstyledButton
-                            onClick={() => handleThemeChange('light')}
-                            style={{
-                              width: 80,
-                              height: 80,
-                              borderRadius: 'var(--mantine-radius-md)',
-                              border:
-                                theme === 'light'
-                                  ? '3px solid var(--mantine-color-blue-6)'
-                                  : '2px solid var(--mantine-color-gray-3)',
-                              backgroundColor: 'white',
-                              position: 'relative',
-                              cursor: 'pointer',
-                              transition: 'all 150ms ease',
-                            }}
-                          >
-                            {theme === 'light' && (
-                              <div
-                                style={{
-                                  position: 'absolute',
-                                  top: -8,
-                                  right: -8,
-                                  width: 24,
-                                  height: 24,
-                                  borderRadius: '50%',
-                                  backgroundColor: 'var(--mantine-color-blue-6)',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                }}
-                              >
-                                <IconCheck size={14} color="white" stroke={3} />
-                              </div>
-                            )}
-                          </UnstyledButton>
-                        </Tooltip>
-
-                        <Tooltip label={t('common:dark')} position="top" withArrow>
-                          <UnstyledButton
-                            onClick={() => handleThemeChange('dark')}
-                            style={{
-                              width: 80,
-                              height: 80,
-                              borderRadius: 'var(--mantine-radius-md)',
-                              border:
-                                theme === 'dark'
-                                  ? '3px solid var(--mantine-color-blue-6)'
-                                  : '2px solid var(--mantine-color-gray-3)',
-                              backgroundColor: '#25262b',
-                              position: 'relative',
-                              cursor: 'pointer',
-                              transition: 'all 150ms ease',
-                            }}
-                          >
-                            {theme === 'dark' && (
-                              <div
-                                style={{
-                                  position: 'absolute',
-                                  top: -8,
-                                  right: -8,
-                                  width: 24,
-                                  height: 24,
-                                  borderRadius: '50%',
-                                  backgroundColor: 'var(--mantine-color-blue-6)',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                }}
-                              >
-                                <IconCheck size={14} color="white" stroke={3} />
-                              </div>
-                            )}
-                          </UnstyledButton>
-                        </Tooltip>
-
-                        <Tooltip label={t('common:auto')} position="top" withArrow>
-                          <UnstyledButton
-                            onClick={() => handleThemeChange('auto')}
-                            style={{
-                              width: 80,
-                              height: 80,
-                              borderRadius: 'var(--mantine-radius-md)',
-                              border:
-                                theme === 'auto'
-                                  ? '3px solid var(--mantine-color-blue-6)'
-                                  : '2px solid var(--mantine-color-gray-3)',
-                              backgroundColor: 'white',
-                              position: 'relative',
-                              cursor: 'pointer',
-                              transition: 'all 150ms ease',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                          >
-                            <IconDeviceDesktop size={32} color="var(--mantine-color-gray-6)" />
-                            {theme === 'auto' && (
-                              <div
-                                style={{
-                                  position: 'absolute',
-                                  top: -8,
-                                  right: -8,
-                                  width: 24,
-                                  height: 24,
-                                  borderRadius: '50%',
-                                  backgroundColor: 'var(--mantine-color-blue-6)',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                }}
-                              >
-                                <IconCheck size={14} color="white" stroke={3} />
-                              </div>
-                            )}
-                          </UnstyledButton>
-                        </Tooltip>
-                      </Group>
-                    </div>
-                  </Stack>
-                )}
-
-                {activeSection === 'language' && (
-                  <Stack gap="lg" mt="md">
-                    <div>
-                      <Text fw={500} size="sm" mb="xs">
-                        {t('settings:language')}
-                      </Text>
-                      <Text size="xs" c="dimmed">
-                        {t('settings:languageHint')}
-                      </Text>
-                    </div>
-
-                    <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-                      {languageOptions.map(lang => {
-                        const isActive = languageValue === lang.value;
-                        return (
-                          <UnstyledButton
-                            key={lang.value}
-                            onClick={() => handleLanguageChange(lang.value)}
-                            className={classes.languageCard}
-                            data-active={isActive || undefined}
-                          >
-                            <Group gap="md">
-                              <span
-                                className={lang.flagClass}
-                                style={{
-                                  fontSize: '1.8rem',
-                                  borderRadius: '6px',
-                                  overflow: 'hidden',
-                                  display: 'inline-block',
-                                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.18)',
-                                }}
-                              />
-                              <Stack gap={2}>
-                                <Text size="sm" fw={500}>
-                                  {lang.label}
-                                </Text>
-                                <Text size="xs" c="dimmed">
-                                  {lang.nativeLabel}
-                                </Text>
-                              </Stack>
-                            </Group>
-
-                            {isActive && (
-                              <IconCheck
-                                size={18}
-                                stroke={2.5}
-                                color="var(--mantine-color-blue-6)"
-                              />
-                            )}
-                          </UnstyledButton>
-                        );
-                      })}
-                    </SimpleGrid>
-                  </Stack>
-                )}
-
-                {activeSection === 'ai' && (
-                  <Stack gap="md" mt="md">
-                    {aiError && (
-                      <Alert color="red" title={t('common:error')}>
-                        {aiError}
-                      </Alert>
-                    )}
-                    {aiLoading && !aiLoaded ? (
-                      <Text size="sm">{t('common:loading')}</Text>
-                    ) : (
-                      <>
-                        <Switch
-                          label={t('settings:aiToggleLabel')}
-                          description={t('settings:aiToggleDescription')}
-                          checked={aiEnabled}
-                          onChange={event => setAiEnabled(event.currentTarget.checked)}
-                          disabled={aiSaving}
-                        />
-                        <Select
-                          label={t('settings:aiProviderLabel')}
-                          data={aiProviderOptions}
-                          value={aiProvider}
-                          onChange={value => {
-                            if (!value) return;
-                            setAiProvider(value);
-                            setAiTokenValid(false);
-                            setAiModelOptions([]);
-                            if (aiHasToken && !aiTokenInput.trim()) {
-                              void fetchAiModels({ provider: value });
-                            }
-                          }}
-                          disabled={aiSaving}
-                        />
-                        <Select
-                          label={t('settings:aiModelLabel')}
-                          data={aiModelOptions}
-                          value={aiModel}
-                          onChange={value => value && setAiModel(value)}
-                          disabled={!aiTokenValid || aiModelOptions.length === 0 || aiModelsLoading}
-                          placeholder={
-                            aiTokenValid
-                              ? t('settings:aiModelPlaceholder')
-                              : t('settings:aiModelRequiresValidation')
-                          }
-                        />
-                        <Group align="flex-end" gap="md">
-                          <Box style={{ flex: 1 }}>
-                            <PasswordInput
-                              label={t('settings:aiTokenLabel')}
-                              value={aiTokenInput}
-                              onChange={event => {
-                                const value = event.currentTarget.value;
-                                setAiTokenInput(value);
-                                if (value.trim().length > 0) {
-                                  setAiTokenValid(false);
-                                  setAiTokenError(null);
-                                }
+                  {/* Content */}
+                  {activeSection === 'view' && (
+                    <Stack gap="lg" mt="md">
+                      <div>
+                        <Text fw={500} size="sm" mb="xs">
+                          {t('common:theme')}
+                        </Text>
+                        <Group gap="md">
+                          <Tooltip label={t('common:light')} position="top" withArrow>
+                            <UnstyledButton
+                              onClick={() => handleThemeChange('light')}
+                              style={{
+                                width: 80,
+                                height: 80,
+                                borderRadius: 'var(--mantine-radius-md)',
+                                border:
+                                  theme === 'light'
+                                    ? '3px solid var(--mantine-color-blue-6)'
+                                    : '2px solid var(--mantine-color-gray-3)',
+                                backgroundColor: 'white',
+                                position: 'relative',
+                                cursor: 'pointer',
+                                transition: 'all 150ms ease',
                               }}
-                              disabled={aiSaving}
-                              placeholder={
-                                aiHasToken ? t('settings:aiTokenPlaceholderSaved') : undefined
+                            >
+                              {theme === 'light' && (
+                                <div
+                                  style={{
+                                    position: 'absolute',
+                                    top: -8,
+                                    right: -8,
+                                    width: 24,
+                                    height: 24,
+                                    borderRadius: '50%',
+                                    backgroundColor: 'var(--mantine-color-blue-6)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                  }}
+                                >
+                                  <IconCheck size={14} color="white" stroke={3} />
+                                </div>
+                              )}
+                            </UnstyledButton>
+                          </Tooltip>
+
+                          <Tooltip label={t('common:dark')} position="top" withArrow>
+                            <UnstyledButton
+                              onClick={() => handleThemeChange('dark')}
+                              style={{
+                                width: 80,
+                                height: 80,
+                                borderRadius: 'var(--mantine-radius-md)',
+                                border:
+                                  theme === 'dark'
+                                    ? '3px solid var(--mantine-color-blue-6)'
+                                    : '2px solid var(--mantine-color-gray-3)',
+                                backgroundColor: '#25262b',
+                                position: 'relative',
+                                cursor: 'pointer',
+                                transition: 'all 150ms ease',
+                              }}
+                            >
+                              {theme === 'dark' && (
+                                <div
+                                  style={{
+                                    position: 'absolute',
+                                    top: -8,
+                                    right: -8,
+                                    width: 24,
+                                    height: 24,
+                                    borderRadius: '50%',
+                                    backgroundColor: 'var(--mantine-color-blue-6)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                  }}
+                                >
+                                  <IconCheck size={14} color="white" stroke={3} />
+                                </div>
+                              )}
+                            </UnstyledButton>
+                          </Tooltip>
+
+                          <Tooltip label={t('common:auto')} position="top" withArrow>
+                            <UnstyledButton
+                              onClick={() => handleThemeChange('auto')}
+                              style={{
+                                width: 80,
+                                height: 80,
+                                borderRadius: 'var(--mantine-radius-md)',
+                                border:
+                                  theme === 'auto'
+                                    ? '3px solid var(--mantine-color-blue-6)'
+                                    : '2px solid var(--mantine-color-gray-3)',
+                                backgroundColor: 'white',
+                                position: 'relative',
+                                cursor: 'pointer',
+                                transition: 'all 150ms ease',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              <IconDeviceDesktop size={32} color="var(--mantine-color-gray-6)" />
+                              {theme === 'auto' && (
+                                <div
+                                  style={{
+                                    position: 'absolute',
+                                    top: -8,
+                                    right: -8,
+                                    width: 24,
+                                    height: 24,
+                                    borderRadius: '50%',
+                                    backgroundColor: 'var(--mantine-color-blue-6)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                  }}
+                                >
+                                  <IconCheck size={14} color="white" stroke={3} />
+                                </div>
+                              )}
+                            </UnstyledButton>
+                          </Tooltip>
+                        </Group>
+                      </div>
+                    </Stack>
+                  )}
+
+                  {activeSection === 'language' && (
+                    <Stack gap="lg" mt="md">
+                      <div>
+                        <Text fw={500} size="sm" mb="xs">
+                          {t('settings:language')}
+                        </Text>
+                        <Text size="xs" c="dimmed">
+                          {t('settings:languageHint')}
+                        </Text>
+                      </div>
+
+                      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+                        {languageOptions.map(lang => {
+                          const isActive = languageValue === lang.value;
+                          return (
+                            <UnstyledButton
+                              key={lang.value}
+                              onClick={() => handleLanguageChange(lang.value)}
+                              className={classes.languageCard}
+                              data-active={isActive || undefined}
+                            >
+                              <Group gap="md">
+                                <span
+                                  className={lang.flagClass}
+                                  style={{
+                                    fontSize: '1.8rem',
+                                    borderRadius: '6px',
+                                    overflow: 'hidden',
+                                    display: 'inline-block',
+                                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.18)',
+                                  }}
+                                />
+                                <Stack gap={2}>
+                                  <Text size="sm" fw={500}>
+                                    {lang.label}
+                                  </Text>
+                                  <Text size="xs" c="dimmed">
+                                    {lang.nativeLabel}
+                                  </Text>
+                                </Stack>
+                              </Group>
+
+                              {isActive && (
+                                <IconCheck
+                                  size={18}
+                                  stroke={2.5}
+                                  color="var(--mantine-color-blue-6)"
+                                />
+                              )}
+                            </UnstyledButton>
+                          );
+                        })}
+                      </SimpleGrid>
+                    </Stack>
+                  )}
+
+                  {activeSection === 'ai' && (
+                    <Stack gap="md" mt="md">
+                      {aiError && (
+                        <Alert color="red" title={t('common:error')}>
+                          {aiError}
+                        </Alert>
+                      )}
+                      {aiLoading && !aiLoaded ? (
+                        <Text size="sm">{t('common:loading')}</Text>
+                      ) : (
+                        <>
+                          <Switch
+                            label={t('settings:aiToggleLabel')}
+                            description={t('settings:aiToggleDescription')}
+                            checked={aiEnabled}
+                            onChange={event => setAiEnabled(event.currentTarget.checked)}
+                            disabled={aiSaving}
+                          />
+                          <Select
+                            label={t('settings:aiProviderLabel')}
+                            data={aiProviderOptions}
+                            value={aiProvider}
+                            onChange={value => {
+                              if (!value) return;
+                              setAiProvider(value);
+                              setAiTokenValid(false);
+                              setAiModelOptions([]);
+                              if (aiHasToken && !aiTokenInput.trim()) {
+                                void fetchAiModels({ provider: value });
                               }
-                              description={
-                                aiHasToken
-                                  ? t('settings:aiTokenHelperSet')
-                                  : t('settings:aiTokenHelperUnset')
-                              }
-                              rightSection={
-                                aiModelsLoading ? (
-                                  <Loader size="xs" />
-                                ) : aiTokenValid ? (
-                                  <IconCheck size={16} color="var(--mantine-color-green-6)" />
-                                ) : undefined
-                              }
-                            />
-                          </Box>
-                          <Button
-                            variant="light"
-                            onClick={handleValidateToken}
-                            loading={aiModelsLoading}
+                            }}
+                            disabled={aiSaving}
+                          />
+                          <Select
+                            label={t('settings:aiModelLabel')}
+                            data={aiModelOptions}
+                            value={aiModel}
+                            onChange={value => value && setAiModel(value)}
                             disabled={
-                              aiModelsLoading || (!aiHasToken && aiTokenInput.trim().length === 0)
+                              !aiTokenValid || aiModelOptions.length === 0 || aiModelsLoading
                             }
-                          >
-                            {t('settings:aiValidate')}
-                          </Button>
-                        </Group>
-                        {aiTokenError && (
-                          <Text size="sm" c="red">
-                            {aiTokenError}
-                          </Text>
-                        )}
-                        <Group justify="flex-end">
-                          <Button variant="subtle" onClick={close} disabled={aiSaving}>
-                            {t('common:cancel')}
-                          </Button>
-                          <Button
-                            onClick={handleAiSave}
-                            loading={aiSaving}
-                            disabled={!aiProvider || !aiModel}
-                          >
-                            {t('settings:aiSave')}
-                          </Button>
-                        </Group>
-                      </>
-                    )}
-                  </Stack>
-                )}
+                            placeholder={
+                              aiTokenValid
+                                ? t('settings:aiModelPlaceholder')
+                                : t('settings:aiModelRequiresValidation')
+                            }
+                          />
+                          <Group align="flex-end" gap="md">
+                            <Box style={{ flex: 1 }}>
+                              <PasswordInput
+                                label={t('settings:aiTokenLabel')}
+                                value={aiTokenInput}
+                                onChange={event => {
+                                  const value = event.currentTarget.value;
+                                  setAiTokenInput(value);
+                                  if (value.trim().length > 0) {
+                                    setAiTokenValid(false);
+                                    setAiTokenError(null);
+                                  }
+                                }}
+                                disabled={aiSaving}
+                                placeholder={
+                                  aiHasToken ? t('settings:aiTokenPlaceholderSaved') : undefined
+                                }
+                                description={
+                                  aiHasToken
+                                    ? t('settings:aiTokenHelperSet')
+                                    : t('settings:aiTokenHelperUnset')
+                                }
+                                data-field="aiToken"
+                                rightSection={
+                                  aiModelsLoading ? (
+                                    <Loader size="xs" />
+                                  ) : aiTokenValid ? (
+                                    <IconCheck size={16} color="var(--mantine-color-green-6)" />
+                                  ) : undefined
+                                }
+                              />
+                            </Box>
+                            <Button
+                              variant="light"
+                              onClick={handleValidateToken}
+                              loading={aiModelsLoading}
+                              disabled={
+                                aiModelsLoading || (!aiHasToken && aiTokenInput.trim().length === 0)
+                              }
+                            >
+                              {t('settings:aiValidate')}
+                            </Button>
+                          </Group>
+                          {aiTokenError && (
+                            <Text size="sm" c="red">
+                              {aiTokenError}
+                            </Text>
+                          )}
+                          <Group justify="flex-end">
+                            <Button variant="subtle" onClick={close} disabled={aiSaving}>
+                              {t('common:cancel')}
+                            </Button>
+                            <Button
+                              onClick={handleAiSave}
+                              loading={aiSaving}
+                              disabled={!aiProvider || !aiModel}
+                            >
+                              {t('settings:aiSave')}
+                            </Button>
+                          </Group>
+                        </>
+                      )}
+                    </Stack>
+                  )}
 
-                {activeSection === 'about' && (
-                  <Stack gap="md" mt="md" align="center">
-                    <Box style={{ width: '100%', textAlign: 'center' }}>
-                      <img
-                        src="/assets/logo3.svg"
-                        alt={t('settings:appName')}
-                        style={{
-                          maxWidth: '300px',
-                          height: 'auto',
-                          marginBottom: 'var(--mantine-spacing-md)',
-                          filter: computedColorScheme === 'dark' ? 'invert(1)' : 'none',
-                          display: 'block',
-                          marginLeft: 'auto',
-                          marginRight: 'auto',
-                        }}
-                      />
-                      <Text size="sm" c="dimmed" mb="md" style={{ textAlign: 'center' }}>
-                        {t('settings:appVersion')}{' '}
-                        {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.1.0'}
-                      </Text>
-                      <Text size="sm" mb="md" style={{ textAlign: 'center' }}>
-                        {t('settings:appDescription')}
-                      </Text>
-                      <Group gap="md" justify="center" mt="sm">
-                        <Tooltip label="GitHub" withArrow>
-                          <ActionIcon
-                            component="a"
-                            href={t('settings:githubLink')}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            variant="subtle"
-                            size="lg"
-                            aria-label="GitHub"
-                          >
-                            <IconBrandGithub size={24} />
-                          </ActionIcon>
-                        </Tooltip>
-                        <Tooltip label="X (Twitter)" withArrow>
-                          <ActionIcon
-                            component="a"
-                            href={t('settings:twitterLink')}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            variant="subtle"
-                            size="lg"
-                            aria-label="X (Twitter)"
-                          >
-                            <IconBrandX size={24} />
-                          </ActionIcon>
-                        </Tooltip>
-                      </Group>
-                    </Box>
-
-                    {/* OOTBee Support Tools Section */}
-                    <Box
-                      style={{
-                        width: '100%',
-                        marginTop: 'var(--mantine-spacing-xl)',
-                        paddingTop: 'var(--mantine-spacing-xl)',
-                        borderTop: '1px solid var(--mantine-color-gray-3)',
-                      }}
-                    >
-                      <Stack gap="sm" align="center">
+                  {activeSection === 'about' && (
+                    <Stack gap="md" mt="md" align="center">
+                      <Box style={{ width: '100%', textAlign: 'center' }}>
                         <img
-                          src="/assets/ootbee.svg"
-                          alt={t('settings:ootbeeTitle')}
+                          src="/assets/logo3.svg"
+                          alt={t('settings:appName')}
                           style={{
-                            maxWidth: '100px',
+                            maxWidth: '300px',
                             height: 'auto',
-                            marginBottom: 'var(--mantine-spacing-sm)',
+                            marginBottom: 'var(--mantine-spacing-md)',
+                            filter: computedColorScheme === 'dark' ? 'invert(1)' : 'none',
                             display: 'block',
                             marginLeft: 'auto',
                             marginRight: 'auto',
                           }}
                         />
-                        <Anchor
-                          href={t('settings:ootbeeGithubLink')}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          size="sm"
-                          fw={500}
-                          style={{ textAlign: 'center' }}
-                        >
-                          {t('settings:ootbeeTitle')}
-                        </Anchor>
-                        <Text
-                          size="xs"
-                          c="dimmed"
-                          style={{ textAlign: 'center', maxWidth: '600px' }}
-                        >
-                          {t('settings:ootbeeDescription')}
+                        <Text size="sm" c="dimmed" mb="md" style={{ textAlign: 'center' }}>
+                          {t('settings:appVersion')}{' '}
+                          {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.1.0'}
                         </Text>
-                        <Text
-                          size="xs"
-                          c="dimmed"
-                          style={{ textAlign: 'center', fontStyle: 'italic' }}
-                        >
-                          {t('settings:ootbeeGratitude')}
+                        <Text size="sm" mb="md" style={{ textAlign: 'center' }}>
+                          {t('settings:appDescription')}
                         </Text>
-                      </Stack>
-                    </Box>
-                  </Stack>
-                )}
-              </Stack>
-            );
-          })()}
-        </Box>
-      </Group>
+                        <Group gap="md" justify="center" mt="sm">
+                          <Tooltip label="GitHub" withArrow>
+                            <ActionIcon
+                              component="a"
+                              href={t('settings:githubLink')}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              variant="subtle"
+                              size="lg"
+                              aria-label="GitHub"
+                            >
+                              <IconBrandGithub size={24} />
+                            </ActionIcon>
+                          </Tooltip>
+                          <Tooltip label="X (Twitter)" withArrow>
+                            <ActionIcon
+                              component="a"
+                              href={t('settings:twitterLink')}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              variant="subtle"
+                              size="lg"
+                              aria-label="X (Twitter)"
+                            >
+                              <IconBrandX size={24} />
+                            </ActionIcon>
+                          </Tooltip>
+                        </Group>
+                      </Box>
+
+                      {/* OOTBee Support Tools Section */}
+                      <Box
+                        style={{
+                          width: '100%',
+                          marginTop: 'var(--mantine-spacing-xl)',
+                          paddingTop: 'var(--mantine-spacing-xl)',
+                          borderTop: '1px solid var(--mantine-color-gray-3)',
+                        }}
+                      >
+                        <Stack gap="sm" align="center">
+                          <img
+                            src="/assets/ootbee.svg"
+                            alt={t('settings:ootbeeTitle')}
+                            style={{
+                              maxWidth: '100px',
+                              height: 'auto',
+                              marginBottom: 'var(--mantine-spacing-sm)',
+                              display: 'block',
+                              marginLeft: 'auto',
+                              marginRight: 'auto',
+                            }}
+                          />
+                          <Anchor
+                            href={t('settings:ootbeeGithubLink')}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            size="sm"
+                            fw={500}
+                            style={{ textAlign: 'center' }}
+                          >
+                            {t('settings:ootbeeTitle')}
+                          </Anchor>
+                          <Text
+                            size="xs"
+                            c="dimmed"
+                            style={{ textAlign: 'center', maxWidth: '600px' }}
+                          >
+                            {t('settings:ootbeeDescription')}
+                          </Text>
+                          <Text
+                            size="xs"
+                            c="dimmed"
+                            style={{ textAlign: 'center', fontStyle: 'italic' }}
+                          >
+                            {t('settings:ootbeeGratitude')}
+                          </Text>
+                        </Stack>
+                      </Box>
+                    </Stack>
+                  )}
+                </Stack>
+              );
+            })()}
+          </Box>
+        </Group>
+      </div>
     </Modal>
   );
 }
