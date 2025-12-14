@@ -16,6 +16,7 @@
   "nativeAllowList": [
     "app.*",
     "os.*",
+    "computer.*",
     "window.*",
     "events.*",
     "filesystem.*",
@@ -25,6 +26,7 @@
   "permissions": {
     "filesystem": true,
     "os": true,
+    "computer": true,
     "process": true
   },
   "cli": {

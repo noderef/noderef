@@ -17,6 +17,7 @@
 // Shared Neutralino initialization and utilities
 import {
   app,
+  computer,
   events,
   init as neutralinoInit,
   window as neutralinoWindow,
@@ -100,18 +101,15 @@ function setupMinimizeOnClose(): void {
 
   minimizeOnCloseSetup = true;
 
-  // Detect platform from NL_PATH to determine close behavior
-  const nlPath = (window as any).NL_PATH || '';
-  const isWindows =
-    /^[A-Za-z]:/.test(nlPath) || // Drive letter (C:, D:, etc.)
-    nlPath.includes('\\') || // Backslashes
-    nlPath.toLowerCase().endsWith('.exe'); // .exe extension
-
   events.on('windowClose', async () => {
     try {
+      // Detect OS using Neutralino API
+      const osInfo = await computer.getOSInfo();
+      const isWindows = osInfo.name.toLowerCase().includes('windows');
+
       if (isWindows) {
         // On Windows, exit the app completely
-        await app.exit();
+        await app.killProcess();
       } else {
         // On macOS/Linux, minimize to keep app running in background
         await neutralinoWindow.minimize();
