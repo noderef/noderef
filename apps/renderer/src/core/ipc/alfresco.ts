@@ -14,23 +14,23 @@
  * limitations under the License.
  */
 
-import { rpc } from './rpc.js';
 import type {
-  LoginReq,
-  LoginRes,
-  LogoutReq,
-  LogoutRes,
-  ValidateCredentialsReq,
-  ValidateCredentialsRes,
   AlfrescoRpcCall,
   AlfrescoRpcResponse,
   ConfigureOAuth2Req,
   ConfigureOAuth2Res,
   ExchangeOAuth2TokenReq,
   ExchangeOAuth2TokenRes,
+  LoginReq,
+  LoginRes,
+  LogoutReq,
+  LogoutRes,
   PollOAuth2CodeReq,
   PollOAuth2CodeRes,
+  ValidateCredentialsReq,
+  ValidateCredentialsRes,
 } from '@app/contracts';
+import { getRpcBaseUrl, rpc, waitForBackend } from './rpc.js';
 
 /**
  * Generic RPC client for Alfresco operations
@@ -161,27 +161,8 @@ export async function buildStreamUrl(
  * In a real implementation, we'd export baseURL or use a shared config
  */
 async function getBackendUrl(): Promise<string> {
-  // Import waitForBackend to ensure backend is ready
-  const { waitForBackend } = await import('./rpc.js');
   await waitForBackend();
-
-  // Try to get the actual backend URL by making a health check
-  // This is a simple approach - in production, you might want to cache this
-  const DEFAULT_PORT = 5111;
-  for (let port = DEFAULT_PORT; port < DEFAULT_PORT + 50; port++) {
-    try {
-      const candidate = `http://127.0.0.1:${port}`;
-      const res = await fetch(`${candidate}/health`, { cache: 'no-store' });
-      if (res.ok) {
-        return candidate;
-      }
-    } catch {
-      // Continue to next port
-    }
-  }
-
-  // Fallback to default
-  return `http://127.0.0.1:${DEFAULT_PORT}`;
+  return getRpcBaseUrl();
 }
 
 /**

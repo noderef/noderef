@@ -541,6 +541,10 @@ export async function waitForBackend(maxAttempts = 50, intervalMs = 200): Promis
   backendReady = false;
 }
 
+export function getRpcBaseUrl(): string {
+  return baseURL;
+}
+
 export async function startBackend(): Promise<void> {
   debugLog('[RPC] startBackend() called');
   // If already healthy, don't spawn

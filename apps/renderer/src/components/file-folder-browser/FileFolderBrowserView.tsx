@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import { CreateSiteForm } from '@/components/submenu/CreateSiteForm';
 import { getFileIconByMimeType } from '@/components/submenu/fileIconUtils';
 import { alfrescoRpc } from '@/core/ipc/alfresco';
 import {
@@ -48,11 +49,11 @@ import {
   Progress,
   ScrollArea,
   Stack,
+  Switch,
   Table,
   Text,
   TextInput,
   Title,
-  Switch,
   useCombobox,
 } from '@mantine/core';
 import { Dropzone, type FileRejection } from '@mantine/dropzone';
@@ -72,16 +73,15 @@ import {
   IconTextWrap,
   IconTrash,
   IconUpload,
-  IconX,
   IconWorld,
   IconWorldPlus,
   IconWorldX,
+  IconX,
 } from '@tabler/icons-react';
 import { fromEvent } from 'file-selector';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { DropEvent, FileWithPath } from 'react-dropzone';
 import { useTranslation } from 'react-i18next';
-import { CreateSiteForm } from '@/components/submenu/CreateSiteForm';
 
 interface FileFolderBrowserViewProps {
   serverId: number;
@@ -125,11 +125,18 @@ interface FileSystemDirectoryEntry extends FileSystemEntry {
 }
 
 function addPathToFile(file: File, path: string): FileWithPath {
+  const originalPath = (file as any).path; // Capture absolute path from Electron/Neutralino
   const fileWithPath = file as FileWithPath;
   Object.defineProperty(fileWithPath, 'path', {
     value: path,
     configurable: true,
   });
+  if (typeof originalPath === 'string' && originalPath !== path) {
+    Object.defineProperty(fileWithPath, 'absolutePath', {
+      value: originalPath,
+      configurable: true,
+    });
+  }
   return fileWithPath;
 }
 
@@ -190,10 +197,24 @@ async function getFilesFromDataTransferItem(item: DataTransferItem): Promise<Fil
   ).webkitGetAsEntry?.();
   if (entry) {
     if ((entry as unknown as FileSystemDirectoryEntry).isDirectory) {
-      return readDirectoryEntry(entry as unknown as FileSystemDirectoryEntry, '');
+      try {
+        return await readDirectoryEntry(entry as unknown as FileSystemDirectoryEntry, '');
+      } catch (error) {
+        console.warn('Failed to read directory entry:', error);
+        return [];
+      }
     }
     if ((entry as unknown as FileSystemFileEntry).isFile) {
-      return readFileEntry(entry as unknown as FileSystemFileEntry, '');
+      try {
+        return await readFileEntry(entry as unknown as FileSystemFileEntry, '');
+      } catch (error) {
+        console.warn('Failed to read file entry, falling back to getAsFile:', error);
+        const file = item.getAsFile();
+        if (file) {
+          return [addPathToFile(file, file.name)];
+        }
+        return [];
+      }
     }
   }
 
@@ -208,20 +229,32 @@ async function getFilesFromDataTransferItem(item: DataTransferItem): Promise<Fil
 }
 
 const dropzoneGetFilesFromEvent = async (event: DropEvent) => {
-  const dragEvent = event as unknown as DragEvent;
-  const items = dragEvent?.dataTransfer?.items;
-  if (!items) {
-    return fromEvent(event);
-  }
+  try {
+    const dragEvent = event as unknown as DragEvent;
+    const items = dragEvent?.dataTransfer?.items;
+    if (!items) {
+      return fromEvent(event);
+    }
 
-  const filePromises = Array.from(items as DataTransferItemList).map((item: DataTransferItem) =>
-    getFilesFromDataTransferItem(item)
-  );
-  const collected = (await Promise.all(filePromises)).flat();
-  if (collected.length === 0) {
+    const filePromises = Array.from(items as DataTransferItemList).map((item: DataTransferItem) =>
+      getFilesFromDataTransferItem(item)
+    );
+    const collected = (await Promise.all(filePromises)).flat();
+    if (collected.length === 0) {
+      return fromEvent(event);
+    }
+    return collected;
+  } catch (error) {
+    console.error('File access error:', error);
+    notifications.show({
+      title: 'File Access Error',
+      message: error instanceof Error ? error.message : String(error),
+      color: 'red',
+      autoClose: false,
+    });
+    // Fallback to standard handling
     return fromEvent(event);
   }
-  return collected;
 };
 
 interface LoadMoreRowProps {
@@ -605,16 +638,38 @@ export function FileFolderBrowserView({
         return;
       }
 
-      const firstReason =
-        rejections[0]?.errors?.[0]?.message || t('fileFolderBrowser:uploadRejectedDefault');
+      const firstError = rejections[0]?.errors?.[0];
+      let errorDetails = t('fileFolderBrowser:uploadRejectedDefault');
+
+      if (firstError) {
+        if (typeof firstError === 'object') {
+          // Try to show code/message or stringify
+          const code = (firstError as any).code;
+          const msg = (firstError as any).message;
+          if (code && msg) {
+            errorDetails = `[${code}] ${msg}`;
+          } else if (msg) {
+            errorDetails = msg;
+          } else {
+            try {
+              errorDetails = JSON.stringify(firstError);
+            } catch {
+              errorDetails = String(firstError);
+            }
+          }
+        } else {
+          errorDetails = String(firstError);
+        }
+      }
 
       notifications.show({
         title: t('fileFolderBrowser:uploadRejectedTitle'),
         message: t('fileFolderBrowser:uploadRejectedMessage', {
           count: rejections.length,
-          reason: firstReason,
+          reason: errorDetails,
         }),
         color: 'orange',
+        autoClose: false, // Keep it open so user can copy
       });
     },
     [t]
@@ -676,10 +731,17 @@ export function FileFolderBrowserView({
             : '';
 
           try {
+            // Read file into memory IMMEDIATELY to avoid WKWebView/Neutralino file access issues.
+            // Do not await anything else before this.
+            const buffer = await file.arrayBuffer();
+            const fileToUpload = new File([buffer], file.name, { type: file.type });
+
             const parentFolderId = dirPath ? await getOrCreateFolderId(dirPath) : nodeId;
-            await uploadFileToFolder(file, parentFolderId);
+
+            await uploadFileToFolder(fileToUpload, parentFolderId);
             succeeded.push(file.name);
           } catch (err) {
+            console.error('File drop processing failed:', err);
             failed.push({
               name: file.name,
               error: err instanceof Error ? err.message : t('fileFolderBrowser:uploadUnknownError'),
