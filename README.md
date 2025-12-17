@@ -177,6 +177,8 @@ http://127.0.0.1:59004/auth/callback
 http://127.0.0.1:59005/auth/callback
 ```
 
+> **Note:** While [RFC8252](https://datatracker.ietf.org/doc/html/rfc8252#section-7.3) recommends that authorization servers allow any port for loopback redirect URIs, Keycloak does not currently support wildcard ports. You must register each port explicitly. See [#39880](https://github.com/keycloak/keycloak/issues/39880) for details.
+
 #### Keycloak configuration
 
 For Alfresco environments using Keycloak, the authorization server URL typically follows this pattern:
