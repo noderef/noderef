@@ -258,14 +258,17 @@ declare const search: {
 declare const people: {
   // Person management
   getPerson(username: string): ScriptNode | null;
+
   getPersonFullName(username: string): string | null;
   createPerson(username: string): ScriptNode | null;
+
   createPerson(
     username: string | null,
     firstName: string,
     lastName: string,
     emailAddress: string
   ): ScriptNode | null;
+
   createPerson(
     username: string | null,
     firstName: string,
@@ -274,6 +277,7 @@ declare const people: {
     password: string,
     setAccountEnabled: boolean
   ): ScriptNode | null;
+
   createPerson(
     username: string | null,
     firstName: string,
@@ -283,6 +287,7 @@ declare const people: {
     setAccountEnabled: boolean,
     notifyByEmail: boolean
   ): ScriptNode | null;
+
   deletePerson(username: string): void;
 
   // Account management
@@ -304,6 +309,7 @@ declare const people: {
     sortBy?: string,
     sortAsc?: boolean
   ): ScriptNode[];
+
   getPeoplePaging(
     filter: string | null,
     pagingDetails: ScriptPagingDetails,
@@ -342,10 +348,22 @@ interface ScriptGroup {
 }
 
 interface ScriptUser {
+  // Java fields
   userName: string;
-  firstName: string;
-  lastName: string;
-  nodeRef: string | { toString(): string };
+  shortName: string;
+  fullName: string;
+  displayName: string; // same as fullName in constructor
+  personNodeRef: string | { toString(): string }; // private in Java but exposed via getter logic if needed, keeping simple for DSL
+
+  // Methods
+  getAuthorityType(): string; // ScriptAuthorityType.USER
+  getShortName(): string;
+  getFullName(): string;
+  getUserName(): string;
+  getDisplayName(): string;
+  getPersonNodeRef(): string | { toString(): string }; // Returns NodeRef
+  getPerson(): ScriptNode; // Returns ScriptNode
+  getZones(): string[]; // from Authority interface
 }
 
 interface ScriptAuthorityService {
@@ -589,7 +607,8 @@ declare const utils: {
 declare const companyhome: ScriptNode;
 declare const userhome: ScriptNode;
 declare const roothome: ScriptNode;
-declare const person: ScriptNode;
+// declare const person: ScriptUser; // Removed to avoid global conflict
+
 declare const document: ScriptNode;
 declare const script: ScriptNode | undefined;
 declare const config: Record<string, any>;
