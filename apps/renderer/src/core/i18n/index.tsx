@@ -181,7 +181,7 @@ function getInitialLanguage() {
 
       // Check if the detected language is supported
       if (SUPPORTED_LANGUAGES.includes(langCode)) {
-        console.log(`Detected ${browserLang}, using ${langCode} as default language`);
+        console.warn(`Detected ${browserLang}, using ${langCode} as default language`);
         return langCode;
       }
     }
@@ -190,7 +190,7 @@ function getInitialLanguage() {
   }
 
   // Fall back to default language
-  console.log(`Using default language: ${DEFAULT_LANGUAGE}`);
+  console.warn(`Using default language: ${DEFAULT_LANGUAGE}`);
   return DEFAULT_LANGUAGE;
 }
 

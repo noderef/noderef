@@ -18,6 +18,7 @@ import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 're
 
 import {
   Alert,
+  Anchor,
   Button,
   Center,
   Group,
@@ -28,6 +29,7 @@ import {
   Text,
   useComputedColorScheme,
 } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 
 import { IconAlertTriangle, IconPlayerPlay, IconRefresh } from '@tabler/icons-react';
 
@@ -39,6 +41,7 @@ import { useTranslation } from 'react-i18next';
 import { backendRpc } from '@/core/ipc/backend';
 import { useServersStore } from '@/core/store/servers';
 import { useLocalFilesStore } from '@/core/store/localFiles';
+import { getDownloadUrl, useUpdateStore } from '@/core/store/updates';
 
 type Phase = 'idle' | 'starting' | 'waiting' | 'ready' | 'error';
 
@@ -83,6 +86,8 @@ export function BackendGate({
   const setLocalFilesError = useLocalFilesStore(state => state.setError);
   const setLocalFilesInitialized = useLocalFilesStore(state => state.setInitialized);
   const setLocalFilesLoadingMore = useLocalFilesStore(state => state.setLoadingMore);
+  const checkForUpdates = useUpdateStore(state => state.checkForUpdates);
+  const markNotified = useUpdateStore(state => state.markNotified);
 
   useEffect(() => {
     progressRef.current = progress;
@@ -200,6 +205,48 @@ export function BackendGate({
     setLocalFilesPage,
     setLocalFilesLoadingMore,
   ]);
+
+  // Once the backend is up, quietly check for app updates
+  useEffect(() => {
+    if (phase !== 'ready') {
+      return;
+    }
+
+    let cancelled = false;
+
+    const runUpdateCheck = async () => {
+      await checkForUpdates();
+      if (cancelled) return;
+
+      const state = useUpdateStore.getState();
+      const latestVersion = state.latestRelease?.version;
+      if (!state.hasUpdate || !latestVersion || state.lastNotifiedVersion === latestVersion) {
+        return;
+      }
+
+      const downloadTarget = getDownloadUrl(state.latestRelease);
+
+      notifications.show({
+        title: t('common:updateAvailable'),
+        message: (
+          <Anchor href={downloadTarget} target="_blank" rel="noopener noreferrer">
+            {t('common:updateAvailableMessage', { version: latestVersion })}
+          </Anchor>
+        ),
+        color: 'blue',
+        withCloseButton: true,
+        autoClose: 9000,
+      });
+
+      markNotified(latestVersion);
+    };
+
+    void runUpdateCheck();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [phase, checkForUpdates, markNotified, t]);
 
   useEffect(() => {
     let cancelled = false;

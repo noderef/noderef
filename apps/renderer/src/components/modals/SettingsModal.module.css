@@ -55,6 +55,20 @@
   flex-shrink: 0;
 }
 
+.linkLabel {
+  flex: 1;
+}
+
+.linkBadge {
+  margin-left: var(--mantine-spacing-sm);
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--mantine-color-green-5);
+  align-self: center;
+  flex-shrink: 0;
+}
+
 .languageCard {
   width: 100%;
   padding: var(--mantine-spacing-sm);
@@ -85,4 +99,23 @@
   overflow-y: auto;
   overflow-x: hidden;
   height: 100%;
+}
+
+.inlineBadge {
+  margin-left: var(--mantine-spacing-xs);
+  vertical-align: middle;
+}
+
+.updateBanner {
+  width: 100%;
+  background: var(--mantine-color-blue-0);
+  border: 1px solid var(--mantine-color-blue-2);
+  color: var(--mantine-color-blue-9);
+  margin-bottom: var(--mantine-spacing-sm);
+}
+
+:root[data-mantine-color-scheme='dark'] .updateBanner {
+  background: var(--mantine-color-dark-6);
+  border: 1px solid var(--mantine-color-blue-6);
+  color: var(--mantine-color-gray-1);
 }

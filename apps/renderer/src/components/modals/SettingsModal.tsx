@@ -23,11 +23,13 @@ import {
   ActionIcon,
   Alert,
   Anchor,
+  Badge,
   Box,
   Button,
   Group,
   Loader,
   Modal,
+  Paper,
   PasswordInput,
   Select,
   SimpleGrid,
@@ -40,7 +42,7 @@ import {
   useMantineColorScheme,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { clipboard } from '@neutralinojs/lib';
+import { clipboard, os } from '@neutralinojs/lib';
 import {
   IconBrandGithub,
   IconBrandX,
@@ -54,6 +56,7 @@ import {
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { getCurrentVersion, getDownloadUrl, useUpdateStore } from '@/core/store/updates';
 import classes from './SettingsModal.module.css';
 
 type SettingsSection = 'view' | 'language' | 'ai' | 'about';
@@ -97,6 +100,12 @@ export function SettingsModal() {
     []
   );
 
+  const currentVersion = getCurrentVersion();
+  const checkForUpdates = useUpdateStore(state => state.checkForUpdates);
+  const updateStatus = useUpdateStore(state => state.status);
+  const hasUpdate = useUpdateStore(state => state.hasUpdate);
+  const latestRelease = useUpdateStore(state => state.latestRelease);
+
   // 🔒 Single source of truth: derive from store with safe fallback
   const languageValue = storeLanguage || 'en';
 
@@ -139,6 +148,25 @@ export function SettingsModal() {
   ];
 
   const aiProviderOptions = [{ value: 'anthropic', label: 'Anthropic' }];
+
+  const latestVersion = latestRelease?.version;
+  const hasUpdateAvailable = hasUpdate && Boolean(latestVersion);
+  const updateDownloadUrl = getDownloadUrl(latestRelease);
+  const hasCheckedAtLeastOnce = Boolean(latestRelease);
+  const handleDownloadUpdate = useCallback(async () => {
+    if (!hasUpdateAvailable || !latestVersion) return;
+    const target = updateDownloadUrl;
+    if (isNeutralinoMode()) {
+      try {
+        await ensureNeutralinoReady();
+        await os.open(target);
+        return;
+      } catch (error) {
+        console.warn('Neutralino open failed, falling back to window.open', error);
+      }
+    }
+    window.open(target, '_blank', 'noreferrer');
+  }, [hasUpdateAvailable, latestVersion, updateDownloadUrl]);
 
   // Custom paste handling for desktop mode to prevent duplicate pastes on Windows
   // and enable paste functionality on Mac
@@ -409,6 +437,13 @@ export function SettingsModal() {
     }
   }, [isOpen, aiLoaded, loadAiSection]);
 
+  useEffect(() => {
+    if (!isOpen || activeSection !== 'about') {
+      return;
+    }
+    void checkForUpdates();
+  }, [isOpen, activeSection, checkForUpdates]);
+
   const handleAiSave = useCallback(async () => {
     setAiSaving(true);
     try {
@@ -533,7 +568,7 @@ export function SettingsModal() {
                     }}
                   >
                     <Icon className={classes.linkIcon} stroke={1.5} />
-                    <span>{item.label}</span>
+                    <span className={classes.linkLabel}>{item.label}</span>
                   </a>
                 );
               })}
@@ -552,7 +587,14 @@ export function SettingsModal() {
                     }}
                   >
                     <AboutIcon className={classes.linkIcon} stroke={1.5} />
-                    <span>{aboutMenuItem.label}</span>
+                    <span className={classes.linkLabel}>{aboutMenuItem.label}</span>
+                    {hasUpdateAvailable && latestVersion && (
+                      <span
+                        className={classes.linkBadge}
+                        aria-label={t('settings:updateAvailableShort', { version: latestVersion })}
+                        title={t('settings:updateAvailableShort', { version: latestVersion })}
+                      />
+                    )}
                   </a>
                 );
               })()}
@@ -568,7 +610,7 @@ export function SettingsModal() {
               const ActiveIcon = activeItem.icon;
 
               return (
-                <Stack gap="lg">
+                <Stack gap={activeSection === 'about' ? 'md' : 'lg'}>
                   {/* Title with icon */}
                   <Group gap="sm">
                     <ActiveIcon size={24} stroke={1.5} />
@@ -576,6 +618,31 @@ export function SettingsModal() {
                       {activeItem.label}
                     </Text>
                   </Group>
+
+                  {activeSection === 'about' && (
+                    <Stack gap="xs">
+                      {updateStatus === 'checking' && (
+                        <Group gap="xs" justify="flex-start">
+                          <Loader size="xs" />
+                          <Text size="xs" c="dimmed">
+                            {t('common:loading')}
+                          </Text>
+                        </Group>
+                      )}
+                      {hasUpdateAvailable && latestVersion && (
+                        <Paper shadow="none" radius="md" p="md" className={classes.updateBanner}>
+                          <Group justify="space-between" align="center" gap="md" wrap="nowrap">
+                            <Text fw={700}>
+                              {t('settings:updateAvailableShort', { version: latestVersion })}
+                            </Text>
+                            <Button variant="filled" color="blue" onClick={handleDownloadUpdate}>
+                              {t('settings:updateDownloadCta')}
+                            </Button>
+                          </Group>
+                        </Paper>
+                      )}
+                    </Stack>
+                  )}
 
                   {/* Intro text */}
                   <Text size="sm" c="dimmed">
@@ -896,9 +963,8 @@ export function SettingsModal() {
                             marginRight: 'auto',
                           }}
                         />
-                        <Text size="sm" c="dimmed" mb="md" style={{ textAlign: 'center' }}>
-                          {t('settings:appVersion')}{' '}
-                          {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.1.0'}
+                        <Text size="sm" c="dimmed" mb="xs" style={{ textAlign: 'center' }}>
+                          {t('settings:appVersion')} {currentVersion}
                         </Text>
                         <Text size="sm" mb="md" style={{ textAlign: 'center' }}>
                           {t('settings:appDescription')}
