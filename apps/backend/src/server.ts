@@ -140,7 +140,79 @@ function shouldUseEphemeralPort(): boolean {
   return !isDev;
 }
 
-// Removed findFreePort - prod uses ephemeral port (0), dev uses fixed port with fail-fast
+/**
+ * Get the preferred port range from environment variables.
+ * Returns null if PROD_PORT_MIN/MAX are not configured or invalid.
+ */
+function getPreferredPortRange(): { min: number; max: number } | null {
+  const minStr = process.env.PROD_PORT_MIN;
+  const maxStr = process.env.PROD_PORT_MAX;
+  if (!minStr || !maxStr) return null;
+
+  const min = parseInt(minStr, 10);
+  const max = parseInt(maxStr, 10);
+  if (isNaN(min) || isNaN(max) || min <= 0 || max <= 0 || min > max) {
+    log.warn({ minStr, maxStr }, 'Invalid PROD_PORT_MIN/MAX values, ignoring');
+    return null;
+  }
+  return { min, max };
+}
+
+/**
+ * Try to listen on a specific port.
+ * Returns { success: true, server, actualPort } on success, { success: false } on EADDRINUSE.
+ */
+function tryListen(
+  app: express.Express,
+  port: number,
+  host: string
+): Promise<{ success: boolean; server?: net.Server; actualPort?: number }> {
+  return new Promise(resolve => {
+    const server = app.listen(port, host);
+    server.once('error', (err: NodeJS.ErrnoException) => {
+      server.close(); // Clean up failed server
+      if (err.code === 'EADDRINUSE') {
+        resolve({ success: false });
+      } else {
+        throw err;
+      }
+    });
+    server.once('listening', () => {
+      const actualPort = (server.address() as net.AddressInfo)?.port;
+      log.debug({ requestedPort: port, actualPort }, 'Server bound successfully');
+      resolve({ success: true, server, actualPort });
+    });
+  });
+}
+
+/**
+ * Try ports in the preferred range sequentially, fall back to OS-assigned if all are in use.
+ */
+async function listenWithFallback(
+  app: express.Express,
+  host: string,
+  { min, max }: { min: number; max: number }
+): Promise<{ server: net.Server; port: number }> {
+  log.info({ min, max, host }, 'Attempting preferred port range');
+
+  for (let port = min; port <= max; port++) {
+    const result = await tryListen(app, port, host);
+    if (result.success && result.server && result.actualPort) {
+      log.info({ port: result.actualPort }, 'Bound to preferred port');
+      return { server: result.server, port: result.actualPort };
+    }
+    log.debug({ port }, 'Port in use, trying next');
+  }
+
+  // Fall back to OS-assigned ephemeral port
+  log.info('Preferred ports exhausted, using OS-assigned port');
+  const result = await tryListen(app, 0, host);
+  if (result.success && result.server && result.actualPort) {
+    log.info({ port: result.actualPort }, 'Bound to OS-assigned port');
+    return { server: result.server, port: result.actualPort };
+  }
+  throw new Error('Failed to bind to any port');
+}
 
 function publishPort(port: number): void {
   try {
@@ -1030,11 +1102,18 @@ async function main() {
 
   const preferred = getPort();
   const host = getHost();
+  const portRange = getPreferredPortRange();
 
   let server: net.Server;
 
-  if (shouldUseEphemeralPort()) {
-    // Prod default: use ephemeral port (0) unless FIXED_PORT=1 overrides
+  if (shouldUseEphemeralPort() && portRange && preferred === 0) {
+    // Production with port range: try preferred range first, then fall back to OS-assigned
+    const result = await listenWithFallback(app, host, portRange);
+    server = result.server;
+    publishPort(result.port);
+    log.info(`Backend listening on ${host}:${result.port}`);
+  } else if (shouldUseEphemeralPort()) {
+    // Prod default without port range: use ephemeral port (0) unless FIXED_PORT=1 overrides
     server = app.listen(0, host, () => {
       const actual = (server.address() as any)?.port as number;
       publishPort(actual);

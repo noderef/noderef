@@ -46,6 +46,7 @@ function getInitialBackendURL(): string {
 let baseURL = getInitialBackendURL();
 let started = false;
 let backendReady = false;
+let startingPromise: Promise<void> | null = null; // Singleton to prevent double-spawn
 
 const WINDOWS_DRIVE_REGEX = /^[A-Za-z]:/;
 const enableDebugLogging = import.meta.env.DEV && !(window as any).NL_ARGS?.includes('--release');
@@ -547,32 +548,53 @@ export function getRpcBaseUrl(): string {
 
 export async function startBackend(): Promise<void> {
   debugLog('[RPC] startBackend() called');
-  // If already healthy, don't spawn
-  const alreadyAlive = await isAlive();
-  debugLog('[RPC] Backend already alive:', alreadyAlive);
 
-  if (alreadyAlive) {
-    try {
-      const discoverTimeout = new Promise<number>((_, reject) => {
-        setTimeout(() => reject(new Error('Port discovery timed out')), 3000);
-      });
-      const discoveredPort = await Promise.race([discoverPort(), discoverTimeout]);
-      baseURL = `http://127.0.0.1:${discoveredPort}`;
-      started = true;
-      backendReady = true;
-      debugLog('[RPC] Using existing backend on port:', discoveredPort);
-      return;
-    } catch {
-      // Continue to start the backend if port discovery fails
-      debugLog('[RPC] Port discovery failed, will start new backend');
-    }
-  }
-
+  // If already started, return immediately
   if (started) {
     debugLog('[RPC] Backend already started, skipping');
     return;
   }
 
+  // If another call is already starting the backend, wait for it
+  if (startingPromise) {
+    debugLog('[RPC] Backend startup already in progress, waiting...');
+    return startingPromise;
+  }
+
+  // ATOMICALLY mark as starting BEFORE any async operations
+  startingPromise = (async () => {
+    try {
+      // If already healthy, don't spawn
+      const alreadyAlive = await isAlive();
+      debugLog('[RPC] Backend already alive:', alreadyAlive);
+
+      if (alreadyAlive) {
+        try {
+          const discoverTimeout = new Promise<number>((_, reject) => {
+            setTimeout(() => reject(new Error('Port discovery timed out')), 3000);
+          });
+          const discoveredPort = await Promise.race([discoverPort(), discoverTimeout]);
+          baseURL = `http://127.0.0.1:${discoveredPort}`;
+          started = true;
+          backendReady = true;
+          debugLog('[RPC] Using existing backend on port:', discoveredPort);
+          return;
+        } catch {
+          // Continue to start the backend if port discovery fails
+          debugLog('[RPC] Port discovery failed, will start new backend');
+        }
+      }
+
+      await doStartBackend();
+    } finally {
+      startingPromise = null;
+    }
+  })();
+
+  return startingPromise;
+}
+
+async function doStartBackend(): Promise<void> {
   try {
     debugLog('[RPC] Ensuring Neutralino is ready...');
     await ensureNeutralinoReady();
@@ -762,41 +784,40 @@ export async function startBackend(): Promise<void> {
       );
     }
 
-    // In prod, use ephemeral port (0); in dev, use fixed port (5111)
+    // In prod, use ephemeral port (0) - backend will try preferred range first
+    // In dev, use fixed port (5111)
     const portArg = isProd ? '0' : String(DEFAULT_PORT);
 
-    // Set NODE_ENV=production in prod mode so backend uses ephemeral port
-    // Use shell to properly set environment variable
+    // Port range for production - backend will try these ports before falling back to OS-assigned
+    const PROD_PORT_MIN = 59001;
+    const PROD_PORT_MAX = 59005;
+
+    // Helper to escape paths for Windows cmd
+    const escapeWindowsPath = (p: string) => p.replace(/"/g, '""');
+
+    // Build command based on environment
     let cmd: string;
     if (isProd) {
-      // Use shell to set NODE_ENV, then run the backend
       if (isWindows) {
-        // Windows: use cmd /c to set env var
-        // Properly quote nodeExe and paths, and escape quotes in paths
-        const escapeWindowsPath = (p: string) => p.replace(/"/g, '""');
         const quotedNodeExe = `"${escapeWindowsPath(nodeExe)}"`;
         const quotedBackendPath = `"${escapeWindowsPath(backendPath)}"`;
         const quotedDataDir = `"${escapeWindowsPath(dataDir)}"`;
-        // Redirect stderr to a log file so we can see backend errors
-        // Create .runtime directory first, then log file
         const runtimeDir = `${dataDir}\\.runtime`;
         const logFile = `${runtimeDir}\\backend.log`;
         const quotedLogFile = `"${escapeWindowsPath(logFile)}"`;
         const quotedRuntimeDir = `"${escapeWindowsPath(runtimeDir)}"`;
-        // Create .runtime directory if it doesn't exist, then redirect stderr to log file
-        cmd = `cmd /c if not exist ${quotedRuntimeDir} mkdir ${quotedRuntimeDir} && set NODE_ENV=production && set MIGRATE_ON_START=1 && ${quotedNodeExe} ${quotedBackendPath} --port=${portArg} --dataDir=${quotedDataDir} 2>${quotedLogFile}`;
+        // Create .runtime dir, set env vars, redirect stderr to log file
+        cmd = `cmd /c if not exist ${quotedRuntimeDir} mkdir ${quotedRuntimeDir} && set NODE_ENV=production && set MIGRATE_ON_START=1 && set PROD_PORT_MIN=${PROD_PORT_MIN} && set PROD_PORT_MAX=${PROD_PORT_MAX} && ${quotedNodeExe} ${quotedBackendPath} --port=${portArg} --dataDir=${quotedDataDir} 2>${quotedLogFile}`;
         debugLog('[RPC] Backend stderr will be logged to:', logFile);
       } else {
-        // macOS/Linux: use sh -c to set env var
-        // Escape single quotes in paths if needed, and use proper quoting
+        // macOS/Linux: escape single quotes in paths
         const escapedBackendPath = backendPath.replace(/'/g, "'\\''");
         const escapedDataDir = dataDir.replace(/'/g, "'\\''");
-        cmd = `sh -c 'MIGRATE_ON_START=1 NODE_ENV=production ${nodeExe} "${escapedBackendPath}" --port=${portArg} --dataDir="${escapedDataDir}"'`;
+        cmd = `sh -c 'MIGRATE_ON_START=1 NODE_ENV=production PROD_PORT_MIN=${PROD_PORT_MIN} PROD_PORT_MAX=${PROD_PORT_MAX} ${nodeExe} "${escapedBackendPath}" --port=${portArg} --dataDir="${escapedDataDir}"'`;
       }
     } else {
-      // In dev mode, quote paths properly for Windows
+      // Dev mode
       if (isWindows) {
-        const escapeWindowsPath = (p: string) => p.replace(/"/g, '""');
         cmd = `"${escapeWindowsPath(nodeExe)}" "${escapeWindowsPath(backendPath)}" --port=${portArg} --dataDir="${escapeWindowsPath(dataDir)}"`;
       } else {
         cmd = `${nodeExe} "${backendPath}" --port=${portArg} --dataDir="${dataDir}"`;
