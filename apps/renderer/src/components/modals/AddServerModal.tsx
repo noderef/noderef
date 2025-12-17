@@ -1000,6 +1000,10 @@ export function AddServerModal() {
               onChange={e => setName(e.currentTarget.value)}
               required
               data-field="name"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
             />
             <TextInput
               label={t('addServer:serverUrl')}

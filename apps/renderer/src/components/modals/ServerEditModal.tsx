@@ -507,6 +507,10 @@ export function ServerEditModal() {
                         value={name}
                         onChange={e => setName(e.currentTarget.value)}
                         required
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck={false}
                       />
                       <TextInput
                         label={t('serverUrl')}
