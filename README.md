@@ -161,6 +161,32 @@ Override the database location with the `DATABASE_URL` environment variable when
 
 Sensitive fields (passwords, API tokens) are encrypted with **AES-256-GCM**. A 32-byte master key is generated on first run and stored in `{dataDir}/.runtime/master.key`.
 
+### **OIDC / OpenID Connect authentication**
+
+NodeRef supports OIDC authentication (e.g., Keycloak) for connecting to Alfresco servers. When configuring your identity provider:
+
+#### Redirect URIs
+
+Add these redirect URIs to your OIDC client configuration (NodeRef binds to ports 59001-59005):
+
+```
+http://127.0.0.1:59001/auth/callback
+http://127.0.0.1:59002/auth/callback
+http://127.0.0.1:59003/auth/callback
+http://127.0.0.1:59004/auth/callback
+http://127.0.0.1:59005/auth/callback
+```
+
+#### Keycloak configuration
+
+For Alfresco environments using Keycloak, the authorization server URL typically follows this pattern:
+
+```
+https://{alfresco-host}/auth
+```
+
+Replace `{alfresco-host}` with your Alfresco server's hostname or IP address.
+
 ### **Development**
 
 Everything runs inside a pnpm powered monorepo, so frontend, backend, and shared contracts evolve together. Use the layout overview and command palette below to navigate the workspace.
