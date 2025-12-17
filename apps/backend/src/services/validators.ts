@@ -112,6 +112,11 @@ const ServerBaseValidationSchema = z
     isAdmin: z.boolean().default(true),
     username: z.string().nullable().optional(),
     token: z.string().nullable().optional(),
+    refreshToken: z.string().nullable().optional(),
+    tokenExpiry: z.date().nullable().optional(),
+    oidcHost: z.string().nullable().optional(),
+    oidcRealm: z.string().nullable().optional(),
+    oidcClientId: z.string().nullable().optional(),
     jsconsoleEndpoint: z
       .string()
       .nullable()

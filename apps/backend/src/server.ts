@@ -31,7 +31,7 @@ import { sendAppError } from './lib/errorHandler';
 import { log } from './lib/logger.js';
 import { getDataDirFromArgsOrEnv } from './lib/paths';
 import { disconnectPrisma, getPrismaClient } from './lib/prisma';
-import { getClient } from './services/alfresco/clientFactory.js';
+import { getAuthenticatedClient } from './services/alfresco/clientFactory.js';
 import { ServerService } from './services/serverService.js';
 import { getCurrentUserId } from './services/userBootstrap.js';
 // Dynamic import for ESM contracts package
@@ -681,15 +681,16 @@ async function main() {
     const userId = await getCurrentUserId();
     const creds = await serverService.getCredentialsForBackend(userId, serverId);
 
-    if (!creds?.username || !creds?.token) {
-      log.warn({ serverId }, 'No stored credentials found for server stream request');
+    if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
+      log.warn(
+        { serverId, authType: creds?.authType },
+        'Missing credentials for server stream request'
+      );
       return undefined;
     }
 
-    const api = getClient(baseUrl);
     try {
-      await api.login(creds.username, creds.token);
-      return api;
+      return await getAuthenticatedClient(baseUrl, creds);
     } catch (error) {
       log.error({ serverId, error }, 'Failed to authenticate stream request');
       throw error;
@@ -878,21 +879,31 @@ async function main() {
               const userId = await getCurrentUserId();
               const creds = await serverService.getCredentialsForBackend(userId, serverId);
 
-              if (!creds?.username || !creds?.token) {
+              if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
                 throw new Error('No stored credentials found for server');
               }
 
               // Make direct HTTP request with text response type
-              const response = await axios.default({
+              // Build authentication based on auth type
+              const axiosConfig: any = {
                 method: 'GET',
                 url: fullUrl,
                 responseType: 'text',
                 headers: { Accept: 'text/plain,*/*' },
-                auth: {
-                  username: creds.username,
+              };
+
+              if (creds.authType === 'openid_connect') {
+                // Use Bearer token for OIDC
+                axiosConfig.headers.Authorization = `Bearer ${creds.token}`;
+              } else {
+                // Use Basic Auth for basic auth type
+                axiosConfig.auth = {
+                  username: creds.username || '',
                   password: creds.token,
-                },
-              });
+                };
+              }
+
+              const response = await axios.default(axiosConfig);
 
               // Forward response headers
               if (response.headers) {
