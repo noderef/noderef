@@ -15,7 +15,7 @@
  */
 
 import { Box } from '@mantine/core';
-import { ReactNode, useEffect, useRef, useState } from 'react';
+import React, { ReactNode, useEffect, useRef, useState } from 'react';
 
 interface SplitPanelProps {
   topPanel: ReactNode;
@@ -41,7 +41,8 @@ export function SplitPanel({
   const [isDragging, setIsDragging] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
-  const handleMouseDown = () => {
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
     setIsDragging(true);
   };
 
@@ -97,6 +98,19 @@ export function SplitPanel({
         userSelect: isDragging ? 'none' : 'auto',
       }}
     >
+      {isDragging && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 9999,
+            cursor: 'ns-resize',
+          }}
+        />
+      )}
       {/* Top Panel */}
       <Box
         style={{
@@ -108,9 +122,6 @@ export function SplitPanel({
       >
         {topPanel}
       </Box>
-
-      {/* Middle Bar (optional - e.g., execute button) */}
-      {middleBar && <Box style={{ flexShrink: 0 }}>{middleBar}</Box>}
 
       {/* Divider */}
       <Box
@@ -156,6 +167,9 @@ export function SplitPanel({
           }}
         />
       </Box>
+
+      {/* Middle Bar (optional - e.g., execute button) */}
+      {middleBar && <Box style={{ flexShrink: 0 }}>{middleBar}</Box>}
 
       {/* Bottom Panel */}
       <Box

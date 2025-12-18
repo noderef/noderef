@@ -97,8 +97,8 @@ export function ExecuteBar({ onExecute, aiStatus, aiBusy, isNodeRefSpace }: Exec
       withBorder={false}
       style={{
         borderRadius: 0,
-        borderTop: '1px solid var(--layout-divider-color)',
         backgroundColor: 'var(--mantine-color-body)',
+        borderBottom: '1px solid var(--layout-divider-color)',
       }}
     >
       <Group justify="space-between" align="center">
