@@ -25,6 +25,7 @@ export const LANGUAGE_OPTIONS = [
   { value: 'css', label: 'CSS' },
   { value: 'markdown', label: 'Markdown' },
   { value: 'sql', label: 'SQL' },
+  { value: 'freemarker2', label: 'FreeMarker' },
 ] as const;
 
 const EXTENSION_LANGUAGE_MAP: Record<string, string> = {
@@ -32,7 +33,8 @@ const EXTENSION_LANGUAGE_MAP: Record<string, string> = {
   text: 'plaintext',
   csv: 'plaintext',
   log: 'plaintext',
-  ftl: 'html', // FTL (FreeMarker Template Language) files use HTML syntax
+  ftl: 'freemarker2', // FTL (FreeMarker Template Language)
+
   json: 'json',
   js: 'javascript',
   mjs: 'javascript',
@@ -65,7 +67,9 @@ const MIME_LANGUAGE_MAP: Record<string, string> = {
   'text/plain': 'plaintext',
   'text/csv': 'plaintext',
   'text/html': 'html',
+  'text/x-freemarker': 'freemarker2',
   'text/xml': 'xml',
+
   'application/xml': 'xml',
   'text/yaml': 'yaml',
   'application/x-yaml': 'yaml',

@@ -22,6 +22,7 @@ import * as monaco from 'monaco-editor';
 import alfrescoDsl from './alfresco-dsl.d.ts?raw';
 
 // Import TypeScript/JavaScript language contribution for IntelliSense and language features
+import 'monaco-editor/esm/vs/basic-languages/freemarker2/freemarker2.contribution';
 import 'monaco-editor/esm/vs/language/css/monaco.contribution';
 import 'monaco-editor/esm/vs/language/html/monaco.contribution';
 import 'monaco-editor/esm/vs/language/json/monaco.contribution';
