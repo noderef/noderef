@@ -258,3 +258,36 @@ function example_console_load_classpath_script_resource() {
   var content = new java.lang.String(baos.toByteArray(), 'UTF-8');
   logger.log('Loaded classpath script, length=' + content.length());
 }
+
+/**
+ * Call a remote HTTP endpoint with custom headers and Basic Auth
+ * using RemoteConnectorService.
+ *
+ * The endpoint echoes the request, useful for verifying headers.
+ */
+function demo_headers_and_basicAuth() {
+  var ctx =
+    Packages.org.springframework.web.context.ContextLoader.getCurrentWebApplicationContext();
+  var svc = ctx.getBean('remoteConnectorService');
+
+  var creds = 'user:pass';
+  var auth =
+    'Basic ' +
+    Packages.java.util.Base64.getEncoder().encodeToString(
+      new java.lang.String(creds).getBytes('UTF-8')
+    );
+
+  var url = 'https://httpbin.org/anything';
+  var req = svc.buildRequest(url, 'GET');
+  req.addRequestHeader('Accept', 'application/json');
+  req.addRequestHeader('Authorization', auth);
+  req.addRequestHeader('X-Demo', 'AlfrescoRemoteConnector');
+
+  var res = svc.executeRequest(req);
+
+  var status = typeof res.getStatusCode === 'function' ? res.getStatusCode() : res.getStatus();
+  var body = res.getResponseBodyAsString();
+
+  logger.log('Status: ' + status);
+  logger.log('Body  : ' + body);
+}
