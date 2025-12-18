@@ -248,3 +248,17 @@ export const GetSearchDictionaryResSchema = z.object({
 
 export type GetSearchDictionaryReq = z.infer<typeof GetSearchDictionaryReqSchema>;
 export type GetSearchDictionaryRes = z.infer<typeof GetSearchDictionaryResSchema>;
+
+/**
+ * Get Tern definitions request and response
+ */
+export const GetTernDefinitionsReqSchema = ServerRefSchema.extend({
+  serverId: z.number().int(),
+});
+
+export const GetTernDefinitionsResSchema = z.object({
+  typeDefinitions: z.array(z.any()),
+});
+
+export type GetTernDefinitionsReq = z.infer<typeof GetTernDefinitionsReqSchema>;
+export type GetTernDefinitionsRes = z.infer<typeof GetTernDefinitionsResSchema>;
