@@ -1,8 +1,9 @@
-### 🎉 First release
+This update focuses on expanding language support and improving the overall user experience.
 
-NodeRef desktop brings the Node Browser, JavaScript Console, search, logs, and multi-server management into one app.
+✨ **Highlights**
 
-### ✨ What’s inside
-
-- Unified workspace: activity overview, query builder, saved searches, tabbed node browser, multi-server switching, and log access.
-- Deep work tools: JavaScript console with history and `/ai` assistent, file viewer/editor, system tree navigator and theming.
+- **🎭 FreeMarker support**: Syntax highlighting and basic editor support for `.ftl` files.
+- **🔄 Auto update system**: Stay up-to-date with new releases through notifications.
+- **🔐 OIDC Authentication improvements**: Better support for Keycloak and other OpenID Connect providers.
+- **💻 Enhanced DSL**: Improved Tern definitions for Alfresco, making scripting more intuitive.
+- **🎨 UI Improvements**: Better accessibility, polished resizer handling, and fixed macOS dock icon sizing.
