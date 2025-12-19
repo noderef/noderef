@@ -20,9 +20,8 @@ import { AppErrors } from '../../lib/errors.js';
 import { createLogger } from '../../lib/logger.js';
 import { getPrismaClient } from '../../lib/prisma.js';
 import * as authSvc from '../../services/alfresco/authService.js';
-import { getAuthenticatedClient } from '../../services/alfresco/clientFactory.js';
+import { getAuthenticatedClientWithRefresh } from '../../services/alfresco/authenticationHelper.js';
 import { callMethod } from '../../services/alfresco/proxyService.js';
-import { ServerService } from '../../services/serverService.js';
 import { getCurrentUserId } from '../../services/userBootstrap.js';
 
 const log = createLogger('alfresco.rpc');
@@ -40,44 +39,9 @@ async function authenticateWithStoredCredentials(
 ): Promise<AlfrescoApi | undefined> {
   const userId = await getCurrentUserId();
   const prisma = await getPrismaClient();
-  const serverService = new ServerService(prisma);
 
-  let creds = await serverService.getCredentialsForBackend(userId, serverId);
-
-  // Refresh OIDC token if expired or expiring soon (within 5 minutes)
-  if (creds?.authType === 'openid_connect' && creds.tokenExpiry) {
-    const expiryThreshold = new Date(Date.now() + 5 * 60 * 1000);
-    if (creds.tokenExpiry <= expiryThreshold) {
-      log.info(
-        { serverId, expiry: creds.tokenExpiry },
-        'Token expired or expiring soon, refreshing...'
-      );
-      try {
-        await serverService.refreshOAuthTokens(userId, serverId);
-        creds = await serverService.getCredentialsForBackend(userId, serverId);
-        log.info({ serverId }, 'Token refreshed successfully');
-      } catch (error) {
-        log.error({ error, serverId }, 'Failed to refresh token, will try with existing token');
-      }
-    }
-  }
-
-  // Validate credentials
-  if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
-    log.warn({ serverId, authType: creds?.authType }, 'Missing credentials for server');
-    return undefined;
-  }
-
-  log.debug({ serverId, authType: creds.authType }, 'Retrieved stored credentials');
-
-  try {
-    const api = await getAuthenticatedClient(baseUrl, creds);
-    log.debug({ serverId }, 'Successfully authenticated with stored credentials');
-    return api;
-  } catch (error) {
-    log.error({ serverId, error }, 'Failed to authenticate with stored credentials');
-    throw error;
-  }
+  // Use centralized authentication helper (DRY principle)
+  return getAuthenticatedClientWithRefresh(userId, serverId, baseUrl, prisma);
 }
 
 /**

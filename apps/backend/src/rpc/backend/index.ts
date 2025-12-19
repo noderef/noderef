@@ -30,7 +30,7 @@ import {
   resolveUserAiConfig,
   upsertUserAiSettings,
 } from '../../services/ai/userSettingsService.js';
-import { getAuthenticatedClient } from '../../services/alfresco/clientFactory.js';
+import { getAuthenticatedClientWithRefresh } from '../../services/alfresco/authenticationHelper.js';
 import { JsConsoleHistoryService } from '../../services/jsConsoleHistoryService.js';
 import { LocalFileService } from '../../services/localFileService.js';
 import { NodeHistoryService } from '../../services/nodeHistoryService.js';
@@ -330,11 +330,11 @@ export async function registerBackendRpc(
       // TypeScript doesn't recognize never-return, so we assert server is defined
       const serverDefined = server!;
 
+      // Fetch credentials for Slingshot API (direct HTTP call, not through js-api)
       const creds = await serverService.getCredentialsForBackend(userId, serverId);
       if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
         AppErrors.unauthorized('No stored credentials found for server');
       }
-      // TypeScript doesn't recognize never-return, so we assert creds are defined
       const credsDefined = creds!;
 
       const { nodeData, slingshotUrl } = await fetchSlingshotNodeData(
@@ -371,14 +371,16 @@ export async function registerBackendRpc(
       // TypeScript doesn't recognize never-return, so we assert server is defined
       const serverDefined = server!;
 
-      const creds = await serverService.getCredentialsForBackend(userId, serverId);
-      if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
+      // Use centralized authentication with automatic token refresh (DRY principle)
+      const api = await getAuthenticatedClientWithRefresh(
+        userId,
+        serverId,
+        serverDefined.baseUrl,
+        prisma
+      );
+      if (!api) {
         AppErrors.unauthorized('No stored credentials found for server');
       }
-      // TypeScript doesn't recognize never-return, so we assert creds are defined
-      const credsDefined = creds!;
-
-      const api = await getAuthenticatedClient(serverDefined.baseUrl, credsDefined);
 
       const { SearchApi } = await import('@alfresco/js-api');
       const searchApi = new SearchApi(api);
@@ -397,6 +399,13 @@ export async function registerBackendRpc(
       }
       // TypeScript doesn't recognize never-return, so we assert systemNodeId is defined
       const systemNodeIdDefined = systemNodeId!;
+
+      // Get credentials for Slingshot API call
+      const creds = await serverService.getCredentialsForBackend(userId, serverId);
+      if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
+        AppErrors.unauthorized('No stored credentials found for server');
+      }
+      const credsDefined = creds!;
 
       const { nodeData, slingshotUrl } = await fetchSlingshotNodeData(
         serverDefined.baseUrl,
@@ -863,17 +872,19 @@ export async function registerBackendRpc(
         AppErrors.notFound('Server', serverId);
       }
 
-      // Get credentials for the server
-      const creds = await serverService.getCredentialsForBackend(userId, serverId);
-      if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
+      // TypeScript doesn't recognize never-return, so we assert server is defined
+      const serverDefined = server!;
+
+      // Use centralized authentication with automatic token refresh (DRY principle)
+      const api = await getAuthenticatedClientWithRefresh(
+        userId,
+        serverId,
+        serverDefined.baseUrl,
+        prisma
+      );
+      if (!api) {
         AppErrors.unauthorized('No stored credentials found for server');
       }
-      // TypeScript doesn't recognize never-return, so we assert server and creds are defined
-      const serverDefined = server!;
-      const credsDefined = creds!;
-
-      // Authenticate with Alfresco
-      const api = await getAuthenticatedClient(serverDefined.baseUrl, credsDefined);
 
       // Use NodesApi to get children
       const nodesApi = new NodesApi(api);
@@ -1039,14 +1050,18 @@ export async function registerBackendRpc(
         AppErrors.notFound('Server', serverId);
       }
 
-      const creds = await serverService.getCredentialsForBackend(userId, serverId);
-      if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
+      const serverDefined = server!;
+
+      // Use centralized authentication with automatic token refresh (DRY principle)
+      const api = await getAuthenticatedClientWithRefresh(
+        userId,
+        serverId,
+        serverDefined.baseUrl,
+        prisma
+      );
+      if (!api) {
         AppErrors.unauthorized('No stored credentials found for server');
       }
-      const serverDefined = server!;
-      const credsDefined = creds!;
-
-      const api = await getAuthenticatedClient(serverDefined.baseUrl, credsDefined);
 
       const sitesApi = new SitesApi(api);
       const nodesApi = new NodesApi(api);
@@ -1195,14 +1210,18 @@ export async function registerBackendRpc(
         AppErrors.notFound('Server', serverId);
       }
 
-      const creds = await serverService.getCredentialsForBackend(userId, serverId);
-      if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
+      const serverDefined = server!;
+
+      // Use centralized authentication with automatic token refresh (DRY principle)
+      const api = await getAuthenticatedClientWithRefresh(
+        userId,
+        serverId,
+        serverDefined.baseUrl,
+        prisma
+      );
+      if (!api) {
         AppErrors.unauthorized('No stored credentials found for server');
       }
-      const serverDefined = server!;
-      const credsDefined = creds!;
-
-      const api = await getAuthenticatedClient(serverDefined.baseUrl, credsDefined);
 
       const sitesApi = new SitesApi(api);
       const result = await sitesApi.getSite(siteId);
@@ -1236,14 +1255,18 @@ export async function registerBackendRpc(
         AppErrors.notFound('Server', serverId);
       }
 
-      const creds = await serverService.getCredentialsForBackend(userId, serverId);
-      if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
+      const serverDefined = server!;
+
+      // Use centralized authentication with automatic token refresh (DRY principle)
+      const api = await getAuthenticatedClientWithRefresh(
+        userId,
+        serverId,
+        serverDefined.baseUrl,
+        prisma
+      );
+      if (!api) {
         AppErrors.unauthorized('No stored credentials found for server');
       }
-      const serverDefined = server!;
-      const credsDefined = creds!;
-
-      const api = await getAuthenticatedClient(serverDefined.baseUrl, credsDefined);
 
       const sitesApi = new SitesApi(api);
 
@@ -1283,14 +1306,18 @@ export async function registerBackendRpc(
         AppErrors.notFound('Server', serverId);
       }
 
-      const creds = await serverService.getCredentialsForBackend(userId, serverId);
-      if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
+      const serverDefined = server!;
+
+      // Use centralized authentication with automatic token refresh (DRY principle)
+      const api = await getAuthenticatedClientWithRefresh(
+        userId,
+        serverId,
+        serverDefined.baseUrl,
+        prisma
+      );
+      if (!api) {
         AppErrors.unauthorized('No stored credentials found for server');
       }
-      const serverDefined = server!;
-      const credsDefined = creds!;
-
-      const api = await getAuthenticatedClient(serverDefined.baseUrl, credsDefined);
 
       const sitesApi = new SitesApi(api);
       await sitesApi.deleteSite(siteId, { permanent });
@@ -1321,17 +1348,19 @@ export async function registerBackendRpc(
         AppErrors.notFound('Server', serverId);
       }
 
-      // Get credentials
-      const creds = await serverService.getCredentialsForBackend(userId, serverId);
-      if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
+      // TypeScript doesn't recognize never-return, so we assert server is defined
+      const serverDefined = server!;
+
+      // Use centralized authentication with automatic token refresh (DRY principle)
+      const api = await getAuthenticatedClientWithRefresh(
+        userId,
+        serverId,
+        serverDefined.baseUrl,
+        prisma
+      );
+      if (!api) {
         AppErrors.unauthorized('No stored credentials found for server');
       }
-      // TypeScript doesn't recognize never-return, so we assert server and creds are defined
-      const serverDefined = server!;
-      const credsDefined = creds!;
-
-      // Authenticate
-      const api = await getAuthenticatedClient(serverDefined.baseUrl, credsDefined);
 
       // Rename node
       const nodesApi = new NodesApi(api);
@@ -1365,17 +1394,19 @@ export async function registerBackendRpc(
         AppErrors.notFound('Server', serverId);
       }
 
-      // Get credentials
-      const creds = await serverService.getCredentialsForBackend(userId, serverId);
-      if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
+      // TypeScript doesn't recognize never-return, so we assert server is defined
+      const serverDefined = server!;
+
+      // Use centralized authentication with automatic token refresh (DRY principle)
+      const api = await getAuthenticatedClientWithRefresh(
+        userId,
+        serverId,
+        serverDefined.baseUrl,
+        prisma
+      );
+      if (!api) {
         AppErrors.unauthorized('No stored credentials found for server');
       }
-      // TypeScript doesn't recognize never-return, so we assert server and creds are defined
-      const serverDefined = server!;
-      const credsDefined = creds!;
-
-      // Authenticate
-      const api = await getAuthenticatedClient(serverDefined.baseUrl, credsDefined);
 
       // Delete node
       const nodesApi = new NodesApi(api);
@@ -1475,13 +1506,14 @@ export async function registerBackendRpc(
         AppErrors.notFound('Server', serverId);
       }
 
-      // Get credentials
+      // TypeScript doesn't recognize never-return, so we assert server is defined
+      const serverDefined = server!;
+
+      // Get credentials for direct HTTP call to Slingshot API
       const creds = await serverService.getCredentialsForBackend(userId, serverId);
       if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
         AppErrors.unauthorized('No stored credentials found for server');
       }
-      // TypeScript doesn't recognize never-return, so we assert server and creds are defined
-      const serverDefined = server!;
       const credsDefined = creds!;
 
       // Build slingshot content URL
@@ -1566,17 +1598,26 @@ export async function registerBackendRpc(
         AppErrors.notFound('Server', serverId);
       }
 
-      // Get credentials for the server
+      // TypeScript doesn't recognize never-return, so we assert server is defined
+      const serverDefined = server!;
+
+      // Use centralized authentication with automatic token refresh (DRY principle)
+      const api = await getAuthenticatedClientWithRefresh(
+        userId,
+        serverId,
+        serverDefined.baseUrl,
+        prisma
+      );
+      if (!api) {
+        AppErrors.unauthorized('No stored credentials found for server');
+      }
+
+      // Get credentials for JavaScript console runas field
       const creds = await serverService.getCredentialsForBackend(userId, serverId);
       if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
         AppErrors.unauthorized('No stored credentials found for server');
       }
-      // TypeScript doesn't recognize never-return, so we assert server and creds are defined
-      const serverDefined = server!;
       const credsDefined = creds!;
-
-      // Authenticate with Alfresco
-      const api = await getAuthenticatedClient(serverDefined.baseUrl, credsDefined);
 
       // Get JavaScript console endpoint from server configuration
       const jsConsoleEndpoint = serverDefined.jsconsoleEndpoint;
@@ -1780,17 +1821,19 @@ export async function registerBackendRpc(
         AppErrors.notFound('Server', serverId);
       }
 
-      // Get credentials for the server
-      const creds = await serverService.getCredentialsForBackend(userId, serverId);
-      if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
+      // TypeScript doesn't recognize never-return, so we assert server is defined
+      const serverDefined = server!;
+
+      // Use centralized authentication with automatic token refresh (DRY principle)
+      const api = await getAuthenticatedClientWithRefresh(
+        userId,
+        serverId,
+        serverDefined.baseUrl,
+        prisma
+      );
+      if (!api) {
         AppErrors.unauthorized('No stored credentials found for server');
       }
-      // TypeScript doesn't recognize never-return, so we assert server and creds are defined
-      const serverDefined = server!;
-      const credsDefined = creds!;
-
-      // Authenticate with Alfresco
-      const api = await getAuthenticatedClient(serverDefined.baseUrl, credsDefined);
 
       try {
         const { SearchApi } = await import('@alfresco/js-api');
@@ -1855,17 +1898,19 @@ export async function registerBackendRpc(
         AppErrors.notFound('Server', serverId);
       }
 
-      // Get credentials for the server
-      const creds = await serverService.getCredentialsForBackend(userId, serverId);
-      if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
+      // TypeScript doesn't recognize never-return, so we assert server is defined
+      const serverDefined = server!;
+
+      // Use centralized authentication with automatic token refresh (DRY principle)
+      const api = await getAuthenticatedClientWithRefresh(
+        userId,
+        serverId,
+        serverDefined.baseUrl,
+        prisma
+      );
+      if (!api) {
         AppErrors.unauthorized('No stored credentials found for server');
       }
-      // TypeScript doesn't recognize never-return, so we assert server and creds are defined
-      const serverDefined = server!;
-      const credsDefined = creds!;
-
-      // Authenticate with Alfresco
-      const api = await getAuthenticatedClient(serverDefined.baseUrl, credsDefined);
 
       try {
         const { NodesApi } = await import('@alfresco/js-api');
@@ -1927,20 +1972,22 @@ export async function registerBackendRpc(
         AppErrors.notFound('Server', serverId);
       }
 
-      // Get credentials for the server
-      const creds = await serverService.getCredentialsForBackend(userId, serverId);
-      if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
+      // TypeScript doesn't recognize never-return, so we assert server is defined
+      const serverDefined = server!;
+
+      // Use centralized authentication with automatic token refresh (DRY principle)
+      const api = await getAuthenticatedClientWithRefresh(
+        userId,
+        serverId,
+        serverDefined.baseUrl,
+        prisma
+      );
+      if (!api) {
         AppErrors.unauthorized('No stored credentials found for server');
       }
-      // TypeScript doesn't recognize never-return, so we assert server and creds are defined
-      const serverDefined = server!;
-      const credsDefined = creds!;
-
-      // Authenticate with Alfresco
-      const api = await getAuthenticatedClient(serverDefined.baseUrl, credsDefined);
 
       // Get the authentication ticket
-      const ticket = api.config?.ticketEcm || api.getTicket();
+      const ticket = api!.config?.ticketEcm || api!.getTicket();
 
       return {
         ticket: ticket || null,
@@ -1969,17 +2016,19 @@ export async function registerBackendRpc(
         AppErrors.notFound('Server', serverId);
       }
 
-      // Get credentials for the server
-      const creds = await serverService.getCredentialsForBackend(userId, serverId);
-      if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
+      // TypeScript doesn't recognize never-return, so we assert server is defined
+      const serverDefined = server!;
+
+      // Use centralized authentication with automatic token refresh (DRY principle)
+      const api = await getAuthenticatedClientWithRefresh(
+        userId,
+        serverId,
+        serverDefined.baseUrl,
+        prisma
+      );
+      if (!api) {
         AppErrors.unauthorized('No stored credentials found for server');
       }
-      // TypeScript doesn't recognize never-return, so we assert server and creds are defined
-      const serverDefined = server!;
-      const credsDefined = creds!;
-
-      // Authenticate with Alfresco
-      const api = await getAuthenticatedClient(serverDefined.baseUrl, credsDefined);
 
       try {
         const { NodesApi } = await import('@alfresco/js-api');

@@ -25,6 +25,7 @@ import { decryptSecret, encryptSecret } from '../lib/encryption.js';
 import { getPrismaClient } from '../lib/prisma.js';
 import { ServerRepository } from '../repositories/serverRepository.js';
 import { validateCreateServerInput, validateUpdateServerInput } from './validators.js';
+import { refreshOidcTokens } from './alfresco/oidcTicketService.js';
 
 /**
  * Server service class
@@ -248,45 +249,24 @@ export class ServerService {
       throw new Error('Missing OAuth configuration for token refresh');
     }
 
-    // Construct token endpoint URL
-    const tokenEndpoint = `${server.oidcHost}/auth/realms/${server.oidcRealm}/protocol/openid-connect/token`;
-
-    // Exchange refresh token for new access token
-    const body = new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: server.oidcClientId,
-    });
-
-    const response = await fetch(tokenEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: body.toString(),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Token refresh failed: ${response.status} ${errorText}`);
-    }
-
-    const tokenResponse = (await response.json()) as {
-      access_token: string;
-      refresh_token?: string;
-      expires_in?: number;
-    };
+    // Use shared refresh function (DRY principle)
+    const tokenResponse = await refreshOidcTokens(
+      server.oidcHost,
+      server.oidcRealm,
+      server.oidcClientId,
+      refreshToken
+    );
 
     // Calculate new expiry
-    const newExpiry = tokenResponse.expires_in
-      ? new Date(Date.now() + tokenResponse.expires_in * 1000)
+    const newExpiry = tokenResponse.expiresIn
+      ? new Date(Date.now() + tokenResponse.expiresIn * 1000)
       : null;
 
     // Update server with new tokens (encrypted)
     const updatedServer = await this.repository.update(userId, serverId, {
-      token: await this.encryptCredentialValue(tokenResponse.access_token),
-      refreshToken: tokenResponse.refresh_token
-        ? await this.encryptCredentialValue(tokenResponse.refresh_token)
+      token: await this.encryptCredentialValue(tokenResponse.accessToken),
+      refreshToken: tokenResponse.refreshToken
+        ? await this.encryptCredentialValue(tokenResponse.refreshToken)
         : server.refreshToken, // Keep old refresh token if not provided
       tokenExpiry: newExpiry,
     });

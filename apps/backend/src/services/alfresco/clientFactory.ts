@@ -173,7 +173,7 @@ export interface StoredCredentials {
 
 /**
  * Get an authenticated AlfrescoApi client based on stored credentials
- * Handles both Basic Auth (calls login()) and OIDC (configures OAuth2)
+ * Handles both Basic Auth (calls login()) and OIDC (uses Bearer token)
  * @param baseUrl The base URL of the Alfresco server
  * @param creds Credentials from ServerService.getCredentialsForBackend()
  * @returns An authenticated AlfrescoApi client
@@ -186,14 +186,21 @@ export async function getAuthenticatedClient(
     if (!creds.oidcHost || !creds.oidcRealm || !creds.oidcClientId) {
       throw new Error('Missing OIDC configuration');
     }
+    if (!creds.token) {
+      throw new Error('Missing OIDC access token');
+    }
+
+    // For OIDC: use Bearer token authentication via OAuth2
     const oauth2Auth: OAuth2AuthDescriptor = {
       type: 'oauth2',
       clientId: creds.oidcClientId,
       host: creds.oidcHost,
       realm: creds.oidcRealm,
-      accessToken: creds.token!,
+      accessToken: creds.token,
     };
-    // OAuth2 client is already configured with Bearer token - no login() needed
+
+    // Get client with OAuth2 configuration
+    // The js-api will use Bearer token for authentication
     return getClient(baseUrl, oauth2Auth);
   }
 
