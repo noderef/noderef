@@ -20,6 +20,7 @@ import { useLocalFilesStore } from '@/core/store/localFiles';
 import { useIntersection, useMediaQuery } from '@mantine/hooks';
 import { useTextEditorStore } from '@/core/store/textEditor';
 import { useNavigation } from '@/hooks/useNavigation';
+import { formatRelativeTime } from '@/utils/formatTime';
 import {
   Alert,
   Badge,
@@ -116,34 +117,6 @@ function formatDate(value: Date | string | null): string {
   return date.toLocaleString();
 }
 
-const RELATIVE_TIME_DIVISIONS: Array<{ amount: number; unit: Intl.RelativeTimeFormatUnit }> = [
-  { amount: 60, unit: 'second' },
-  { amount: 60, unit: 'minute' },
-  { amount: 24, unit: 'hour' },
-  { amount: 7, unit: 'day' },
-  { amount: 4.34524, unit: 'week' },
-  { amount: 12, unit: 'month' },
-  { amount: Number.POSITIVE_INFINITY, unit: 'year' },
-];
-
-function formatRelativeDate(
-  value: Date | string | null,
-  formatter: Intl.RelativeTimeFormat
-): string {
-  if (!value) return '-';
-  const date = value instanceof Date ? value : new Date(value);
-  let duration = (date.getTime() - Date.now()) / 1000;
-
-  for (const division of RELATIVE_TIME_DIVISIONS) {
-    if (Math.abs(duration) < division.amount) {
-      return formatter.format(Math.round(duration), division.unit);
-    }
-    duration /= division.amount;
-  }
-
-  return '-';
-}
-
 function getFileIcon(name: string, providedType?: string | null) {
   const mime = providedType || guessMimeFromName(name) || undefined;
   return getFileIconByMimeType(mime || undefined);
@@ -200,10 +173,6 @@ export function LocalFilesPage() {
   const showLastModifiedColumn = useMediaQuery('(min-width: 1020px)');
 
   const filteredFiles = files; // now backend-driven filter
-  const relativeTimeFormatter = useMemo(
-    () => new Intl.RelativeTimeFormat(i18n.language || undefined, { numeric: 'auto' }),
-    [i18n.language]
-  );
 
   useEffect(() => {
     const existingIds = new Set(files.map(f => f.id));
@@ -820,7 +789,7 @@ export function LocalFilesPage() {
                             <Table.Td>
                               <Tooltip label={formatDate(file.createdAt)}>
                                 <Text size="sm">
-                                  {formatRelativeDate(file.createdAt, relativeTimeFormatter)}
+                                  {formatRelativeTime(file.createdAt, i18n.language)}
                                 </Text>
                               </Tooltip>
                             </Table.Td>
@@ -829,9 +798,9 @@ export function LocalFilesPage() {
                             <Table.Td>
                               <Tooltip label={formatDate(file.lastModified ?? file.createdAt)}>
                                 <Text size="sm">
-                                  {formatRelativeDate(
+                                  {formatRelativeTime(
                                     file.lastModified ?? file.createdAt,
-                                    relativeTimeFormatter
+                                    i18n.language
                                   )}
                                 </Text>
                               </Tooltip>

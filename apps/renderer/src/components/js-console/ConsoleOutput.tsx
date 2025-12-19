@@ -17,6 +17,7 @@
 import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
 import { useJsConsoleStore } from '@/core/store/jsConsole';
 import { useServersStore } from '@/core/store/servers';
+import { formatRelativeTime } from '@/utils/formatTime';
 import {
   Accordion,
   ActionIcon,
@@ -46,22 +47,6 @@ import {
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-
-// Simple time formatting function
-function formatTimeAgo(date: Date): string {
-  const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-
-  if (seconds < 60) return `${seconds} second${seconds !== 1 ? 's' : ''} ago`;
-
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
-
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
-
-  const days = Math.floor(hours / 24);
-  return `${days} day${days !== 1 ? 's' : ''} ago`;
-}
 
 export function ConsoleOutput({ isNodeRefSpace }: { isNodeRefSpace: boolean }) {
   const { t } = useTranslation('jsConsole');
@@ -487,7 +472,7 @@ export function ConsoleOutput({ isNodeRefSpace }: { isNodeRefSpace: boolean }) {
                           <Accordion.Control>
                             <Box>
                               <Text size="xs" c="dimmed" mb={openedAccordion === item.id ? 0 : 4}>
-                                {formatTimeAgo(item.timestamp)}
+                                {formatRelativeTime(item.timestamp)}
                               </Text>
                               {openedAccordion !== item.id && (
                                 <Text
@@ -629,7 +614,7 @@ export function ConsoleOutput({ isNodeRefSpace }: { isNodeRefSpace: boolean }) {
                             </Badge>
                           )}
                           <Text size="xs" c="dimmed">
-                            {formatTimeAgo(output.timestamp)}
+                            {formatRelativeTime(output.timestamp)}
                           </Text>
                         </Group>
                         <Code

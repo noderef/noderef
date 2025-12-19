@@ -33,6 +33,7 @@ import { useServersStore } from '@/core/store/servers';
 import { useTextEditorStore } from '@/core/store/textEditor';
 import { isTextLikeFile } from '@/features/text-editor/language';
 import { markNodesTemporary as markNodesTemporaryRpc } from '@/utils/markNodesTemporary';
+import { formatRelativeTime } from '@/utils/formatTime';
 import {
   ActionIcon,
   Anchor,
@@ -1032,11 +1033,6 @@ export function FileFolderBrowserView({
     });
   }, [bulkDeleting, deleteSelectedNodes, selectedNodeIds.length, t]);
 
-  const relativeTimeFormatter = useMemo(
-    () => new Intl.RelativeTimeFormat(i18n.language || undefined, { numeric: 'auto' }),
-    [i18n.language]
-  );
-
   const formatRelativeDate = useCallback(
     (value?: string) => {
       if (!value) {
@@ -1047,26 +1043,9 @@ export function FileFolderBrowserView({
         return value;
       }
 
-      const divisions: Array<{ amount: number; unit: Intl.RelativeTimeFormatUnit }> = [
-        { amount: 60, unit: 'second' },
-        { amount: 60, unit: 'minute' },
-        { amount: 24, unit: 'hour' },
-        { amount: 7, unit: 'day' },
-        { amount: 4.34524, unit: 'week' },
-        { amount: 12, unit: 'month' },
-        { amount: Infinity, unit: 'year' },
-      ];
-
-      let duration = (date.getTime() - Date.now()) / 1000;
-      for (const division of divisions) {
-        if (Math.abs(duration) < division.amount) {
-          return relativeTimeFormatter.format(Math.round(duration), division.unit);
-        }
-        duration /= division.amount;
-      }
-      return relativeTimeFormatter.format(Math.round(duration), 'year');
+      return formatRelativeTime(date, i18n.language);
     },
-    [relativeTimeFormatter, t]
+    [i18n.language, t]
   );
 
   const renderNodeIcon = (node: RepositoryNode) => {

@@ -48,34 +48,12 @@ import { getFileIconByMimeType } from '@/components/submenu/fileIconUtils';
 import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
 import { useFileFolderBrowserTabsStore } from '@/core/store/fileFolderBrowserTabs';
 import { useNavigation } from '@/hooks/useNavigation';
+import { formatRelativeTime } from '@/utils/formatTime';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const DEFAULT_ACTIVITY_DAYS = 365;
-
-function formatRelativeTime(date: Date, locale?: string): string {
-  const diff = date.getTime() - Date.now();
-  const intervals: Array<{ unit: Intl.RelativeTimeFormatUnit; ms: number }> = [
-    { unit: 'year', ms: 1000 * 60 * 60 * 24 * 365 },
-    { unit: 'month', ms: 1000 * 60 * 60 * 24 * 30 },
-    { unit: 'week', ms: 1000 * 60 * 60 * 24 * 7 },
-    { unit: 'day', ms: 1000 * 60 * 60 * 24 },
-    { unit: 'hour', ms: 1000 * 60 * 60 },
-    { unit: 'minute', ms: 1000 * 60 },
-  ];
-
-  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
-
-  for (const { unit, ms } of intervals) {
-    if (Math.abs(diff) >= ms || unit === 'minute') {
-      const value = Math.round(diff / ms);
-      return rtf.format(value as number, unit);
-    }
-  }
-
-  return rtf.format(0, 'minute');
-}
 
 function formatDateLabel(value: string | Date, locale?: string): string {
   const parsed = typeof value === 'string' ? new Date(value) : value;

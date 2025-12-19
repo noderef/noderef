@@ -19,6 +19,7 @@ import { useSearchStore, type SearchResult } from '@/core/store/search';
 import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
 import { useFileFolderBrowserTabsStore } from '@/core/store/fileFolderBrowserTabs';
 import { useNavigationStore } from '@/core/store/navigation';
+import { formatRelativeTime } from '@/utils/formatTime';
 import {
   Badge,
   Box,
@@ -35,26 +36,6 @@ import { useIntersection } from '@mantine/hooks';
 import { IconDots, IconFolder, IconSearch, IconWorld } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-const formatRelativeTime = (date: string) => {
-  const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
-  let duration = (new Date(date).getTime() - Date.now()) / 1000; // seconds difference
-  const divisions: Array<{ amount: number; unit: Intl.RelativeTimeFormatUnit }> = [
-    { amount: 60, unit: 'second' },
-    { amount: 60, unit: 'minute' },
-    { amount: 24, unit: 'hour' },
-    { amount: 7, unit: 'day' },
-    { amount: 4.34524, unit: 'week' },
-    { amount: 12, unit: 'month' },
-    { amount: Infinity, unit: 'year' },
-  ];
-  for (const division of divisions) {
-    if (Math.abs(duration) < division.amount) {
-      return formatter.format(Math.round(duration), division.unit);
-    }
-    duration /= division.amount;
-  }
-  return formatter.format(Math.round(duration), 'year');
-};
 
 interface LoadMoreTimelineItemProps {
   isLoading: boolean;
