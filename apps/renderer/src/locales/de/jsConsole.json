@@ -18,5 +18,12 @@
   "aiTooltipBusy": "KI generiert Code\u2026",
   "aiTooltipReady": "KI bereit \u2013 /ai eingeben",
   "aiTooltipUnavailable": "KI nicht verf\u00fcgbar",
-  "clearConsole": "Konsole leeren"
+  "clearConsole": "Konsole leeren",
+  "executing": "Wird ausgef\u00fchrt...",
+  "noOutputYet": "Noch keine Ausgabe. F\u00fchren Sie Code aus, um Ergebnisse hier zu sehen.",
+  "executionError": "Ausf\u00fchrungsfehler",
+  "executionResult": "Ausf\u00fchrungsergebnis",
+  "error": "Fehler",
+  "outputLabel": "Ausgabe",
+  "noOutputFromExecution": "Keine Ausgabe von dieser Ausf\u00fchrung."
 }

@@ -571,7 +571,7 @@ export function ConsoleOutput({ isNodeRefSpace }: { isNodeRefSpace: boolean }) {
                   <Group gap="sm">
                     <IconLoader size={20} className="rotating" />
                     <Text size="sm" c="dimmed">
-                      Executing...
+                      {t('executing')}
                     </Text>
                   </Group>
                 </Paper>
@@ -579,7 +579,7 @@ export function ConsoleOutput({ isNodeRefSpace }: { isNodeRefSpace: boolean }) {
 
               {activeOutputs.length === 0 && !isExecuting ? (
                 <Text c="dimmed" size="sm" ta="center" mt="xl">
-                  No output yet. Execute some code to see results here.
+                  {t('noOutputYet')}
                 </Text>
               ) : (
                 <Stack gap="sm">
@@ -640,13 +640,13 @@ export function ConsoleOutput({ isNodeRefSpace }: { isNodeRefSpace: boolean }) {
         <Modal
           opened={viewResultModal !== null}
           onClose={() => setViewResultModal(null)}
-          title={viewResultModal?.error ? 'Execution Error' : 'Execution Result'}
+          title={viewResultModal?.error ? t('executionError') : t('executionResult')}
           size="xl"
         >
           {viewResultModal?.error ? (
             <Box>
               <Badge color="red" variant="light" mb="sm">
-                Error
+                {t('error')}
               </Badge>
               <Code
                 block
@@ -662,7 +662,7 @@ export function ConsoleOutput({ isNodeRefSpace }: { isNodeRefSpace: boolean }) {
           ) : viewResultModal?.output ? (
             <Box>
               <Badge color="green" variant="light" mb="sm">
-                Output
+                {t('outputLabel')}
               </Badge>
               <Code
                 block
@@ -676,7 +676,7 @@ export function ConsoleOutput({ isNodeRefSpace }: { isNodeRefSpace: boolean }) {
             </Box>
           ) : (
             <Text c="dimmed" size="sm">
-              No output from this execution.
+              {t('noOutputFromExecution')}
             </Text>
           )}
         </Modal>

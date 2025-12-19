@@ -18,5 +18,12 @@
   "aiTooltipBusy": "L'IA g\u00e9n\u00e8re du code\u2026",
   "aiTooltipReady": "IA pr\u00eate \u2013 tapez /ai",
   "aiTooltipUnavailable": "IA non disponible",
-  "clearConsole": "Vider la console"
+  "clearConsole": "Vider la console",
+  "executing": "Ex\u00e9cution en cours...",
+  "noOutputYet": "Aucune sortie pour le moment. Ex\u00e9cutez du code pour voir les r\u00e9sultats ici.",
+  "executionError": "Erreur d'ex\u00e9cution",
+  "executionResult": "R\u00e9sultat de l'ex\u00e9cution",
+  "error": "Erreur",
+  "outputLabel": "Sortie",
+  "noOutputFromExecution": "Aucune sortie de cette ex\u00e9cution."
 }

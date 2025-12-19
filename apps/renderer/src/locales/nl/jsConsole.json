@@ -18,5 +18,12 @@
   "aiTooltipBusy": "AI genereert code\u2026",
   "aiTooltipReady": "AI klaar \u2013 typ /ai",
   "aiTooltipUnavailable": "AI niet beschikbaar",
-  "clearConsole": "Console legen"
+  "clearConsole": "Console legen",
+  "executing": "Aan het uitvoeren...",
+  "noOutputYet": "Nog geen output. Voer code uit om resultaten hier te zien.",
+  "executionError": "Uitvoeringsfout",
+  "executionResult": "Uitvoeringsresultaat",
+  "error": "Fout",
+  "outputLabel": "Output",
+  "noOutputFromExecution": "Geen output van deze uitvoering."
 }

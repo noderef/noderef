@@ -18,5 +18,12 @@
   "aiTooltipBusy": "AI is generating code…",
   "aiTooltipReady": "AI ready – type /ai",
   "aiTooltipUnavailable": "AI unavailable",
-  "clearConsole": "Clear console"
+  "clearConsole": "Clear console",
+  "executing": "Executing...",
+  "noOutputYet": "No output yet. Execute some code to see results here.",
+  "executionError": "Execution error",
+  "executionResult": "Execution result",
+  "error": "Error",
+  "outputLabel": "Output",
+  "noOutputFromExecution": "No output from this execution."
 }
