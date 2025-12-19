@@ -35,7 +35,8 @@ import { IconAlertTriangle, IconPlayerPlay, IconRefresh } from '@tabler/icons-re
 
 import { isBackendReady, startBackend, waitForBackend } from '@/core/ipc/rpc';
 
-import { isNeutralinoMode } from '@/core/ipc/neutralino';
+import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
+import { os } from '@neutralinojs/lib';
 
 import { useTranslation } from 'react-i18next';
 import { backendRpc } from '@/core/ipc/backend';
@@ -226,10 +227,29 @@ export function BackendGate({
 
       const downloadTarget = getDownloadUrl(state.latestRelease);
 
+      const handleDownloadClick = async (e: React.MouseEvent) => {
+        e.preventDefault();
+        if (isNeutralinoMode()) {
+          try {
+            await ensureNeutralinoReady();
+            await os.open(downloadTarget);
+            return;
+          } catch (error) {
+            console.warn('Neutralino open failed, falling back to window.open', error);
+          }
+        }
+        window.open(downloadTarget, '_blank', 'noreferrer');
+      };
+
       notifications.show({
         title: t('common:updateAvailable'),
         message: (
-          <Anchor href={downloadTarget} target="_blank" rel="noopener noreferrer">
+          <Anchor
+            href={downloadTarget}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={handleDownloadClick}
+          >
             {t('common:updateAvailableMessage', { version: latestVersion })}
           </Anchor>
         ),
