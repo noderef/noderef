@@ -55,7 +55,7 @@ import {
   IconTextWrap,
 } from '@tabler/icons-react';
 import { getFileIconByMimeType } from '@/components/submenu/fileIconUtils';
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const MAX_FILE_BYTES = 250 * 1024 * 1024; // 250MB
