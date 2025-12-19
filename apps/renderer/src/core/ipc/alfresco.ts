@@ -21,6 +21,8 @@ import type {
   ConfigureOAuth2Res,
   ExchangeOAuth2TokenReq,
   ExchangeOAuth2TokenRes,
+  GetTernDefinitionsReq,
+  GetTernDefinitionsRes,
   LoginReq,
   LoginRes,
   LogoutReq,
@@ -373,5 +375,12 @@ export const alfrescoRpc = {
 
   search: {
     search: (baseUrl: string, queryBody: unknown) => call('search.search', { queryBody }, baseUrl),
+  },
+
+  /**
+   * Get Tern definitions from Alfresco
+   */
+  async getTernDefinitions(req: GetTernDefinitionsReq): Promise<GetTernDefinitionsRes> {
+    return rpc<GetTernDefinitionsRes>('alfresco.getTernDefinitions', req);
   },
 };

@@ -24,6 +24,7 @@ import {
   fetchAiStatus,
   type AiStatusResponse,
 } from '@/core/ai/consoleClient';
+import { dslManager } from '@/core/monaco/dsl-manager';
 import { useJsConsoleStore } from '@/core/store/jsConsole';
 import { useServersStore } from '@/core/store/servers';
 import { useActiveServerId } from '@/hooks/useNavigation';
@@ -139,6 +140,20 @@ function JsConsolePage() {
     }
     return servers.filter(server => selectedServerIds.includes(server.id));
   }, [activeServer, isNodeRefSpace, servers, selectedServerIds]);
+
+  // Load custom DSL when active server changes
+  useEffect(() => {
+    if (activeServer?.id && activeServer?.baseUrl) {
+      void dslManager.loadCustomDsl(activeServer.id, activeServer.baseUrl);
+    }
+  }, [activeServer?.id, activeServer?.baseUrl]);
+
+  // Unload all DSLs on page unmount
+  useEffect(() => {
+    return () => {
+      dslManager.unloadAll();
+    };
+  }, []);
 
   const appendHistory = useJsConsoleStore(state => state.appendHistory);
   const setHistoryLoading = useJsConsoleStore(state => state.setHistoryLoading);

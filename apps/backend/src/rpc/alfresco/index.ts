@@ -16,10 +16,9 @@
 
 import type { AlfrescoApi } from '@alfresco/js-api';
 import { z } from 'zod';
+import { AppErrors } from '../../lib/errors.js';
 import { createLogger } from '../../lib/logger.js';
 import { getPrismaClient } from '../../lib/prisma.js';
-import { AppErrors } from '../../lib/errors.js';
-import { ErrorCode } from '@app/contracts';
 import * as authSvc from '../../services/alfresco/authService.js';
 import { getClient } from '../../services/alfresco/clientFactory.js';
 import { callMethod } from '../../services/alfresco/proxyService.js';
@@ -82,6 +81,7 @@ export function registerAlfrescoRpc(
     'ConfigureOAuth2ReqSchema',
     'ExchangeOAuth2TokenReqSchema',
     'PollOAuth2CodeReqSchema',
+    'GetTernDefinitionsReqSchema',
   ];
 
   const missing = required.filter(n => !(n in contracts));
@@ -97,6 +97,7 @@ export function registerAlfrescoRpc(
     ConfigureOAuth2ReqSchema,
     ExchangeOAuth2TokenReqSchema,
     PollOAuth2CodeReqSchema,
+    GetTernDefinitionsReqSchema,
   } = contracts;
 
   routes['alfresco.login'] = {
@@ -550,6 +551,20 @@ export function registerAlfrescoRpc(
         log.error({ serverId, query, error }, 'Failed to execute search query');
         throw error;
       }
+    },
+  };
+
+  routes['alfresco.getTernDefinitions'] = {
+    schema: GetTernDefinitionsReqSchema as unknown as ZSchema,
+    handler: async params => {
+      const { serverId, baseUrl } = GetTernDefinitionsReqSchema.parse(params);
+      const { getTernDefinitions } = await import('../../services/alfresco/ternService.js');
+
+      const api = await authenticateWithStoredCredentials(serverId, baseUrl);
+      if (!api) {
+        AppErrors.unauthorized('Failed to authenticate');
+      }
+      return getTernDefinitions(api!);
     },
   };
 }
