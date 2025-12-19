@@ -102,6 +102,22 @@ export type ValidateCredentialsReq = z.infer<typeof ValidateCredentialsReqSchema
 export type ValidateCredentialsRes = z.infer<typeof ValidateCredentialsResSchema>;
 
 /**
+ * Validate OIDC credentials request and response
+ */
+export const ValidateOidcCredentialsReqSchema = z.object({
+  baseUrl: z.string().url(),
+  accessToken: z.string().min(1),
+  oidcHost: z.string().min(1),
+  oidcRealm: z.string().min(1),
+  oidcClientId: z.string().min(1),
+});
+
+export const ValidateOidcCredentialsResSchema = ValidateCredentialsResSchema;
+
+export type ValidateOidcCredentialsReq = z.infer<typeof ValidateOidcCredentialsReqSchema>;
+export type ValidateOidcCredentialsRes = z.infer<typeof ValidateOidcCredentialsResSchema>;
+
+/**
  * List sites request and response
  */
 export const ListSitesReqSchema = ServerRefSchema.extend({

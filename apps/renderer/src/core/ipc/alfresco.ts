@@ -31,6 +31,8 @@ import type {
   PollOAuth2CodeRes,
   ValidateCredentialsReq,
   ValidateCredentialsRes,
+  ValidateOidcCredentialsReq,
+  ValidateOidcCredentialsRes,
 } from '@app/contracts';
 import { getRpcBaseUrl, rpc, waitForBackend } from './rpc.js';
 
@@ -237,6 +239,26 @@ export const alfrescoRpc = {
     } catch (error) {
       const duration = Date.now() - startTime;
       console.error(`✅ RPC Validate Credentials Error (${duration}ms):`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Validate OIDC credentials and check admin status
+   */
+  async validateOidcCredentials(
+    req: ValidateOidcCredentialsReq
+  ): Promise<ValidateOidcCredentialsRes> {
+    console.log(`✅ RPC Validate OIDC Credentials:`, { baseUrl: req.baseUrl });
+    const startTime = Date.now();
+    try {
+      const result = await rpc<ValidateOidcCredentialsRes>('alfresco.validateOidcCredentials', req);
+      const duration = Date.now() - startTime;
+      console.log(`✅ RPC Validate OIDC Credentials Response (${duration}ms):`, result);
+      return result;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`✅ RPC Validate OIDC Credentials Error (${duration}ms):`, error);
       throw error;
     }
   },

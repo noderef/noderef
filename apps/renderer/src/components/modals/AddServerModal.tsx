@@ -678,6 +678,45 @@ export function AddServerModal() {
                   expiresIn: tokenResponse.expiresIn,
                 });
 
+                // Validate OIDC credentials and check admin status
+                try {
+                  const validationResult = await alfrescoRpc.validateOidcCredentials({
+                    baseUrl: storedBaseUrl,
+                    accessToken: tokenResponse.accessToken,
+                    oidcHost: storedHost,
+                    oidcRealm: storedRealm,
+                    oidcClientId: storedClientId,
+                  });
+
+                  if (validationResult.valid) {
+                    const adminStatus = validationResult.isAdmin || false;
+                    setIsAdmin(adminStatus);
+                    if (!validationResult.isAdmin) {
+                      notifications.show({
+                        title: 'Admin Access Required',
+                        message: 'Only admin users can add servers',
+                        color: 'yellow',
+                      });
+                    }
+                  } else {
+                    setIsAdmin(false);
+                    notifications.show({
+                      title: 'Validation Failed',
+                      message: validationResult.error || 'Failed to validate credentials',
+                      color: 'red',
+                    });
+                  }
+                } catch (validationError) {
+                  console.error('Failed to validate OIDC credentials:', validationError);
+                  setIsAdmin(false);
+                  // Don't block the flow, but warn the user
+                  notifications.show({
+                    title: 'Warning',
+                    message: 'Could not verify admin status. The server may not have admin access.',
+                    color: 'yellow',
+                  });
+                }
+
                 // Clean up session storage
                 sessionStorage.removeItem(`oidc_pkce_verifier_${result.state}`);
                 sessionStorage.removeItem(`oidc_base_url_${result.state}`);

@@ -57,6 +57,7 @@ export function registerAlfrescoRpc(
     'LoginReqSchema',
     'LogoutReqSchema',
     'ValidateCredentialsReqSchema',
+    'ValidateOidcCredentialsReqSchema',
     'AlfrescoRpcCallSchema',
     'ConfigureOAuth2ReqSchema',
     'ExchangeOAuth2TokenReqSchema',
@@ -73,6 +74,7 @@ export function registerAlfrescoRpc(
     LoginReqSchema,
     LogoutReqSchema,
     ValidateCredentialsReqSchema,
+    ValidateOidcCredentialsReqSchema,
     AlfrescoRpcCallSchema,
     ConfigureOAuth2ReqSchema,
     ExchangeOAuth2TokenReqSchema,
@@ -95,6 +97,24 @@ export function registerAlfrescoRpc(
     handler: async params => {
       try {
         return await authSvc.validateCredentials(ValidateCredentialsReqSchema.parse(params));
+      } catch (error: any) {
+        // Ensure errors never escape - always return a validation response
+        return {
+          valid: false,
+          isAdmin: false,
+          error: 'Authentication failed',
+        };
+      }
+    },
+  };
+
+  routes['alfresco.validateOidcCredentials'] = {
+    schema: ValidateOidcCredentialsReqSchema as unknown as ZSchema,
+    handler: async params => {
+      try {
+        return await authSvc.validateOidcCredentials(
+          ValidateOidcCredentialsReqSchema.parse(params)
+        );
       } catch (error: any) {
         // Ensure errors never escape - always return a validation response
         return {

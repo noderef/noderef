@@ -17,17 +17,20 @@
 import { PeopleApi } from '@alfresco/js-api';
 import type {
   AlfUser,
-  LoginReq,
-  LoginRes,
-  LogoutReq,
-  LogoutRes,
   ConfigureOAuth2Req,
   ConfigureOAuth2Res,
   ExchangeOAuth2TokenReq,
   ExchangeOAuth2TokenRes,
+  LoginReq,
+  LoginRes,
+  LogoutReq,
+  LogoutRes,
   ValidateCredentialsReq,
   ValidateCredentialsRes,
+  ValidateOidcCredentialsReq,
+  ValidateOidcCredentialsRes,
 } from '@app/contracts';
+import { createLogger } from '../../lib/logger.js';
 import {
   dropClient,
   getClient,
@@ -35,7 +38,6 @@ import {
   type OAuth2AuthDescriptor,
 } from './clientFactory.js';
 import { mapError } from './errorMapper.js';
-import { createLogger } from '../../lib/logger.js';
 
 const log = createLogger('alfresco.auth');
 
@@ -210,6 +212,85 @@ export async function validateCredentials(
       dropClient(req.baseUrl);
     } catch (cleanupError) {
       log.debug({ cleanupError }, 'Error cleaning up client');
+    }
+
+    return {
+      valid: false,
+      isAdmin: false,
+      error: errorMessage,
+    };
+  }
+}
+
+/**
+ * Validate OIDC credentials and check admin status
+ * @param req Validate OIDC credentials request with baseUrl, accessToken, and OIDC config
+ * @returns Validation response with admin status
+ */
+export async function validateOidcCredentials(
+  req: ValidateOidcCredentialsReq
+): Promise<ValidateOidcCredentialsRes> {
+  let api: any;
+
+  try {
+    // Create OAuth2 client with access token
+    const oauth2Auth: OAuth2AuthDescriptor = {
+      type: 'oauth2',
+      clientId: req.oidcClientId,
+      host: req.oidcHost,
+      realm: req.oidcRealm,
+      accessToken: req.accessToken,
+    };
+
+    api = getClient(req.baseUrl, oauth2Auth);
+
+    // Retrieve current user information with full capabilities
+    const peopleApi = new PeopleApi(api);
+    const personEntry = await peopleApi.getPerson('-me-');
+
+    // Check if user is admin
+    const isAdmin = personEntry.entry.capabilities?.isAdmin === true;
+
+    log.info(
+      {
+        userId: personEntry.entry.id,
+        isAdmin,
+      },
+      'OIDC credential validation completed'
+    );
+
+    // Map to user object
+    const user = {
+      id: personEntry.entry.id,
+      displayName:
+        personEntry.entry.displayName || personEntry.entry.firstName || personEntry.entry.id,
+      email: personEntry.entry.email,
+    };
+
+    // Drop the client after validation (we'll create a new one when adding the server)
+    dropClient(req.baseUrl);
+
+    return {
+      valid: true,
+      isAdmin,
+      user,
+    };
+  } catch (error: any) {
+    // If validation fails, return invalid without throwing
+    log.debug('OIDC credential validation failed:', error);
+
+    // Provide helpful error message
+    let errorMessage = 'Authentication failed';
+
+    try {
+      const status = error?.status;
+      if (status === 401 || status === 403) {
+        errorMessage = 'Invalid access token or insufficient permissions';
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+    } catch {
+      // Ignore errors when extracting error message
     }
 
     return {
