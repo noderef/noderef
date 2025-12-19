@@ -624,3 +624,9 @@ declare function print(...args: unknown[]): void;
 
 // Java "Packages" is available in secure scripts; keep it loose.
 declare const Packages: any;
+
+// Java package roots
+declare const java: any;
+declare const javax: any;
+declare const org: any;
+declare const com: any;
