@@ -141,19 +141,26 @@ function JsConsolePage() {
     return servers.filter(server => selectedServerIds.includes(server.id));
   }, [activeServer, isNodeRefSpace, servers, selectedServerIds]);
 
-  // Load custom DSL when active server changes
+  // Manage DSL loading/unloading based on selected servers
+  // DSLs persist across page navigation to avoid flickering
   useEffect(() => {
-    if (activeServer?.id && activeServer?.baseUrl) {
-      void dslManager.loadCustomDsl(activeServer.id, activeServer.baseUrl);
-    }
-  }, [activeServer?.id, activeServer?.baseUrl]);
+    const currentServerIds = new Set(selectedServers.map(s => s.id));
+    const loadedServerIds = dslManager.getLoadedServerIds();
 
-  // Unload all DSLs on page unmount
-  useEffect(() => {
-    return () => {
-      dslManager.unloadAll();
-    };
-  }, []);
+    // Unload DSLs for deselected servers
+    loadedServerIds.forEach(serverId => {
+      if (!currentServerIds.has(serverId)) {
+        dslManager.unloadCustomDsl(serverId);
+      }
+    });
+
+    // Load DSLs for selected servers
+    selectedServers.forEach(server => {
+      if (server.id && server.baseUrl) {
+        void dslManager.loadCustomDsl(server.id, server.baseUrl);
+      }
+    });
+  }, [selectedServers]);
 
   const appendHistory = useJsConsoleStore(state => state.appendHistory);
   const setHistoryLoading = useJsConsoleStore(state => state.setHistoryLoading);

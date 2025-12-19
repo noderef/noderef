@@ -20,12 +20,22 @@ import { convertTernToTs } from './tern-converter';
 
 interface LoadedDsl {
   serverId: number;
-  lib: monaco.IDisposable;
+  jsLib: monaco.IDisposable;
+  tsLib: monaco.IDisposable;
 }
 
 const loadedDsls = new Map<number, LoadedDsl>();
 const loadingServers = new Set<number>();
-const lastLoadedContent = new Map<number, string>();
+const serversWithoutDsl = new Set<number>(); // Track servers that don't have DSL
+
+/**
+ * Mark a server as having no DSL and unload any existing DSL for it
+ */
+function markServerWithoutDsl(serverId: number, reason: string): void {
+  console.log(`[DSL] Server ${serverId} ${reason}`);
+  serversWithoutDsl.add(serverId);
+  dslManager.unloadCustomDsl(serverId);
+}
 
 /**
  * Manage Alfresco DSLs for Monaco Editor
@@ -37,7 +47,14 @@ export const dslManager = {
    * @param baseUrl The base URL of the Alfresco server
    */
   async loadCustomDsl(serverId: number, baseUrl: number | string): Promise<void> {
-    if (loadingServers.has(serverId)) return;
+    if (loadedDsls.has(serverId)) {
+      serversWithoutDsl.delete(serverId);
+      return;
+    }
+
+    if (loadingServers.has(serverId)) {
+      return;
+    }
 
     try {
       loadingServers.add(serverId);
@@ -46,28 +63,27 @@ export const dslManager = {
       const definitions = response.typeDefinitions || [];
 
       if (definitions.length === 0) {
-        this.unloadCustomDsl(serverId);
-        lastLoadedContent.delete(serverId);
+        markServerWithoutDsl(serverId, 'has no Tern definitions');
         return;
       }
 
       const tsContent = convertTernToTs(definitions);
-      if (!tsContent.trim() || tsContent === lastLoadedContent.get(serverId)) {
+      if (!tsContent.trim()) {
+        markServerWithoutDsl(serverId, 'has no valid DSL content after conversion');
         return;
       }
 
-      // Clear existing DSL for this server if any
-      this.unloadCustomDsl(serverId);
-
       const fileName = `ts:alfresco-custom-${serverId}.d.ts`;
-      const lib = monaco.languages.typescript.javascriptDefaults.addExtraLib(tsContent, fileName);
-      monaco.languages.typescript.typescriptDefaults.addExtraLib(tsContent, fileName);
+      const jsLib = monaco.languages.typescript.javascriptDefaults.addExtraLib(tsContent, fileName);
+      const tsLib = monaco.languages.typescript.typescriptDefaults.addExtraLib(tsContent, fileName);
 
-      loadedDsls.set(serverId, { serverId, lib });
-      lastLoadedContent.set(serverId, tsContent);
+      loadedDsls.set(serverId, { serverId, jsLib, tsLib });
+      serversWithoutDsl.delete(serverId);
+
+      console.log(`[DSL] Loaded custom DSL for server ${serverId}`);
     } catch (error) {
-      // Fail silent as per requirements, but log error for debugging
       console.error(`[DSL] Failed to load custom DSL for server ${serverId}:`, error);
+      markServerWithoutDsl(serverId, 'failed to load (API error)');
     } finally {
       loadingServers.delete(serverId);
     }
@@ -75,22 +91,48 @@ export const dslManager = {
 
   /**
    * Unload custom DSL for a specific serverId
-   * @param serverId The server ID to unload DSL for
    */
   unloadCustomDsl(serverId: number): void {
     const loaded = loadedDsls.get(serverId);
     if (loaded) {
-      loaded.lib.dispose();
+      loaded.jsLib.dispose();
+      loaded.tsLib.dispose();
       loadedDsls.delete(serverId);
+      console.log(`[DSL] Unloaded custom DSL for server ${serverId}`);
     }
+    serversWithoutDsl.delete(serverId);
   },
 
   /**
    * Unload all custom DSLs
    */
   unloadAll(): void {
-    for (const serverId of loadedDsls.keys()) {
-      this.unloadCustomDsl(serverId);
+    const serverIds = Array.from(loadedDsls.keys());
+    if (serverIds.length > 0) {
+      console.log(`[DSL] Unloading all DSLs (${serverIds.length} servers)`);
+      serverIds.forEach(id => this.unloadCustomDsl(id));
     }
+    serversWithoutDsl.clear();
+  },
+
+  /**
+   * Get all loaded server IDs
+   */
+  getLoadedServerIds(): number[] {
+    return Array.from(loadedDsls.keys());
+  },
+
+  /**
+   * Check if a DSL is loaded for a specific serverId
+   */
+  isLoaded(serverId: number): boolean {
+    return loadedDsls.has(serverId);
+  },
+
+  /**
+   * Check if a server is known to not have DSL
+   */
+  hasNoDsl(serverId: number): boolean {
+    return serversWithoutDsl.has(serverId);
   },
 };

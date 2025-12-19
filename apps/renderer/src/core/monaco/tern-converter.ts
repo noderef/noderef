@@ -33,6 +33,13 @@ const TYPE_MAPPINGS: Record<string, string> = {
 };
 
 /**
+ * Filter out Tern metadata keys and duplicate entries
+ */
+function isValidEntry([key, val]: [string, any]): boolean {
+  return !key.startsWith('!') && !val['!original'];
+}
+
+/**
  * Convert an array of Tern definitions to a single TypeScript declaration string
  */
 export function convertTernToTs(defs: TernDefinition[]): string {
@@ -48,10 +55,9 @@ export function convertTernToTs(defs: TernDefinition[]): string {
           .join('');
       }
 
-      // Process global objects
+      // Process global objects, filtering out metadata and duplicates
       output += Object.entries(def)
-        .filter(([key]) => !key.startsWith('!'))
-        .filter(([_key, val]) => !val['!original']) // Skip duplicate entries marked by Tern
+        .filter(isValidEntry)
         .map(([key, val]) => convertItemToTs(key, val, false))
         .join('');
 
@@ -93,8 +99,7 @@ function renderInterface(name: string, def: any): string {
 
 function renderProperties(def: any, indent: string): string {
   return Object.entries(def)
-    .filter(([key]) => !key.startsWith('!'))
-    .filter(([_key, val]: [string, any]) => !val['!original']) // Skip duplicate entries marked by Tern
+    .filter(isValidEntry)
     .map(([key, val]: [string, any]) => {
       const doc = renderDoc(val['!doc'], indent);
       const tsType = val['!type'] ? parseTernType(val['!type']) : 'any';

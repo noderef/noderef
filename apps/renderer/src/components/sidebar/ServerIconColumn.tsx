@@ -17,7 +17,7 @@
 import { backendRpc } from '@/core/ipc/backend';
 import { useSavedSearchesStore } from '@/core/store/savedSearches';
 import { useServersStore } from '@/core/store/servers';
-import { useNavigation } from '@/hooks/useNavigation';
+import { useActivePage, useNavigation } from '@/hooks/useNavigation';
 import type { PublicServer } from '@app/contracts';
 import { ScrollArea, Stack } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
@@ -25,6 +25,9 @@ import { useRef, useState } from 'react';
 import { AddServerButton } from './AddServerButton';
 import { ServerIconButton } from './ServerIconButton';
 import classes from './ServerIconColumn.module.css';
+
+// Pages that work across all servers and should be preserved when switching
+const GLOBAL_PAGES = ['jsconsole', 'text-editor'] as const;
 
 interface ServerIconColumnProps {
   servers: PublicServer[];
@@ -38,6 +41,7 @@ export function ServerIconColumn({
   onSelectServer,
 }: ServerIconColumnProps) {
   const { navigate } = useNavigation();
+  const activePage = useActivePage();
   const reorderServers = useServersStore(state => state.reorderServers);
   const savedSearches = useSavedSearchesStore(state => state.savedSearches);
   const setActiveSavedSearchId = useSavedSearchesStore(state => state.setActiveSavedSearchId);
@@ -51,31 +55,22 @@ export function ServerIconColumn({
 
     const server = servers.find(s => s.id === serverId);
 
-    // If the server is already selected, navigate to the appropriate default page
-    // instead of 'repo'/'dashboard' which would show NotFoundPage
     if (isAlreadySelected && server?.serverType === 'alfresco') {
-      // Check if there are saved searches for this server
+      // Server already selected - navigate to appropriate default page
       const serverSearches = savedSearches.filter(s => s.serverId === serverId);
       if (serverSearches.length > 0) {
-        // Navigate to saved-search page
-        const defaultSearch = serverSearches.find(s => s.isDefault);
-        if (defaultSearch) {
-          setActiveSavedSearchId(defaultSearch.id);
-        } else {
-          setActiveSavedSearchId(serverSearches[0].id);
-        }
+        const defaultSearch = serverSearches.find(s => s.isDefault) || serverSearches[0];
+        setActiveSavedSearchId(defaultSearch.id);
         navigate('saved-search');
       } else {
-        // No saved searches, navigate to jsconsole
         navigate('jsconsole');
       }
+    } else if (GLOBAL_PAGES.includes(activePage as any)) {
+      // Stay on current global page when switching servers to prevent flickering
+      // No navigation needed - just update the server
     } else {
-      // Navigate to the first page for this server type (only when switching servers)
-      if (server?.serverType === 'alfresco') {
-        navigate('repo');
-      } else {
-        navigate('dashboard');
-      }
+      // Navigate to default page for the server type
+      navigate(server?.serverType === 'alfresco' ? 'repo' : 'dashboard');
     }
 
     // Update last accessed (fire-and-forget)
