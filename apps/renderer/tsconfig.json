@@ -21,5 +21,6 @@
     }
   },
   "include": ["src", "src/types/**/*"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "references": [{ "path": "./tsconfig.node.json" }],
+  "exclude": ["src/core/monaco/alfresco-dsl.d.ts"]
 }
