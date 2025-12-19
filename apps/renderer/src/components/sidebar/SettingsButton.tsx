@@ -14,30 +14,34 @@
  * limitations under the License.
  */
 
-import { ActionIcon, Tooltip } from '@mantine/core';
+import { ActionIcon, Indicator, Tooltip } from '@mantine/core';
 import { IconSettings } from '@tabler/icons-react';
 import { useTranslation } from 'react-i18next';
 import { useModal } from '@/hooks/useModal';
 import { MODAL_KEYS } from '@/core/store/keys';
+import { useUpdateStore } from '@/core/store/updates';
 import classes from './sidebarIcon.module.css';
 
 export function SettingsButton() {
   const { t } = useTranslation('spotlight');
   const { open } = useModal(MODAL_KEYS.SETTINGS);
+  const hasUpdate = useUpdateStore(state => state.hasUpdate);
 
   return (
     <Tooltip label={t('settings')} position="right" withArrow>
-      <ActionIcon
-        variant="light"
-        size={56}
-        radius="xl"
-        aria-label={t('settings')}
-        color="slate"
-        className={classes.icon}
-        onClick={open}
-      >
-        <IconSettings size={20} className={classes.settingsIcon} />
-      </ActionIcon>
+      <Indicator position="top-end" offset={-2} disabled={!hasUpdate} color="green" size={10}>
+        <ActionIcon
+          variant="light"
+          size={56}
+          radius="xl"
+          aria-label={t('settings')}
+          color="slate"
+          className={classes.icon}
+          onClick={open}
+        >
+          <IconSettings size={20} className={classes.settingsIcon} />
+        </ActionIcon>
+      </Indicator>
     </Tooltip>
   );
 }

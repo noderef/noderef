@@ -33,5 +33,7 @@
   "delete": "Verwijderen",
   "info": "Info",
   "noServers": "Geen servers beschikbaar",
-  "back": "Terug"
+  "back": "Terug",
+  "updateAvailable": "Update beschikbaar",
+  "updateAvailableMessage": "Versie {{version}} is klaar om te downloaden."
 }

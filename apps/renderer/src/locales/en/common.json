@@ -33,5 +33,7 @@
   "delete": "Delete",
   "info": "Info",
   "noServers": "No servers available",
-  "back": "Back"
+  "back": "Back",
+  "updateAvailable": "Update available",
+  "updateAvailableMessage": "Version {{version}} is ready to download."
 }
