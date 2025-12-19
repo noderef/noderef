@@ -19,6 +19,10 @@ info() { echo "• $*"; }
 resize_into() { # $1=src $2=size $3=dest
   "${MAGICK[@]}" "$1" -resize "${2}x${2}" "$3"
 }
+resize_padded() { # $1=src $2=size $3=dest
+  local pad_size=$(($2 * 80 / 100))
+  "${MAGICK[@]}" "$1" -resize "${pad_size}x${pad_size}" -background none -gravity center -extent "${2}x${2}" "$3"
+}
 KEEP_ICONSET="${KEEP_ICONSET:-0}"
 
 # Choose ImageMagick binary
@@ -56,31 +60,31 @@ for size in "${ICO_SIZES[@]}"; do
   resize_into "$PNG_DIR/${size}.png" "$size" "$ICO_TMP/${size}.png"
 done
 
-info "Building ICO → $ICO_OUT"
-"${MAGICK[@]}" \
-  "$ICO_TMP/16.png" \
-  "$ICO_TMP/32.png" \
-  "$ICO_TMP/48.png" \
-  "$ICO_TMP/64.png" \
-  "$ICO_TMP/128.png" \
-  "$ICO_TMP/256.png" \
-  "$ICO_TMP/512.png" \
-  "$ICO_OUT"
+# info "Building ICO → $ICO_OUT"
+# "${MAGICK[@]}" \
+#   "$ICO_TMP/16.png" \
+#   "$ICO_TMP/32.png" \
+#   "$ICO_TMP/48.png" \
+#   "$ICO_TMP/64.png" \
+#   "$ICO_TMP/128.png" \
+#   "$ICO_TMP/256.png" \
+#   "$ICO_TMP/512.png" \
+#   "$ICO_OUT"
 
 info "Preparing iconset at $ICONSET"
 rm -rf "$ICONSET"
 mkdir -p "$ICONSET"
 
-resize_into "$PNG_DIR/16.png"   16   "$ICONSET/icon_16x16.png"
-resize_into "$PNG_DIR/32.png"   32   "$ICONSET/icon_16x16@2x.png"
-resize_into "$PNG_DIR/32.png"   32   "$ICONSET/icon_32x32.png"
-resize_into "$PNG_DIR/64.png"   64   "$ICONSET/icon_32x32@2x.png"
-resize_into "$PNG_DIR/128.png"  128  "$ICONSET/icon_128x128.png"
-resize_into "$PNG_DIR/256.png"  256  "$ICONSET/icon_128x128@2x.png"
-resize_into "$PNG_DIR/256.png"  256  "$ICONSET/icon_256x256.png"
-resize_into "$PNG_DIR/512.png"  512  "$ICONSET/icon_256x256@2x.png"
-resize_into "$PNG_DIR/512.png"  512  "$ICONSET/icon_512x512.png"
-resize_into "$PNG_DIR/1024.png" 1024 "$ICONSET/icon_512x512@2x.png"
+resize_padded "$PNG_DIR/16.png"   16   "$ICONSET/icon_16x16.png"
+resize_padded "$PNG_DIR/32.png"   32   "$ICONSET/icon_16x16@2x.png"
+resize_padded "$PNG_DIR/32.png"   32   "$ICONSET/icon_32x32.png"
+resize_padded "$PNG_DIR/64.png"   64   "$ICONSET/icon_32x32@2x.png"
+resize_padded "$PNG_DIR/128.png"  128  "$ICONSET/icon_128x128.png"
+resize_padded "$PNG_DIR/256.png"  256  "$ICONSET/icon_128x128@2x.png"
+resize_padded "$PNG_DIR/256.png"  256  "$ICONSET/icon_256x256.png"
+resize_padded "$PNG_DIR/512.png"  512  "$ICONSET/icon_256x256@2x.png"
+resize_padded "$PNG_DIR/512.png"  512  "$ICONSET/icon_512x512.png"
+resize_padded "$PNG_DIR/1024.png" 1024 "$ICONSET/icon_512x512@2x.png"
 
 info "Building ICNS → $ICNS_OUT"
 if ! iconutil -c icns "$ICONSET" -o "$ICNS_OUT"; then
