@@ -15,14 +15,7 @@
  */
 
 import { Menu } from '@mantine/core';
-import {
-  IconCopy,
-  IconCut,
-  IconDeviceFloppy,
-  IconDots,
-  IconFilePlus,
-  IconHelp,
-} from '@tabler/icons-react';
+import { IconCopy, IconCut, IconDeviceFloppy, IconDots, IconHelp } from '@tabler/icons-react';
 import { useTranslation } from 'react-i18next';
 import { MenuButton } from './MenuButton';
 
@@ -36,7 +29,6 @@ export function AppMenu() {
       </Menu.Target>
       <Menu.Dropdown>
         <Menu.Label>{t('file')}</Menu.Label>
-        <Menu.Item leftSection={<IconFilePlus size={14} />}>{t('newFile')}</Menu.Item>
         <Menu.Item leftSection={<IconDeviceFloppy size={14} />}>{t('save')}</Menu.Item>
         <Menu.Divider />
         <Menu.Label>{t('edit')}</Menu.Label>

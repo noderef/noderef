@@ -24,7 +24,6 @@ import {
   IconEdit,
   IconEraser,
   IconFileDownload,
-  IconFilePlus,
   IconFileText,
   IconFolderPlus,
   IconHelp,
@@ -190,13 +189,7 @@ export function getPageActions(
 
     // Files page - File operations
     files: {
-      actionIcons: [
-        {
-          icon: <IconFilePlus size={18} />,
-          label: t('menu:newFile'),
-          onClick: defaultHandlers.onNewFile,
-        },
-      ],
+      actionIcons: [],
       moreMenuActions: [
         {
           label: t('menu:cut'),
