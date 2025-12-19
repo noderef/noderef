@@ -31,7 +31,7 @@ import { sendAppError } from './lib/errorHandler';
 import { log } from './lib/logger.js';
 import { getDataDirFromArgsOrEnv } from './lib/paths';
 import { disconnectPrisma, getPrismaClient } from './lib/prisma';
-import { getClient } from './services/alfresco/clientFactory.js';
+import { getAuthenticatedClient } from './services/alfresco/clientFactory.js';
 import { ServerService } from './services/serverService.js';
 import { getCurrentUserId } from './services/userBootstrap.js';
 // Dynamic import for ESM contracts package
@@ -140,7 +140,79 @@ function shouldUseEphemeralPort(): boolean {
   return !isDev;
 }
 
-// Removed findFreePort - prod uses ephemeral port (0), dev uses fixed port with fail-fast
+/**
+ * Get the preferred port range from environment variables.
+ * Returns null if PROD_PORT_MIN/MAX are not configured or invalid.
+ */
+function getPreferredPortRange(): { min: number; max: number } | null {
+  const minStr = process.env.PROD_PORT_MIN;
+  const maxStr = process.env.PROD_PORT_MAX;
+  if (!minStr || !maxStr) return null;
+
+  const min = parseInt(minStr, 10);
+  const max = parseInt(maxStr, 10);
+  if (isNaN(min) || isNaN(max) || min <= 0 || max <= 0 || min > max) {
+    log.warn({ minStr, maxStr }, 'Invalid PROD_PORT_MIN/MAX values, ignoring');
+    return null;
+  }
+  return { min, max };
+}
+
+/**
+ * Try to listen on a specific port.
+ * Returns { success: true, server, actualPort } on success, { success: false } on EADDRINUSE.
+ */
+function tryListen(
+  app: express.Express,
+  port: number,
+  host: string
+): Promise<{ success: boolean; server?: net.Server; actualPort?: number }> {
+  return new Promise(resolve => {
+    const server = app.listen(port, host);
+    server.once('error', (err: NodeJS.ErrnoException) => {
+      server.close(); // Clean up failed server
+      if (err.code === 'EADDRINUSE') {
+        resolve({ success: false });
+      } else {
+        throw err;
+      }
+    });
+    server.once('listening', () => {
+      const actualPort = (server.address() as net.AddressInfo)?.port;
+      log.debug({ requestedPort: port, actualPort }, 'Server bound successfully');
+      resolve({ success: true, server, actualPort });
+    });
+  });
+}
+
+/**
+ * Try ports in the preferred range sequentially, fall back to OS-assigned if all are in use.
+ */
+async function listenWithFallback(
+  app: express.Express,
+  host: string,
+  { min, max }: { min: number; max: number }
+): Promise<{ server: net.Server; port: number }> {
+  log.info({ min, max, host }, 'Attempting preferred port range');
+
+  for (let port = min; port <= max; port++) {
+    const result = await tryListen(app, port, host);
+    if (result.success && result.server && result.actualPort) {
+      log.info({ port: result.actualPort }, 'Bound to preferred port');
+      return { server: result.server, port: result.actualPort };
+    }
+    log.debug({ port }, 'Port in use, trying next');
+  }
+
+  // Fall back to OS-assigned ephemeral port
+  log.info('Preferred ports exhausted, using OS-assigned port');
+  const result = await tryListen(app, 0, host);
+  if (result.success && result.server && result.actualPort) {
+    log.info({ port: result.actualPort }, 'Bound to OS-assigned port');
+    return { server: result.server, port: result.actualPort };
+  }
+  throw new Error('Failed to bind to any port');
+}
 
 function publishPort(port: number): void {
   try {
@@ -681,15 +753,16 @@ async function main() {
     const userId = await getCurrentUserId();
     const creds = await serverService.getCredentialsForBackend(userId, serverId);
 
-    if (!creds?.username || !creds?.token) {
-      log.warn({ serverId }, 'No stored credentials found for server stream request');
+    if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
+      log.warn(
+        { serverId, authType: creds?.authType },
+        'Missing credentials for server stream request'
+      );
       return undefined;
     }
 
-    const api = getClient(baseUrl);
     try {
-      await api.login(creds.username, creds.token);
-      return api;
+      return await getAuthenticatedClient(baseUrl, creds);
     } catch (error) {
       log.error({ serverId, error }, 'Failed to authenticate stream request');
       throw error;
@@ -878,21 +951,31 @@ async function main() {
               const userId = await getCurrentUserId();
               const creds = await serverService.getCredentialsForBackend(userId, serverId);
 
-              if (!creds?.username || !creds?.token) {
+              if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
                 throw new Error('No stored credentials found for server');
               }
 
               // Make direct HTTP request with text response type
-              const response = await axios.default({
+              // Build authentication based on auth type
+              const axiosConfig: any = {
                 method: 'GET',
                 url: fullUrl,
                 responseType: 'text',
                 headers: { Accept: 'text/plain,*/*' },
-                auth: {
-                  username: creds.username,
+              };
+
+              if (creds.authType === 'openid_connect') {
+                // Use Bearer token for OIDC
+                axiosConfig.headers.Authorization = `Bearer ${creds.token}`;
+              } else {
+                // Use Basic Auth for basic auth type
+                axiosConfig.auth = {
+                  username: creds.username || '',
                   password: creds.token,
-                },
-              });
+                };
+              }
+
+              const response = await axios.default(axiosConfig);
 
               // Forward response headers
               if (response.headers) {
@@ -1019,11 +1102,18 @@ async function main() {
 
   const preferred = getPort();
   const host = getHost();
+  const portRange = getPreferredPortRange();
 
   let server: net.Server;
 
-  if (shouldUseEphemeralPort()) {
-    // Prod default: use ephemeral port (0) unless FIXED_PORT=1 overrides
+  if (shouldUseEphemeralPort() && portRange && preferred === 0) {
+    // Production with port range: try preferred range first, then fall back to OS-assigned
+    const result = await listenWithFallback(app, host, portRange);
+    server = result.server;
+    publishPort(result.port);
+    log.info(`Backend listening on ${host}:${result.port}`);
+  } else if (shouldUseEphemeralPort()) {
+    // Prod default without port range: use ephemeral port (0) unless FIXED_PORT=1 overrides
     server = app.listen(0, host, () => {
       const actual = (server.address() as any)?.port as number;
       publishPort(actual);

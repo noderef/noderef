@@ -20,7 +20,7 @@ import { AppErrors } from '../../lib/errors.js';
 import { createLogger } from '../../lib/logger.js';
 import { getPrismaClient } from '../../lib/prisma.js';
 import * as authSvc from '../../services/alfresco/authService.js';
-import { getClient } from '../../services/alfresco/clientFactory.js';
+import { getAuthenticatedClient } from '../../services/alfresco/clientFactory.js';
 import { callMethod } from '../../services/alfresco/proxyService.js';
 import { ServerService } from '../../services/serverService.js';
 import { getCurrentUserId } from '../../services/userBootstrap.js';
@@ -32,9 +32,7 @@ type Routes = Record<string, { schema: ZSchema; handler: (p: unknown) => Promise
 
 /**
  * Authenticate using stored server credentials
- * @param serverId The server ID to retrieve credentials for
- * @param baseUrl The base URL of the Alfresco server
- * @returns Authenticated API client if successful, undefined otherwise
+ * Handles automatic token refresh for OIDC if token is expired or expiring soon
  */
 async function authenticateWithStoredCredentials(
   serverId: number,
@@ -44,18 +42,36 @@ async function authenticateWithStoredCredentials(
   const prisma = await getPrismaClient();
   const serverService = new ServerService(prisma);
 
-  const creds = await serverService.getCredentialsForBackend(userId, serverId);
+  let creds = await serverService.getCredentialsForBackend(userId, serverId);
 
-  if (!creds?.username || !creds?.token) {
-    log.warn({ serverId }, 'No stored credentials found for server');
+  // Refresh OIDC token if expired or expiring soon (within 5 minutes)
+  if (creds?.authType === 'openid_connect' && creds.tokenExpiry) {
+    const expiryThreshold = new Date(Date.now() + 5 * 60 * 1000);
+    if (creds.tokenExpiry <= expiryThreshold) {
+      log.info(
+        { serverId, expiry: creds.tokenExpiry },
+        'Token expired or expiring soon, refreshing...'
+      );
+      try {
+        await serverService.refreshOAuthTokens(userId, serverId);
+        creds = await serverService.getCredentialsForBackend(userId, serverId);
+        log.info({ serverId }, 'Token refreshed successfully');
+      } catch (error) {
+        log.error({ error, serverId }, 'Failed to refresh token, will try with existing token');
+      }
+    }
+  }
+
+  // Validate credentials
+  if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
+    log.warn({ serverId, authType: creds?.authType }, 'Missing credentials for server');
     return undefined;
   }
 
   log.debug({ serverId, authType: creds.authType }, 'Retrieved stored credentials');
 
-  const api = getClient(baseUrl);
   try {
-    await api.login(creds.username, creds.token);
+    const api = await getAuthenticatedClient(baseUrl, creds);
     log.debug({ serverId }, 'Successfully authenticated with stored credentials');
     return api;
   } catch (error) {

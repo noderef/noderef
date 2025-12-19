@@ -79,6 +79,21 @@ const clientCache = new Map<string, AlfrescoApi>();
 const authCache = new Map<string, AuthDescriptor>(); // Store auth descriptors for token refresh
 
 /**
+ * Set OAuth2 token on an AlfrescoApi client
+ * Uses the SDK's oauth2Auth.setToken() method which properly sets authentications.oauth2.accessToken
+ */
+function setOAuth2Token(
+  client: AlfrescoApi,
+  accessToken: string,
+  refreshToken?: string | null
+): void {
+  const oauth2Auth = (client as any).oauth2Auth;
+  if (oauth2Auth && typeof oauth2Auth.setToken === 'function') {
+    oauth2Auth.setToken(accessToken, refreshToken || null);
+  }
+}
+
+/**
  * Get or create an AlfrescoApi client for the given base URL and auth descriptor
  * @param baseUrl The base URL of the Alfresco server
  * @param auth Optional authentication descriptor (defaults to basic auth)
@@ -90,17 +105,19 @@ export function getClient(baseUrl: string, auth?: AuthDescriptor): AlfrescoApi {
   // Check cache first
   const cached = clientCache.get(cacheKey);
   if (cached) {
+    // For OAuth2, always update the token in case it has been refreshed
+    if (auth && auth.type === 'oauth2' && auth.accessToken) {
+      setOAuth2Token(cached, auth.accessToken, auth.refreshToken);
+    }
     return cached;
   }
 
-  // Normalize baseUrl
-  // Remove trailing slash
+  // Normalize baseUrl - remove trailing slash
   let normalizedUrl = baseUrl.replace(/\/$/, '');
 
-  // Remove /alfresco context path if present
-  // The Alfresco JS API adds /alfresco automatically, so we need to strip it
+  // Remove /alfresco context path if present (SDK adds it automatically)
   if (normalizedUrl.endsWith('/alfresco')) {
-    normalizedUrl = normalizedUrl.slice(0, -9); // Remove '/alfresco'
+    normalizedUrl = normalizedUrl.slice(0, -9);
   }
 
   // Create client configuration
@@ -111,31 +128,79 @@ export function getClient(baseUrl: string, auth?: AuthDescriptor): AlfrescoApi {
 
   // Configure OAuth2 if provided
   if (auth && auth.type === 'oauth2') {
+    // authType: 'OAUTH' makes isOauthConfiguration() return true
+    // oauthInit: true triggers initAuth() which creates oauth2Auth instance
+    config.authType = 'OAUTH';
+    config.oauthInit = true;
     config.oauth2 = {
       clientId: auth.clientId,
       host: auth.host,
       realm: auth.realm,
       scope: auth.scope || 'openid profile email',
       redirectUri: auth.redirectUri || 'http://localhost:3000',
-      implicitFlow: auth.implicitFlow || false,
+      implicitFlow: false,
     };
-
-    // If access token is provided, set it
-    if (auth.accessToken) {
-      config.oauth2.accessToken = auth.accessToken;
-    }
   }
 
   // Create new client
   const client = new AlfrescoApi(config);
 
+  // For OAuth2, set access token via SDK's setToken method
+  if (auth && auth.type === 'oauth2' && auth.accessToken) {
+    setOAuth2Token(client, auth.accessToken, auth.refreshToken);
+  }
+
   // Cache it
   clientCache.set(cacheKey, client);
   if (auth) {
-    authCache.set(cacheKey, { ...auth }); // Store a copy of the auth descriptor
+    authCache.set(cacheKey, { ...auth });
   }
 
   return client;
+}
+
+/**
+ * Credentials from ServerService.getCredentialsForBackend()
+ */
+export interface StoredCredentials {
+  authType: string | null;
+  username: string | null;
+  token: string | null;
+  oidcHost?: string | null;
+  oidcRealm?: string | null;
+  oidcClientId?: string | null;
+}
+
+/**
+ * Get an authenticated AlfrescoApi client based on stored credentials
+ * Handles both Basic Auth (calls login()) and OIDC (configures OAuth2)
+ * @param baseUrl The base URL of the Alfresco server
+ * @param creds Credentials from ServerService.getCredentialsForBackend()
+ * @returns An authenticated AlfrescoApi client
+ */
+export async function getAuthenticatedClient(
+  baseUrl: string,
+  creds: StoredCredentials
+): Promise<AlfrescoApi> {
+  if (creds.authType === 'openid_connect') {
+    if (!creds.oidcHost || !creds.oidcRealm || !creds.oidcClientId) {
+      throw new Error('Missing OIDC configuration');
+    }
+    const oauth2Auth: OAuth2AuthDescriptor = {
+      type: 'oauth2',
+      clientId: creds.oidcClientId,
+      host: creds.oidcHost,
+      realm: creds.oidcRealm,
+      accessToken: creds.token!,
+    };
+    // OAuth2 client is already configured with Bearer token - no login() needed
+    return getClient(baseUrl, oauth2Auth);
+  }
+
+  // Basic Auth: get client and call login()
+  const api = getClient(baseUrl);
+  await api.login(creds.username || '', creds.token!);
+  return api;
 }
 
 /**
@@ -204,17 +269,11 @@ export function updateOAuth2Token(
   const storedAuth = authCache.get(cacheKey);
 
   if (client && storedAuth && storedAuth.type === 'oauth2') {
-    // Update the stored auth descriptor
     storedAuth.accessToken = accessToken;
     if (refreshToken) {
       storedAuth.refreshToken = refreshToken;
     }
-
-    // Update the client's token if the SDK supports it
-    // Note: The Alfresco JS API may handle this internally, but we store it for reference
-    if ((client as any).config?.oauth2) {
-      (client as any).config.oauth2.accessToken = accessToken;
-    }
+    setOAuth2Token(client, accessToken, refreshToken);
   }
 }
 

@@ -17,6 +17,7 @@
 import { alfrescoRpc } from '@/core/ipc/alfresco';
 import { backendRpc, refreshWorkspace } from '@/core/ipc/backend';
 import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
+import { getRpcBaseUrl } from '@/core/ipc/rpc';
 import type { ServerType } from '@/core/store/keys';
 import { MODAL_KEYS } from '@/core/store/keys';
 import { useServersStore } from '@/core/store/servers';
@@ -550,8 +551,10 @@ export function AddServerModal() {
       }
 
       // Get the backend URL to construct the redirect URI
-      // Using localhost loopback as per OAuth 2.0 for Native Apps (RFC 8252)
-      const backendPort = await getBackendPort();
+      // In production, the backend might be on any random port
+      const rpcUrl = getRpcBaseUrl();
+      const rpcUrlObj = new URL(rpcUrl);
+      const backendPort = parseInt(rpcUrlObj.port, 10);
       const redirectUri = `http://127.0.0.1:${backendPort}/auth/callback`;
 
       // Generate PKCE parameters
@@ -763,25 +766,6 @@ export function AddServerModal() {
       });
       setOidcAuthenticating(false);
     }
-  };
-
-  // Helper function to get the backend port
-  const getBackendPort = async (): Promise<number> => {
-    // Simple approach: check the current backend URL
-    // In a real implementation, you'd get this from the RPC module
-    const DEFAULT_PORT = 5111;
-    for (let port = DEFAULT_PORT; port < DEFAULT_PORT + 50; port++) {
-      try {
-        const candidate = `http://127.0.0.1:${port}`;
-        const res = await fetch(`${candidate}/health`, { cache: 'no-store' });
-        if (res.ok) {
-          return port;
-        }
-      } catch {
-        // Continue to next port
-      }
-    }
-    return DEFAULT_PORT;
   };
 
   const handleSave = async () => {
@@ -1016,6 +1000,10 @@ export function AddServerModal() {
               onChange={e => setName(e.currentTarget.value)}
               required
               data-field="name"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
             />
             <TextInput
               label={t('addServer:serverUrl')}
@@ -1115,6 +1103,10 @@ export function AddServerModal() {
                       required
                       type="url"
                       data-field="oidcHost"
+                      autoCorrect="off"
+                      autoComplete="off"
+                      autoCapitalize="none"
+                      spellCheck={false}
                     />
                     <TextInput
                       label={t('addServer:oidcRealm')}
@@ -1123,6 +1115,10 @@ export function AddServerModal() {
                       onChange={e => setOidcRealm(e.currentTarget.value)}
                       required
                       data-field="oidcRealm"
+                      autoCorrect="off"
+                      autoComplete="off"
+                      autoCapitalize="none"
+                      spellCheck={false}
                     />
                     <TextInput
                       label={t('addServer:oidcClientId')}
@@ -1131,6 +1127,10 @@ export function AddServerModal() {
                       onChange={e => setOidcClientId(e.currentTarget.value)}
                       required
                       data-field="oidcClientId"
+                      autoCorrect="off"
+                      autoComplete="off"
+                      autoCapitalize="none"
+                      spellCheck={false}
                     />
                     <Button
                       onClick={handleOidcLogin}
