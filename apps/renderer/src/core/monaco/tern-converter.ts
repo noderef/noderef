@@ -34,9 +34,10 @@ const TYPE_MAPPINGS: Record<string, string> = {
 
 /**
  * Filter out Tern metadata keys and duplicate entries
+ * Also filter out 'person' global to avoid conflicts with static DSL
  */
 function isValidEntry([key, val]: [string, any]): boolean {
-  return !key.startsWith('!') && !val['!original'];
+  return !key.startsWith('!') && !val['!original'] && key !== 'person';
 }
 
 /**
