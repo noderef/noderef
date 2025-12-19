@@ -51,6 +51,7 @@ export function convertTernToTs(defs: TernDefinition[]): string {
       // Process global objects
       output += Object.entries(def)
         .filter(([key]) => !key.startsWith('!'))
+        .filter(([_key, val]) => !val['!original']) // Skip duplicate entries marked by Tern
         .map(([key, val]) => convertItemToTs(key, val, false))
         .join('');
 
@@ -93,6 +94,7 @@ function renderInterface(name: string, def: any): string {
 function renderProperties(def: any, indent: string): string {
   return Object.entries(def)
     .filter(([key]) => !key.startsWith('!'))
+    .filter(([_key, val]: [string, any]) => !val['!original']) // Skip duplicate entries marked by Tern
     .map(([key, val]: [string, any]) => {
       const doc = renderDoc(val['!doc'], indent);
       const tsType = val['!type'] ? parseTernType(val['!type']) : 'any';
