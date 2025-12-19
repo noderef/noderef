@@ -23,7 +23,6 @@ import {
   ActionIcon,
   Alert,
   Anchor,
-  Badge,
   Box,
   Button,
   Group,
@@ -152,7 +151,6 @@ export function SettingsModal() {
   const latestVersion = latestRelease?.version;
   const hasUpdateAvailable = hasUpdate && Boolean(latestVersion);
   const updateDownloadUrl = getDownloadUrl(latestRelease);
-  const hasCheckedAtLeastOnce = Boolean(latestRelease);
   const handleDownloadUpdate = useCallback(async () => {
     if (!hasUpdateAvailable || !latestVersion) return;
     const target = updateDownloadUrl;
