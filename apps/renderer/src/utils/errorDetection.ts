@@ -34,6 +34,7 @@ export function isAuthenticationError(error: unknown): boolean {
   const authPatterns = [
     'authorization',
     'authentication failed',
+    'login failed',
     'bearer',
     'not supported',
     'unauthorized',
@@ -43,9 +44,13 @@ export function isAuthenticationError(error: unknown): boolean {
     'refresh token',
     'session expired',
     '401',
+    '403',
     'statuscode":401',
     'statuscode": 401',
     '"statuscode":401',
+    'statuscode":403',
+    'statuscode": 403',
+    '"statuscode":403',
   ];
 
   // Check if message contains any auth patterns
@@ -55,14 +60,19 @@ export function isAuthenticationError(error: unknown): boolean {
 
   // Check for 401 status code in error object
   const status = (error as any)?.status || (error as any)?.statusCode;
-  if (status === 401) {
+  if (status === 401 || status === 403) {
     return true;
   }
 
   // Check for 401 in nested error details
   try {
     const errorStr = JSON.stringify(error);
-    if (errorStr.includes('"statusCode":401') || errorStr.includes('"status":401')) {
+    if (
+      errorStr.includes('"statusCode":401') ||
+      errorStr.includes('"status":401') ||
+      errorStr.includes('"statusCode":403') ||
+      errorStr.includes('"status":403')
+    ) {
       return true;
     }
   } catch {

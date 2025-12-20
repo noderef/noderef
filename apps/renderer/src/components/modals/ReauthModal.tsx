@@ -19,6 +19,7 @@ import { isNeutralinoMode } from '@/core/ipc/neutralino';
 import { MODAL_KEYS } from '@/core/store/keys';
 import { useServersStore } from '@/core/store/servers';
 import { useModal } from '@/hooks/useModal';
+import type { PublicServer } from '@app/contracts';
 import {
   constructOidcAuthUrl,
   ensureProtocol,
@@ -28,7 +29,19 @@ import {
   OIDC_AUTH_TIMEOUT,
   openOidcPopup,
 } from '@/utils/oidcAuth';
-import { Alert, Button, Group, Loader, Modal, Stack, Text, ThemeIcon, Title } from '@mantine/core';
+import {
+  Alert,
+  Button,
+  Group,
+  Loader,
+  Modal,
+  PasswordInput,
+  Stack,
+  Text,
+  TextInput,
+  ThemeIcon,
+  Title,
+} from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconAlertCircle, IconLock, IconRefresh } from '@tabler/icons-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -45,16 +58,22 @@ interface ReauthModalPayload {
  */
 export function ReauthModal() {
   const { isOpen, close, payload } = useModal(MODAL_KEYS.REAUTH);
-  const { t } = useTranslation(['common', 'settings']);
+  const { t } = useTranslation(['common', 'settings', 'addServer']);
   const [authenticating, setAuthenticating] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
+  const [server, setServer] = useState<PublicServer | null>(null);
+  const [serverLoading, setServerLoading] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const pollingIntervalRef = useRef<number | null>(null);
   const popupCheckIntervalRef = useRef<number | null>(null);
   const updateServer = useServersStore(state => state.updateServer);
 
   const modalPayload = payload as ReauthModalPayload | undefined;
   const serverId = modalPayload?.serverId;
-  const serverName = modalPayload?.serverName || 'this server';
+  const serverName = server?.name || modalPayload?.serverName || 'this server';
+  const isBasicFlow = server?.authType === 'basic';
+  const isOidcFlow = server?.authType === 'openid_connect';
 
   // Cleanup intervals on unmount or close
   useEffect(() => {
@@ -73,8 +92,25 @@ export function ReauthModal() {
     if (isOpen) {
       setAuthenticating(false);
       setAuthenticated(false);
+      setUsername('');
+      setPassword('');
+      if (serverId) {
+        setServerLoading(true);
+        backendRpc.servers
+          .get(serverId)
+          .then(setServer)
+          .catch(error => {
+            console.error('Failed to load server for re-auth:', error);
+            notifications.show({
+              title: t('common:error'),
+              message: error instanceof Error ? error.message : 'Failed to load server details',
+              color: 'red',
+            });
+          })
+          .finally(() => setServerLoading(false));
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, serverId, t]);
 
   const handleClose = useCallback(() => {
     if (pollingIntervalRef.current) {
@@ -87,29 +123,72 @@ export function ReauthModal() {
     }
     setAuthenticating(false);
     setAuthenticated(false);
+    setServer(null);
+    setUsername('');
+    setPassword('');
     close();
   }, [close]);
 
   const handleReauthenticate = async () => {
-    if (!serverId) {
+    if (!serverId || !server) {
       notifications.show({
         title: t('common:error'),
-        message: 'Server ID not found',
+        message: 'Server not found',
         color: 'red',
       });
       return;
     }
 
+    if (isBasicFlow) {
+      if (!username.trim() || !password.trim()) {
+        notifications.show({
+          title: t('common:error'),
+          message: 'Please enter username and password.',
+          color: 'red',
+        });
+        return;
+      }
+
+      setAuthenticating(true);
+
+      try {
+        const updatedServer = await backendRpc.servers.update(serverId, {
+          username: username.trim(),
+          token: password,
+        });
+
+        updateServer(serverId, updatedServer);
+        setAuthenticated(true);
+        setAuthenticating(false);
+
+        window.dispatchEvent(new CustomEvent('reauth-success', { detail: { serverId } }));
+
+        notifications.show({
+          title: t('settings:reauthSuccess'),
+          message: t('settings:reauthSuccessMessage'),
+          color: 'green',
+        });
+
+        setTimeout(() => {
+          handleClose();
+        }, 1500);
+      } catch (error) {
+        console.error('Basic re-authentication error:', error);
+        setAuthenticating(false);
+        notifications.show({
+          title: t('common:error'),
+          message: error instanceof Error ? error.message : 'Failed to update credentials',
+          color: 'red',
+        });
+      }
+      return;
+    }
+
+    // OIDC flow
     setAuthenticating(true);
 
     try {
-      // Get server details from backend to retrieve OIDC config
-      const server = await backendRpc.servers.get(serverId);
-      if (!server) {
-        throw new Error('Server not found');
-      }
-
-      if (server.authType !== 'openid_connect') {
+      if (!isOidcFlow) {
         throw new Error('Server does not use OIDC authentication');
       }
 
@@ -376,7 +455,14 @@ export function ReauthModal() {
           <Text size="sm">{t('settings:reauthDescription', { serverName })}</Text>
         </Alert>
 
-        {authenticated ? (
+        {serverLoading ? (
+          <Group justify="center" py="md">
+            <Loader size="sm" />
+            <Text size="sm" c="dimmed">
+              {t('common:loading')}
+            </Text>
+          </Group>
+        ) : authenticated ? (
           <Alert icon={<IconRefresh size={16} />} color="green" variant="light">
             <Text size="sm" fw={500}>
               {t('settings:reauthSuccessMessage')}
@@ -389,6 +475,25 @@ export function ReauthModal() {
               {t('settings:waitingForAuth')}
             </Text>
           </Group>
+        ) : isBasicFlow ? (
+          <Stack gap="sm">
+            <Text size="sm" c="dimmed">
+              Enter your Alfresco credentials to refresh access for {serverName}.
+            </Text>
+            <TextInput
+              label={t('addServer:username')}
+              placeholder={t('addServer:usernamePlaceholder')}
+              value={username}
+              onChange={e => setUsername(e.currentTarget.value)}
+              disabled={authenticating}
+            />
+            <PasswordInput
+              label={t('addServer:password')}
+              value={password}
+              onChange={e => setPassword(e.currentTarget.value)}
+              disabled={authenticating}
+            />
+          </Stack>
         ) : (
           <Text size="sm" c="dimmed">
             {t('settings:reauthInstructions')}
@@ -403,7 +508,7 @@ export function ReauthModal() {
             leftSection={<IconLock size={16} />}
             onClick={handleReauthenticate}
             loading={authenticating}
-            disabled={authenticated}
+            disabled={authenticated || serverLoading}
           >
             {t('settings:signInAgain')}
           </Button>

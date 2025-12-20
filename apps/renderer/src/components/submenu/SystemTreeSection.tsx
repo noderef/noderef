@@ -23,7 +23,6 @@ import { useTextEditorStore } from '@/core/store/textEditor';
 import { useUIStore } from '@/core/store/ui';
 import { isTextLikeFile } from '@/features/text-editor/language';
 import { useActiveServerId, useNavigation } from '@/hooks/useNavigation';
-import { isAuthenticationError } from '@/utils/errorDetection';
 import { markNodesTemporary } from '@/utils/markNodesTemporary';
 import {
   Box,
@@ -106,7 +105,6 @@ export function SystemTreeSection({
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isAuthError, setIsAuthError] = useState(false);
   const [rootLoadAttempts, setRootLoadAttempts] = useState(0);
   const [loadedNodes, setLoadedNodes] = useState<Set<string>>(new Set());
   const [loadingNodes, setLoadingNodes] = useState<Set<string>>(new Set());
@@ -125,6 +123,8 @@ export function SystemTreeSection({
   const activeServer = useServersStore(state =>
     activeServerId ? (state.servers.find(s => s.id === activeServerId) ?? null) : null
   );
+  const canReauth =
+    activeServer?.authType === 'openid_connect' || activeServer?.authType === 'basic';
 
   useEffect(() => {
     onOpenedChange?.(opened);
@@ -144,7 +144,6 @@ export function SystemTreeSection({
     setTreeData([]);
     setLoadedNodes(new Set());
     setError(null);
-    setIsAuthError(false);
     setRootLoadAttempts(0);
     setLoadingNodes(new Set());
     loadChildrenPromisesRef.current.clear();
@@ -158,7 +157,6 @@ export function SystemTreeSection({
         setTreeData([]);
         setLoadedNodes(new Set());
         setError(null);
-        setIsAuthError(false);
         setRootLoadAttempts(0);
         setLoadingNodes(new Set());
         loadChildrenPromisesRef.current.clear();
@@ -370,11 +368,10 @@ export function SystemTreeSection({
     setTreeData([]);
     setLoadedNodes(new Set());
     setError(null);
-    setIsAuthError(false);
   };
 
   const handleReauthenticate = () => {
-    if (!activeServer || activeServer.authType !== 'openid_connect') return;
+    if (!activeServer || !canReauth) return;
     const { openModal } = useUIStore.getState();
     openModal('reauth', { serverId: activeServerId, serverName: activeServer.name });
   };
@@ -464,9 +461,6 @@ export function SystemTreeSection({
       setLoadedNodes(new Set([result.systemNodeId]));
     } catch (err) {
       console.error('Failed to load system tree:', err);
-      // Check if this is an authentication error
-      setIsAuthError(isAuthenticationError(err));
-
       if (attemptNumber >= MAX_ROOT_LOAD_ATTEMPTS) {
         const baseMessage = err instanceof Error ? err.message : t('submenu:loadError');
         setError(
@@ -896,7 +890,7 @@ export function SystemTreeSection({
                   >
                     {t('common:retry')}
                   </Button>
-                  {isAuthError && activeServer?.authType === 'openid_connect' && (
+                  {canReauth && (
                     <Button
                       variant="filled"
                       size="xs"

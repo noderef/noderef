@@ -30,7 +30,6 @@ import { useUIStore } from '@/core/store/ui';
 import { isTextLikeFile } from '@/features/text-editor/language';
 import { useActiveServerId, useNavigation } from '@/hooks/useNavigation';
 import { markNodesTemporary } from '@/utils/markNodesTemporary';
-import { isAuthenticationError } from '@/utils/errorDetection';
 import {
   Box,
   Button,
@@ -317,7 +316,6 @@ export function RepositorySection({
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isAuthError, setIsAuthError] = useState(false);
   const [rootLoadAttempts, setRootLoadAttempts] = useState(0);
   const [loadedNodes, setLoadedNodes] = useState<Set<string>>(new Set());
   const [loadingNodes, setLoadingNodes] = useState<Set<string>>(new Set());
@@ -332,6 +330,8 @@ export function RepositorySection({
   const activeServer = useServersStore(state =>
     activeServerId ? (state.servers.find(s => s.id === activeServerId) ?? null) : null
   );
+  const canReauth =
+    activeServer?.authType === 'openid_connect' || activeServer?.authType === 'basic';
   const [headerHovered, setHeaderHovered] = useState(false);
   const openNodeTab = useNodeBrowserTabsStore(state => state.openTab);
   const openFolderTab = useFileFolderBrowserTabsStore(state => state.openTab);
@@ -357,7 +357,6 @@ export function RepositorySection({
     setTreeData([]);
     setLoadedNodes(new Set());
     setError(null);
-    setIsAuthError(false);
     setRootLoadAttempts(0);
     setPaginationState({});
     setLoadingMoreNodes(new Set());
@@ -371,7 +370,6 @@ export function RepositorySection({
         setTreeData([]);
         setLoadedNodes(new Set());
         setError(null);
-        setIsAuthError(false);
         setRootLoadAttempts(0);
         setPaginationState({});
         setLoadingMoreNodes(new Set());
@@ -585,11 +583,10 @@ export function RepositorySection({
     setPaginationState({});
     setLoadingMoreNodes(new Set());
     setError(null);
-    setIsAuthError(false);
   };
 
   const handleReauthenticate = () => {
-    if (!activeServer || activeServer.authType !== 'openid_connect') return;
+    if (!activeServer || !canReauth) return;
     const { openModal } = useUIStore.getState();
     openModal('reauth', { serverId: activeServerId, serverName: activeServer.name });
   };
@@ -857,9 +854,6 @@ export function RepositorySection({
       setLoadedNodes(new Set([ROOT_NODE_ID]));
     } catch (err) {
       console.error('Failed to load root nodes:', err);
-      // Check if this is an authentication error
-      setIsAuthError(isAuthenticationError(err));
-
       if (attemptNumber >= MAX_ROOT_LOAD_ATTEMPTS) {
         const baseMessage = err instanceof Error ? err.message : t('submenu:loadError');
         setError(
@@ -1242,7 +1236,7 @@ export function RepositorySection({
                   >
                     {t('common:retry')}
                   </Button>
-                  {isAuthError && activeServer?.authType === 'openid_connect' && (
+                  {canReauth && (
                     <Button
                       variant="filled"
                       size="xs"
