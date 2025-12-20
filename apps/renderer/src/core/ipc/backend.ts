@@ -151,6 +151,16 @@ export const backendRpc = {
     async getAuthTicket(serverId: number): Promise<{ ticket: string | null }> {
       return rpc<{ ticket: string | null }>('backend.servers.getAuthTicket', { serverId });
     },
+
+    /**
+     * Update OIDC tokens for a server (used during re-authentication)
+     */
+    async updateOidcTokens(
+      id: number,
+      tokens: { accessToken: string; refreshToken?: string; expiresIn?: number }
+    ): Promise<PublicServer> {
+      return rpc<PublicServer>('backend.servers.updateOidcTokens', { id, ...tokens });
+    },
   },
 
   /**

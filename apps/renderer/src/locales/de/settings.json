@@ -42,5 +42,12 @@
   "ootbeeTitle": "OOTBee Support Tools",
   "ootbeeDescription": "Diese Anwendung nutzt das Open-Source-Modul OOTBee Support Tools, das die administrativen Werkzeuge auf Repository- und Share-Ebene erweitert.",
   "ootbeeGithubLink": "https://github.com/OrderOfTheBee/ootbee-support-tools",
-  "ootbeeGratitude": "Wir danken den Autoren der OOTBee Support Tools für ihren Beitrag."
+  "ootbeeGratitude": "Wir danken den Autoren der OOTBee Support Tools für ihren Beitrag.",
+  "reauthRequired": "Erneute Anmeldung erforderlich",
+  "reauthDescription": "Ihre Sitzung für {{serverName}} ist abgelaufen. Bitte melden Sie sich erneut an, um fortzufahren.",
+  "reauthInstructions": "Klicken Sie auf \"Erneut anmelden\", um das Anmeldefenster zu öffnen und sich erneut bei Ihrem OIDC-Anbieter zu authentifizieren.",
+  "reauthSuccess": "Erneute Anmeldung erfolgreich!",
+  "reauthSuccessMessage": "Authentifizierung erfolgreich! Ihre Sitzung wurde aktualisiert.",
+  "waitingForAuth": "Warten auf Authentifizierung...",
+  "signInAgain": "Erneut anmelden"
 }

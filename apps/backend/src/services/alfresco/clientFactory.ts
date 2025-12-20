@@ -15,6 +15,7 @@
  */
 
 import { AlfrescoApi } from '@alfresco/js-api';
+import { DEFAULT_OIDC_SCOPE, DEFAULT_REDIRECT_URI } from './constants.js';
 
 /**
  * Client factory for AlfrescoApi instances
@@ -136,8 +137,8 @@ export function getClient(baseUrl: string, auth?: AuthDescriptor): AlfrescoApi {
       clientId: auth.clientId,
       host: auth.host,
       realm: auth.realm,
-      scope: auth.scope || 'openid profile email',
-      redirectUri: auth.redirectUri || 'http://localhost:3000',
+      scope: auth.scope || DEFAULT_OIDC_SCOPE,
+      redirectUri: auth.redirectUri || DEFAULT_REDIRECT_URI,
       implicitFlow: false,
     };
   }

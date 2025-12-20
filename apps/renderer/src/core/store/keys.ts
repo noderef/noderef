@@ -39,7 +39,8 @@ export type ModalKey =
   | 'confirm'
   | 'create_search_query'
   | 'save_search'
-  | 'logs';
+  | 'logs'
+  | 'reauth';
 
 export type ServerType = 'alfresco' | 'process_services';
 
@@ -65,4 +66,5 @@ export const MODAL_KEYS: Record<string, ModalKey> = {
   CREATE_SEARCH_QUERY: 'create_search_query',
   SAVE_SEARCH: 'save_search',
   LOGS: 'logs',
+  REAUTH: 'reauth',
 } as const;

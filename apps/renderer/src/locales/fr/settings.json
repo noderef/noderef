@@ -42,5 +42,12 @@
   "ootbeeTitle": "OOTBee Support Tools",
   "ootbeeDescription": "Cette application utilise le module open source OOTBee Support Tools, qui étend l'ensemble des outils d'administration sur les niveaux Repository et Share.",
   "ootbeeGithubLink": "https://github.com/OrderOfTheBee/ootbee-support-tools",
-  "ootbeeGratitude": "Nous remercions les auteurs de OOTBee Support Tools pour leur contribution."
+  "ootbeeGratitude": "Nous remercions les auteurs de OOTBee Support Tools pour leur contribution.",
+  "reauthRequired": "Réauthentification requise",
+  "reauthDescription": "Votre session pour {{serverName}} a expiré. Veuillez vous reconnecter pour continuer.",
+  "reauthInstructions": "Cliquez sur 'Se reconnecter' pour ouvrir la fenêtre de connexion et vous réauthentifier auprès de votre fournisseur OIDC.",
+  "reauthSuccess": "Réauthentification réussie !",
+  "reauthSuccessMessage": "Authentification réussie ! Votre session a été actualisée.",
+  "waitingForAuth": "En attente d'authentification...",
+  "signInAgain": "Se reconnecter"
 }

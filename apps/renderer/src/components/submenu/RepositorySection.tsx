@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import { DeleteConfirmationForm } from '@/components/common/DeleteConfirmationForm';
 import {
   backendRpc,
   type RepositoryNode,
@@ -23,11 +24,13 @@ import {
 import { useFileFolderBrowserTabsStore } from '@/core/store/fileFolderBrowserTabs';
 import { useJsConsoleStore } from '@/core/store/jsConsole';
 import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
+import { useServersStore } from '@/core/store/servers';
 import { useTextEditorStore } from '@/core/store/textEditor';
+import { useUIStore } from '@/core/store/ui';
 import { isTextLikeFile } from '@/features/text-editor/language';
 import { useActiveServerId, useNavigation } from '@/hooks/useNavigation';
-import { DeleteConfirmationForm } from '@/components/common/DeleteConfirmationForm';
 import { markNodesTemporary } from '@/utils/markNodesTemporary';
+import { isAuthenticationError } from '@/utils/errorDetection';
 import {
   Box,
   Button,
@@ -36,11 +39,11 @@ import {
   Loader,
   Menu,
   Stack,
+  Switch,
   Text,
   TextInput,
   Tree,
   UnstyledButton,
-  Switch,
   useTree,
 } from '@mantine/core';
 import { useDisclosure, useIntersection } from '@mantine/hooks';
@@ -63,8 +66,8 @@ import {
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useRef, useState, type ComponentPropsWithoutRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getFileIconByMimeType } from './fileIconUtils';
 import { CreateSiteForm } from './CreateSiteForm';
+import { getFileIconByMimeType } from './fileIconUtils';
 import { getAvailableActions, type NodeActionContext } from './nodeActionEvaluators';
 
 interface RepositorySectionProps {
@@ -314,6 +317,7 @@ export function RepositorySection({
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isAuthError, setIsAuthError] = useState(false);
   const [rootLoadAttempts, setRootLoadAttempts] = useState(0);
   const [loadedNodes, setLoadedNodes] = useState<Set<string>>(new Set());
   const [loadingNodes, setLoadingNodes] = useState<Set<string>>(new Set());
@@ -325,6 +329,9 @@ export function RepositorySection({
   const [renamingNode, setRenamingNode] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const activeServer = useServersStore(state =>
+    activeServerId ? (state.servers.find(s => s.id === activeServerId) ?? null) : null
+  );
   const [headerHovered, setHeaderHovered] = useState(false);
   const openNodeTab = useNodeBrowserTabsStore(state => state.openTab);
   const openFolderTab = useFileFolderBrowserTabsStore(state => state.openTab);
@@ -350,10 +357,33 @@ export function RepositorySection({
     setTreeData([]);
     setLoadedNodes(new Set());
     setError(null);
+    setIsAuthError(false);
     setRootLoadAttempts(0);
     setPaginationState({});
     setLoadingMoreNodes(new Set());
   }, [activeServerId]);
+
+  // Listen for re-authentication success and reload tree
+  useEffect(() => {
+    const handleReauthSuccess = (event: CustomEvent<{ serverId: number }>) => {
+      if (event.detail.serverId === activeServerId && opened) {
+        // Reset state and reload
+        setTreeData([]);
+        setLoadedNodes(new Set());
+        setError(null);
+        setIsAuthError(false);
+        setRootLoadAttempts(0);
+        setPaginationState({});
+        setLoadingMoreNodes(new Set());
+        // Trigger reload will happen automatically via the useEffect that watches these states
+      }
+    };
+
+    window.addEventListener('reauth-success', handleReauthSuccess as EventListener);
+    return () => {
+      window.removeEventListener('reauth-success', handleReauthSuccess as EventListener);
+    };
+  }, [activeServerId, opened]);
 
   // Load root nodes when section opens or server changes
   useEffect(() => {
@@ -555,6 +585,13 @@ export function RepositorySection({
     setPaginationState({});
     setLoadingMoreNodes(new Set());
     setError(null);
+    setIsAuthError(false);
+  };
+
+  const handleReauthenticate = () => {
+    if (!activeServer || activeServer.authType !== 'openid_connect') return;
+    const { openModal } = useUIStore.getState();
+    openModal('reauth', { serverId: activeServerId, serverName: activeServer.name });
   };
 
   const handleCreateSite = () => {
@@ -820,6 +857,9 @@ export function RepositorySection({
       setLoadedNodes(new Set([ROOT_NODE_ID]));
     } catch (err) {
       console.error('Failed to load root nodes:', err);
+      // Check if this is an authentication error
+      setIsAuthError(isAuthenticationError(err));
+
       if (attemptNumber >= MAX_ROOT_LOAD_ATTEMPTS) {
         const baseMessage = err instanceof Error ? err.message : t('submenu:loadError');
         setError(
@@ -1192,15 +1232,29 @@ export function RepositorySection({
                 <Text size="sm" c="red">
                   {error}
                 </Text>
-                <Button
-                  variant="light"
-                  size="xs"
-                  onClick={handleRetryRepositoryLoad}
-                  disabled={loading}
-                  style={{ alignSelf: 'flex-start' }}
-                >
-                  {t('common:retry')}
-                </Button>
+                <Group gap="xs">
+                  <Button
+                    variant="light"
+                    size="xs"
+                    onClick={handleRetryRepositoryLoad}
+                    disabled={loading}
+                    style={{ alignSelf: 'flex-start' }}
+                  >
+                    {t('common:retry')}
+                  </Button>
+                  {isAuthError && activeServer?.authType === 'openid_connect' && (
+                    <Button
+                      variant="filled"
+                      size="xs"
+                      color="orange"
+                      onClick={handleReauthenticate}
+                      disabled={loading}
+                      style={{ alignSelf: 'flex-start' }}
+                    >
+                      {t('common:signIn')}
+                    </Button>
+                  )}
+                </Group>
               </Stack>
             ) : treeData.length === 0 ? (
               <Text size="sm" c="dimmed" p="sm">

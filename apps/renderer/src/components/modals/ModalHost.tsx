@@ -19,6 +19,7 @@ import { useEffect } from 'react';
 import { AddServerModal } from './AddServerModal';
 import { ConfirmModal } from './ConfirmModal';
 import { LogsModal } from './LogsModal';
+import { ReauthModal } from './ReauthModal';
 import { SaveSearchModal } from './SaveSearchModal';
 import { ServerEditModal } from './ServerEditModal';
 import { ServerInfoModal } from './ServerInfoModal';
@@ -51,6 +52,7 @@ export function ModalHost() {
         'create_search_query',
         'save_search',
         'logs',
+        'reauth',
       ];
       if (!knownModals.includes(activeModal)) {
         console.warn(`Unknown modal key detected: "${activeModal}". No modal will be rendered.`);
@@ -65,7 +67,7 @@ export function ModalHost() {
       <ServerEditModal />
       <ConfirmModal />
       <AddServerModal />
-
+      <ReauthModal />
       <SaveSearchModal />
       <LogsModal />
     </>

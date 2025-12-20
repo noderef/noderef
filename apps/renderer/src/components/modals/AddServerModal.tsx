@@ -24,6 +24,13 @@ import { useServersStore } from '@/core/store/servers';
 import { useModal } from '@/hooks/useModal';
 import { useNavigation } from '@/hooks/useNavigation';
 import {
+  constructOidcAuthUrl,
+  ensureProtocol,
+  generatePKCE,
+  generateState,
+  validateUrl,
+} from '@/utils/oidcAuth';
+import {
   Alert,
   Button,
   Group,
@@ -392,47 +399,7 @@ export function AddServerModal() {
     setOidcAuthenticated(false);
   };
 
-  const validateUrl = (value: string): boolean => {
-    if (!value.trim()) return false;
-    try {
-      new URL(value.trim());
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  // Helper to ensure URL has a protocol
-  const ensureProtocol = (url: string): string => {
-    const trimmed = url.trim();
-    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-      return trimmed;
-    }
-    // Default to http:// if no protocol specified
-    return `http://${trimmed}`;
-  };
-
-  // Helper function to generate PKCE code verifier and challenge
-  const generatePKCE = () => {
-    // Generate random code verifier (43-128 characters)
-    const array = new Uint8Array(32);
-    crypto.getRandomValues(array);
-    const codeVerifier = btoa(String.fromCharCode(...array))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=/g, '');
-
-    // Generate code challenge (SHA-256 hash of verifier, base64url encoded)
-    const encoder = new TextEncoder();
-    const data = encoder.encode(codeVerifier);
-    return crypto.subtle.digest('SHA-256', data).then(hash => {
-      const codeChallenge = btoa(String.fromCharCode(...new Uint8Array(hash)))
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=/g, '');
-      return { codeVerifier, codeChallenge };
-    });
-  };
+  // Utility functions (ensureProtocol, generatePKCE, validateUrl) are now imported from @/utils/oidcAuth
 
   const handleOidcLogin = async () => {
     // Validate OIDC fields
@@ -561,7 +528,7 @@ export function AddServerModal() {
       const { codeVerifier, codeChallenge } = await generatePKCE();
 
       // Generate state and store all necessary values keyed by state for later retrieval
-      const state = Math.random().toString(36).substring(2);
+      const state = generateState();
       sessionStorage.setItem(`oidc_pkce_verifier_${state}`, codeVerifier);
       sessionStorage.setItem(`oidc_base_url_${state}`, normalizedBaseUrl);
       sessionStorage.setItem(`oidc_host_${state}`, normalizedOidcHost);
@@ -569,30 +536,14 @@ export function AddServerModal() {
       sessionStorage.setItem(`oidc_client_id_${state}`, oidcClientId.trim());
       sessionStorage.setItem(`oidc_redirect_uri_${state}`, redirectUri);
 
-      // Construct the authorization URL
-      // Handle both Keycloak versions:
-      // - Legacy (< v17): http://host:port/auth/realms/{realm}/...
-      // - Modern (>= v17): http://host:port/realms/{realm}/...
-      // If the OIDC Host already ends with /auth, don't add /realms
-      // If it doesn't, check if we need to add /auth prefix
-      let authBaseUrl = normalizedOidcHost;
-      if (!authBaseUrl.endsWith('/auth') && !authBaseUrl.includes('/realms/')) {
-        // Try to detect: if it's legacy Keycloak, add /auth prefix
-        // For now, we'll add /auth by default to support legacy Keycloak
-        // Users can override by including the path in OIDC Host
-        authBaseUrl = `${authBaseUrl}/auth`;
-      }
-
-      const authUrl = new URL(
-        `${authBaseUrl}/realms/${oidcRealm.trim()}/protocol/openid-connect/auth`
-      );
-      authUrl.searchParams.set('client_id', oidcClientId.trim());
-      authUrl.searchParams.set('redirect_uri', redirectUri);
-      authUrl.searchParams.set('response_type', 'code');
-      authUrl.searchParams.set('scope', 'openid profile email offline_access');
-      authUrl.searchParams.set('code_challenge', codeChallenge);
-      authUrl.searchParams.set('code_challenge_method', 'S256');
-      authUrl.searchParams.set('state', state);
+      const authUrl = constructOidcAuthUrl({
+        oidcHost: normalizedOidcHost,
+        oidcRealm: oidcRealm.trim(),
+        clientId: oidcClientId.trim(),
+        redirectUri,
+        state,
+        codeChallenge,
+      });
 
       // Open the authorization URL
       try {

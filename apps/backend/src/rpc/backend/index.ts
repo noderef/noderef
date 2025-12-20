@@ -638,6 +638,34 @@ export async function registerBackendRpc(
     },
   };
 
+  routes['backend.servers.updateOidcTokens'] = {
+    schema: z.object({
+      id: z.number(),
+      accessToken: z.string(),
+      refreshToken: z.string().optional(),
+      expiresIn: z.number().optional(),
+    }),
+    handler: async params => {
+      const userId = await getCurrentUserId();
+      const { id, accessToken, refreshToken, expiresIn } = params as {
+        id: number;
+        accessToken: string;
+        refreshToken?: string;
+        expiresIn?: number;
+      };
+
+      // Calculate token expiry
+      const tokenExpiry = expiresIn ? new Date(Date.now() + expiresIn * 1000) : null;
+
+      // Update server with new tokens
+      return serverService.update(userId, id, {
+        token: accessToken,
+        refreshToken,
+        tokenExpiry,
+      });
+    },
+  };
+
   // Saved Search operations
   routes['backend.savedSearches.list'] = {
     schema: z.object({

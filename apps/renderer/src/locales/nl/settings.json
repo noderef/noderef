@@ -42,5 +42,12 @@
   "ootbeeTitle": "OOTBee Support Tools",
   "ootbeeDescription": "Deze applicatie maakt gebruik van de open source module OOTBee Support Tools, die de set administratieve tools op de Repository en Share tier uitbreidt.",
   "ootbeeGithubLink": "https://github.com/OrderOfTheBee/ootbee-support-tools",
-  "ootbeeGratitude": "We zijn dankbaar aan de auteurs van OOTBee Support Tools voor hun bijdrage."
+  "ootbeeGratitude": "We zijn dankbaar aan de auteurs van OOTBee Support Tools voor hun bijdrage.",
+  "reauthRequired": "Opnieuw inloggen vereist",
+  "reauthDescription": "Uw sessie voor {{serverName}} is verlopen. Log opnieuw in om door te gaan.",
+  "reauthInstructions": "Klik op 'Opnieuw inloggen' om het inlogvenster te openen en opnieuw te authenticeren bij uw OIDC provider.",
+  "reauthSuccess": "Opnieuw inloggen geslaagd!",
+  "reauthSuccessMessage": "Authenticatie geslaagd! Uw sessie is vernieuwd.",
+  "waitingForAuth": "Wachten op authenticatie...",
+  "signInAgain": "Opnieuw inloggen"
 }

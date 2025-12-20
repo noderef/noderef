@@ -14,13 +14,16 @@
  * limitations under the License.
  */
 
-import { backendRpc } from '@/core/ipc/backend';
 import { DeleteConfirmationForm } from '@/components/common/DeleteConfirmationForm';
+import { backendRpc } from '@/core/ipc/backend';
 import { useJsConsoleStore } from '@/core/store/jsConsole';
 import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
+import { useServersStore } from '@/core/store/servers';
 import { useTextEditorStore } from '@/core/store/textEditor';
+import { useUIStore } from '@/core/store/ui';
 import { isTextLikeFile } from '@/features/text-editor/language';
 import { useActiveServerId, useNavigation } from '@/hooks/useNavigation';
+import { isAuthenticationError } from '@/utils/errorDetection';
 import { markNodesTemporary } from '@/utils/markNodesTemporary';
 import {
   Box,
@@ -103,6 +106,7 @@ export function SystemTreeSection({
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isAuthError, setIsAuthError] = useState(false);
   const [rootLoadAttempts, setRootLoadAttempts] = useState(0);
   const [loadedNodes, setLoadedNodes] = useState<Set<string>>(new Set());
   const [loadingNodes, setLoadingNodes] = useState<Set<string>>(new Set());
@@ -118,6 +122,9 @@ export function SystemTreeSection({
   const setLoadedScript = useJsConsoleStore(state => state.setLoadedScript);
   const setDocumentContext = useJsConsoleStore(state => state.setDocumentContext);
   const loadRemoteTextFile = useTextEditorStore(state => state.loadRemoteFile);
+  const activeServer = useServersStore(state =>
+    activeServerId ? (state.servers.find(s => s.id === activeServerId) ?? null) : null
+  );
 
   useEffect(() => {
     onOpenedChange?.(opened);
@@ -137,10 +144,33 @@ export function SystemTreeSection({
     setTreeData([]);
     setLoadedNodes(new Set());
     setError(null);
+    setIsAuthError(false);
     setRootLoadAttempts(0);
     setLoadingNodes(new Set());
     loadChildrenPromisesRef.current.clear();
   }, [activeServerId]);
+
+  // Listen for re-authentication success and reload tree
+  useEffect(() => {
+    const handleReauthSuccess = (event: CustomEvent<{ serverId: number }>) => {
+      if (event.detail.serverId === activeServerId && opened) {
+        // Reset state and reload
+        setTreeData([]);
+        setLoadedNodes(new Set());
+        setError(null);
+        setIsAuthError(false);
+        setRootLoadAttempts(0);
+        setLoadingNodes(new Set());
+        loadChildrenPromisesRef.current.clear();
+        // Trigger reload will happen automatically via the useEffect that watches these states
+      }
+    };
+
+    window.addEventListener('reauth-success', handleReauthSuccess as EventListener);
+    return () => {
+      window.removeEventListener('reauth-success', handleReauthSuccess as EventListener);
+    };
+  }, [activeServerId, opened]);
 
   // Load root nodes when section opens or server changes
   useEffect(() => {
@@ -340,6 +370,13 @@ export function SystemTreeSection({
     setTreeData([]);
     setLoadedNodes(new Set());
     setError(null);
+    setIsAuthError(false);
+  };
+
+  const handleReauthenticate = () => {
+    if (!activeServer || activeServer.authType !== 'openid_connect') return;
+    const { openModal } = useUIStore.getState();
+    openModal('reauth', { serverId: activeServerId, serverName: activeServer.name });
   };
 
   const handleDelete = () => {
@@ -427,6 +464,9 @@ export function SystemTreeSection({
       setLoadedNodes(new Set([result.systemNodeId]));
     } catch (err) {
       console.error('Failed to load system tree:', err);
+      // Check if this is an authentication error
+      setIsAuthError(isAuthenticationError(err));
+
       if (attemptNumber >= MAX_ROOT_LOAD_ATTEMPTS) {
         const baseMessage = err instanceof Error ? err.message : t('submenu:loadError');
         setError(
@@ -846,15 +886,29 @@ export function SystemTreeSection({
                 <Text size="sm" c="red">
                   {error}
                 </Text>
-                <Button
-                  variant="light"
-                  size="xs"
-                  onClick={handleRetryRepositoryLoad}
-                  disabled={loading}
-                  style={{ alignSelf: 'flex-start' }}
-                >
-                  {t('common:retry')}
-                </Button>
+                <Group gap="xs">
+                  <Button
+                    variant="light"
+                    size="xs"
+                    onClick={handleRetryRepositoryLoad}
+                    disabled={loading}
+                    style={{ alignSelf: 'flex-start' }}
+                  >
+                    {t('common:retry')}
+                  </Button>
+                  {isAuthError && activeServer?.authType === 'openid_connect' && (
+                    <Button
+                      variant="filled"
+                      size="xs"
+                      color="orange"
+                      onClick={handleReauthenticate}
+                      disabled={loading}
+                      style={{ alignSelf: 'flex-start' }}
+                    >
+                      {t('common:signIn')}
+                    </Button>
+                  )}
+                </Group>
               </Stack>
             ) : treeData.length === 0 ? (
               <Text size="sm" c="dimmed" p="sm">
