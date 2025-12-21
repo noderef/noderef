@@ -10,18 +10,6 @@ const CATEGORIES = [
     title: '🐛 Bug fixes',
     patterns: [/🐛/, /:bug:/, /^fix/],
   },
-  {
-    title: '📝 Documentation',
-    patterns: [/📝/, /:pencil:/, /^docs/],
-  },
-  {
-    title: '♻️ Refactoring & improvements',
-    patterns: [/♻️/, /:recycle:/, /:fire:/, /:zap:/, /^refactor/, /^perf/],
-  },
-  {
-    title: '🔧 Implementation & config',
-    patterns: [/🔧/, /:wrench:/, /^chore/, /^build/, /^ci/],
-  },
 ];
 
 function getGitLog(fromTag, toTag) {
@@ -114,7 +102,7 @@ function generateChangelog() {
   });
 
   if (uncategorized.length > 0) {
-    output += `### Other Changes\n\n`;
+    output += `### 🔧 Other changes\n\n`;
     uncategorized.forEach(c => {
       output += `- ${c.subject} @${c.author} (${c.hash.substring(0, 7)})\n`;
     });
@@ -123,6 +111,11 @@ function generateChangelog() {
 
   // New Contributors?
   // Hard to detect "New" without analyzing all history. We'll skip for now.
+
+  if (previousTag) {
+    const repo = process.env.GITHUB_REPOSITORY || 'owner/repo';
+    output += `\n**Full Changelog**: https://github.com/${repo}/compare/${previousTag}...${currentTag}`;
+  }
 
   return output;
 }
