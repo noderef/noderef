@@ -9,6 +9,7 @@ on:
 permissions:
   contents: write
   packages: write
+  issues: write
 
 jobs:
   # 1) Build all binaries once on macOS
@@ -310,14 +311,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 1. Fetch auto-generated release notes from GitHub
-          gh api \
-            --method POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            /repos/${{ github.repository }}/releases/generate-notes \
-            -f tag_name=${{ github.ref_name }} \
-            --jq .body > generated_notes.md
+          # 1. Generate changelog from git history
+          node scripts/gh-release-generate-changelog.mjs > generated_notes.md
 
           # 2. Combine Custom Notes + Auto-Generated Notes
           # Create a new file so we don't overwrite the original source
@@ -333,3 +328,8 @@ jobs:
             artifacts/**/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Close Released Issues
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/gh-release-close-issues.mjs
