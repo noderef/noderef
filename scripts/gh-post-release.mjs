@@ -97,4 +97,59 @@ function processIssues() {
   });
 }
 
-processIssues();
+function cleanupBranches() {
+  console.log('\nCleaning up merged branches...');
+
+  // fetch latest to ensure we know what is merged
+  try {
+    execSync('git fetch origin', { stdio: 'ignore' });
+  } catch (e) {
+    console.warn('Warning: Failed to fetch origin. Branch cleanup might be incomplete.');
+  }
+
+  let branchesOutput;
+  try {
+    // List remote branches merged into origin/main
+    branchesOutput = execSync('git branch -r --merged origin/main', { encoding: 'utf-8' });
+  } catch (e) {
+    console.error(`Error listing merged branches: ${e.message}`);
+    return;
+  }
+
+  const branchesToDelete = branchesOutput
+    .split('\n')
+    .map(b => b.trim())
+    .filter(b => {
+      if (!b) return false;
+      // Filter out main, HEAD, and symrefs
+      if (b.includes('origin/main')) return false;
+      if (b.includes('HEAD')) return false;
+      if (b.includes('->')) return false;
+      return true;
+    })
+    .map(b => b.replace('origin/', '')); // remove origin/ prefix for push delete
+
+  if (branchesToDelete.length === 0) {
+    console.log('No merged branches to delete.');
+    return;
+  }
+
+  console.log(`Found ${branchesToDelete.length} merged branches to delete:`);
+  branchesToDelete.forEach(b => console.log(` - ${b}`));
+
+  branchesToDelete.forEach(branch => {
+    try {
+      console.log(`Deleting origin/${branch}...`);
+      execSync(`git push origin --delete "${branch}"`, { stdio: 'inherit' });
+    } catch (e) {
+      console.error(`Failed to delete branch ${branch}: ${e.message}`);
+    }
+  });
+}
+
+function main() {
+  processIssues();
+  cleanupBranches();
+}
+
+main();

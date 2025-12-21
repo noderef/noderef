@@ -329,7 +329,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Close Released Issues
+      - name: Post-release cleanup
+        if: success()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node scripts/gh-release-close-issues.mjs
+        run: node ./scripts/gh-post-release.mjs
