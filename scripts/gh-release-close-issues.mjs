@@ -71,25 +71,28 @@ function processIssues() {
 
   issueIds.forEach(id => {
     try {
-      // Check status strings to avoid double closing or erroring on PRs
-      // We will blindly attempt to close with comment. If it's already closed,
-      // GH might add the comment or ignore the close.
-      // Better: Check if it's an issue and open.
+      const commentLink = `[${currentTag}](https://github.com/${process.env.GITHUB_REPOSITORY}/releases/tag/${currentTag})`;
+      const commentBody = `🚀 Released in ${commentLink}`;
 
-      const comment = `🚀 Released in [${currentTag}](https://github.com/${process.env.GITHUB_REPOSITORY}/releases/tag/${currentTag})`;
+      // Check current status
+      const checkCmd = `gh issue view ${id} --json state --jq .state`;
 
-      console.log(`Closing #${id}...`);
+      let state;
+      try {
+        state = execSync(checkCmd, { encoding: 'utf-8' }).trim();
+      } catch (e) {
+        console.warn(`Skipping #${id}: Unable to fetch details (might be a PR or not found)`);
+        return;
+      }
 
-      // --comment automatically adds a comment.
-      // If the issue is already closed, this might just add a comment (if the cli supports it) or fail.
-      // Let's use `gh issue close` which is idempotent for state, but comment might duplicate?
-      // Actually `gh issue close` on a closed issue does nothing usually, but let's see.
-      // To be safe and clean:
-
-      execSync(`gh issue close ${id} --comment "${comment}"`, { stdio: 'inherit' });
+      if (state === 'OPEN') {
+        console.log(`Closing #${id}...`);
+        execSync(`gh issue close ${id} --comment "${commentBody}"`, { stdio: 'inherit' });
+      } else {
+        console.log(`Skipping #${id}: Issue is already closed.`);
+      }
     } catch (e) {
-      console.error(`Failed to close issue #${id}: ${e.message}`);
-      // Continue to next issue
+      console.error(`Failed to process issue #${id}: ${e.message}`);
     }
   });
 }
