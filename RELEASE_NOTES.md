@@ -1,1 +1,1 @@
-This release brings improvements to the developer experience, focusing on **OIDC authentication** flows and **dynamic DSL** definitions fetched directly from your Alfresco server. We've also introduced **FreeMarker syntax highlighting** and a new **auto-update system** to keep you on the latest version.
+This release brings improvements to the developer experience, focusing on **OIDC authentication** flows and **dynamic DSL** definitions fetched directly from your Alfresco server. We've also introduced a new **auto-update system** to keep you on the latest version.
