@@ -14,6 +14,7 @@
   "openInTextEditorSuccess": "Ouvert dans l'éditeur de texte",
   "openInTextEditorFailed": "Impossible d'ouvrir dans l'éditeur de texte",
   "logFileOpened": "Fichier de journal « {{fileName}} » ouvert dans l'éditeur de texte",
+  "logsTabLabel": "Journaux",
   "textEditorTabTitle": "Visualiseur de journaux",
   "textEditorEmptyState": "Sélectionnez un fichier de journal et choisissez « Ouvrir dans l'éditeur de texte » pour le consulter ici.",
   "loadingEditor": "Ouverture du fichier de journal…",

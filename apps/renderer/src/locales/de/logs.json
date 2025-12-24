@@ -14,6 +14,7 @@
   "openInTextEditorSuccess": "Im Texteditor geöffnet",
   "openInTextEditorFailed": "Öffnen im Texteditor fehlgeschlagen",
   "logFileOpened": "Protokolldatei \"{{fileName}}\" im Texteditor geöffnet",
+  "logsTabLabel": "Protokolle",
   "textEditorTabTitle": "Protokoll-Anzeige",
   "textEditorEmptyState": "Wählen Sie eine Protokolldatei und klicken Sie auf \"Im Texteditor öffnen\", um sie hier anzuzeigen.",
   "loadingEditor": "Protokolldatei wird geöffnet…",

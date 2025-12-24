@@ -14,6 +14,7 @@
   "openInTextEditorSuccess": "Opened in Text Editor",
   "openInTextEditorFailed": "Failed to open in Text Editor",
   "logFileOpened": "Log file '{{fileName}}' opened in Text Editor",
+  "logsTabLabel": "Logs",
   "textEditorTabTitle": "Log Viewer",
   "textEditorEmptyState": "Select a log file and choose \"Open in Text Editor\" to view it here.",
   "loadingEditor": "Opening log file…",
