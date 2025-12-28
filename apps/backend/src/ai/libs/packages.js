@@ -291,3 +291,59 @@ function demo_headers_and_basicAuth() {
   logger.log('Status: ' + status);
   logger.log('Body  : ' + body);
 }
+
+/**
+ * Synchronize the user registry.
+ *
+ * Be careful running this on production if you have a large directory.
+ */
+function example_userRegistrySync() {
+  var ctx =
+    Packages.org.springframework.web.context.ContextLoader.getCurrentWebApplicationContext();
+  var synchronizer = ctx.getBean(
+    'userRegistrySynchronizer',
+    Packages.org.alfresco.repo.security.sync.UserRegistrySynchronizer
+  );
+
+  // forceUpdate = false, isFullSync = false - change for full update / with deletions
+  logger.log('Starting user registry synchronization...');
+  synchronizer.synchronize(false, false);
+  logger.log('Synchronization complete.');
+}
+
+/**
+ * Read global properties (alfresco-global.properties) using the 'global-properties' bean.
+ */
+function example_readGlobalProperty() {
+  var ctx =
+    Packages.org.springframework.web.context.ContextLoader.getCurrentWebApplicationContext();
+  var properties = ctx.getBean('global-properties', java.util.Properties);
+
+  var dbUser = properties['db.user'];
+  logger.log('db.user property: ' + dbUser);
+}
+
+/**
+ * Use NodeService directly to get a property value using QName.
+ */
+function example_useNodeService() {
+  var ctx =
+    Packages.org.springframework.web.context.ContextLoader.getCurrentWebApplicationContext();
+  var nodeService = ctx.getBean('NodeService', org.alfresco.service.cmr.repository.NodeService);
+  var QName = Packages.org.alfresco.service.namespace.QName;
+
+  var contentProp = QName.createQName('{http://www.alfresco.org/model/content/1.0}content');
+
+  // 'document' is a root object providing the current node context
+  if (typeof document === 'undefined' || !document) {
+    logger.log("No 'document' node context available.");
+    return;
+  }
+
+  var propValue = nodeService.getProperty(document.nodeRef, contentProp);
+  if (propValue) {
+    logger.log('Content URL: ' + propValue.contentUrl);
+  } else {
+    logger.log('Content property is null.');
+  }
+}

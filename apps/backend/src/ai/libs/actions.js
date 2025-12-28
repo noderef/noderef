@@ -179,3 +179,73 @@ function example_runCustomAction() {
 
   logger.log('Custom action executed.');
 }
+
+/**
+ * Export a node structure to an ACP file.
+ *
+ * Parameters:
+ *   - store: Store containing the node (e.g. "workspace://SpacesStore")
+ *   - package-name: Name of the ACP file (without extension)
+ *   - destination: Folder where the ACP file will be saved
+ *   - include-children: boolean
+ *   - include-self: boolean
+ *   - encoding: Character encoding (e.g. "UTF-8")
+ */
+function example_exportACP() {
+  // Example path - adjust as needed
+  var nodeToExport = companyhome.childByNamePath('Sites/swsdp/documentLibrary');
+  if (!nodeToExport) {
+    logger.log('Node to export not found');
+    return;
+  }
+
+  var exportAction = actions.create('export');
+  if (!exportAction) {
+    logger.log('Action not available: export');
+    return;
+  }
+
+  exportAction.parameters['store'] = 'workspace://SpacesStore';
+  exportAction.parameters['package-name'] = 'ACPexport';
+  exportAction.parameters['destination'] = companyhome;
+  exportAction.parameters['include-children'] = true;
+  exportAction.parameters['include-self'] = false;
+  exportAction.parameters['encoding'] = 'UTF-8';
+
+  // execute() can be called on the action object passing the node
+  exportAction.execute(nodeToExport);
+
+  logger.log('Export action executed for: ' + nodeToExport.name);
+}
+
+/**
+ * Import an ACP file to a destination folder.
+ *
+ * Parameters:
+ *   - destination: Target folder (nodeRef)
+ *   - encoding: Character encoding (e.g. "UTF-8")
+ */
+function example_importACP() {
+  // Example paths - adjust as needed
+  var targetNodeForImport = companyhome.childByNamePath('Sites/swsdp/documentLibrary');
+  var ACPFile = companyhome.childByNamePath('ACPexport.acp');
+
+  if (!targetNodeForImport || !ACPFile) {
+    logger.log('Target node (Sites/swsdp/documentLibrary) or ACP file (ACPexport.acp) not found');
+    return;
+  }
+
+  var importAction = actions.create('import');
+  if (!importAction) {
+    logger.log('Action not available: import');
+    return;
+  }
+
+  importAction.parameters['encoding'] = 'UTF-8';
+  importAction.parameters['destination'] = targetNodeForImport;
+
+  // Execute the import action on the ACP file node
+  importAction.execute(ACPFile);
+
+  logger.log('Import action executed for: ' + ACPFile.name);
+}
