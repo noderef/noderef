@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
+import { isNeutralinoMode } from '@/core/ipc/neutralino';
 import { initMonaco } from '@/core/monaco/setup';
 import { useJsConsoleStore } from '@/core/store/jsConsole';
+import { readClipboardText, writeClipboardText } from '@/core/utils/clipboard';
 import { useComputedColorScheme } from '@mantine/core';
-import { clipboard } from '@neutralinojs/lib';
 import * as monaco from 'monaco-editor';
 import { ICodeEditorService } from 'monaco-editor/esm/vs/editor/browser/services/codeEditorService';
 import { CommandsRegistry } from 'monaco-editor/esm/vs/platform/commands/common/commands';
@@ -328,80 +328,12 @@ export function JsConsoleEditor({ onAiRequest }: JsConsoleEditorProps) {
       }
     };
 
-    const readClipboardText = async (event?: ClipboardEvent): Promise<string | null> => {
-      const clipboardData = event?.clipboardData || (window as any).clipboardData;
-      const textFromEvent = clipboardData?.getData?.('text/plain');
-      if (textFromEvent) return textFromEvent;
-
-      if (isNeutralinoMode()) {
-        try {
-          await ensureNeutralinoReady();
-          const neutralinoText = await clipboard.readText();
-          if (neutralinoText) return neutralinoText;
-        } catch (neutralinoError) {
-          console.error('Neutralino clipboard read failed:', neutralinoError);
-        }
-      }
-
-      if (navigator.clipboard?.readText) {
-        try {
-          const navigatorText = await navigator.clipboard.readText();
-          if (navigatorText) return navigatorText;
-        } catch {
-          // Ignore and fall through
-        }
-      }
-
-      return null;
-    };
-
     const getEditorSelectionText = (): string => {
       const model = editor.getModel();
       if (!model) return '';
       const selection = editor.getSelection();
       if (!selection || selection.isEmpty()) return '';
       return model.getValueInRange(selection);
-    };
-
-    const writeClipboardText = async (text: string, event?: ClipboardEvent): Promise<boolean> => {
-      if (!text) return false;
-
-      const stopEvent = () => {
-        if (event) {
-          event.preventDefault();
-          event.stopPropagation();
-        }
-      };
-
-      const clipboardData = event?.clipboardData;
-      if (clipboardData) {
-        clipboardData.setData('text/plain', text);
-        stopEvent();
-        return true;
-      }
-
-      if (isNeutralinoMode()) {
-        try {
-          await ensureNeutralinoReady();
-          await clipboard.writeText(text);
-          stopEvent();
-          return true;
-        } catch (neutralinoError) {
-          console.error('Neutralino clipboard write failed:', neutralinoError);
-        }
-      }
-
-      if (navigator.clipboard?.writeText) {
-        try {
-          await navigator.clipboard.writeText(text);
-          stopEvent();
-          return true;
-        } catch {
-          // Ignore and fall through
-        }
-      }
-
-      return false;
     };
 
     const performCopy = async (event?: ClipboardEvent): Promise<boolean> => {
@@ -569,36 +501,50 @@ export function JsConsoleEditor({ onAiRequest }: JsConsoleEditorProps) {
       commandOverrideDisposables.push(disposable);
     };
 
-    overrideCommand('editor.action.clipboardPasteAction', () => pasteText(undefined, 'action'));
-    overrideCommand('editor.action.clipboardCopyAction', () => performCopy());
-    overrideCommand('editor.action.clipboardCutAction', () => performCut());
+    // Only apply custom clipboard handling in Neutralino mode
+    if (isNeutralinoMode()) {
+      overrideCommand('editor.action.clipboardPasteAction', () => pasteText(undefined, 'action'));
+      overrideCommand('editor.action.clipboardCopyAction', () => performCopy());
+      overrideCommand('editor.action.clipboardCutAction', () => performCut());
 
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {
-      void pasteText(undefined, 'action');
-    });
-    editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.Insert, () => {
-      void pasteText(undefined, 'action');
-    });
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {
-      void performCopy();
-    });
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Insert, () => {
-      void performCopy();
-    });
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {
+        void pasteText(undefined, 'action');
+      });
+      editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.Insert, () => {
+        void pasteText(undefined, 'action');
+      });
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {
+        void performCopy();
+      });
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Insert, () => {
+        void performCopy();
+      });
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {
+        void performCut();
+      });
 
-    window.addEventListener('beforeinput', handleBeforeInput, true);
-    window.addEventListener('paste', handlePaste, true);
-    window.addEventListener('copy', handleCopy, true);
-    window.addEventListener('cut', handleCut, true);
-    container.addEventListener('click', handleContainerClick);
+      window.addEventListener('beforeinput', handleBeforeInput, true);
+      window.addEventListener('paste', handlePaste, true);
+      window.addEventListener('copy', handleCopy, true);
+      window.addEventListener('cut', handleCut, true);
+      container.addEventListener('click', handleContainerClick);
+    }
+
+    // Always listen for container clicks to focus editor, even in browser mode,
+    // unless managed above
+    if (!isNeutralinoMode()) {
+      container.addEventListener('click', handleContainerClick);
+    }
 
     return () => {
       container.removeEventListener('click', handleContainerClick);
-      window.removeEventListener('paste', handlePaste, true);
-      window.removeEventListener('copy', handleCopy, true);
-      window.removeEventListener('cut', handleCut, true);
-      window.removeEventListener('beforeinput', handleBeforeInput, true);
-      commandOverrideDisposables.forEach(disposable => disposable.dispose());
+      if (isNeutralinoMode()) {
+        window.removeEventListener('paste', handlePaste, true);
+        window.removeEventListener('copy', handleCopy, true);
+        window.removeEventListener('cut', handleCut, true);
+        window.removeEventListener('beforeinput', handleBeforeInput, true);
+        commandOverrideDisposables.forEach(disposable => disposable.dispose());
+      }
     };
   }, [editorReady]);
 

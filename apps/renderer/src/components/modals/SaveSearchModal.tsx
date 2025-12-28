@@ -15,11 +15,12 @@
  */
 
 import { backendRpc, type SavedSearch } from '@/core/ipc/backend';
-import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
+import { isNeutralinoMode } from '@/core/ipc/neutralino';
 import { MODAL_KEYS } from '@/core/store/keys';
 import { useSavedSearchesStore } from '@/core/store/savedSearches';
 import { useSearchStore } from '@/core/store/search';
 import { useServersStore } from '@/core/store/servers';
+import { readClipboardText, writeClipboardText } from '@/core/utils/clipboard';
 import { useModal } from '@/hooks/useModal';
 import { useActiveServerId } from '@/hooks/useNavigation';
 import { useSearchDictionary } from '@/hooks/useSearchDictionary';
@@ -39,7 +40,6 @@ import {
   useCombobox,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { clipboard } from '@neutralinojs/lib';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -268,73 +268,6 @@ export function SaveSearchModal() {
       if (selectionStart === null || selectionEnd === null) return '';
       if (selectionStart === selectionEnd) return '';
       return value.slice(selectionStart, selectionEnd);
-    };
-
-    const writeClipboardText = async (text: string, event?: ClipboardEvent): Promise<boolean> => {
-      if (!text) return false;
-
-      const stopEvent = () => {
-        if (event) {
-          event.preventDefault();
-          event.stopPropagation();
-        }
-      };
-
-      if (event?.clipboardData) {
-        event.clipboardData.setData('text/plain', text);
-        stopEvent();
-        return true;
-      }
-
-      if (isDesktopMode) {
-        try {
-          await ensureNeutralinoReady();
-          await clipboard.writeText(text);
-          stopEvent();
-          return true;
-        } catch (error) {
-          console.error('Neutralino clipboard write failed:', error);
-        }
-      }
-
-      if (navigator.clipboard?.writeText) {
-        try {
-          await navigator.clipboard.writeText(text);
-          stopEvent();
-          return true;
-        } catch {
-          // Ignore
-        }
-      }
-
-      return false;
-    };
-
-    const readClipboardText = async (event?: ClipboardEvent): Promise<string | null> => {
-      const clipboardData = event?.clipboardData || (window as any).clipboardData;
-      const textFromEvent = clipboardData?.getData?.('text/plain');
-      if (textFromEvent) return textFromEvent;
-
-      if (isDesktopMode) {
-        try {
-          await ensureNeutralinoReady();
-          const neutralinoText = await clipboard.readText();
-          if (neutralinoText) return neutralinoText;
-        } catch (error) {
-          console.error('Neutralino clipboard read failed:', error);
-        }
-      }
-
-      if (navigator.clipboard?.readText) {
-        try {
-          const navigatorText = await navigator.clipboard.readText();
-          if (navigatorText) return navigatorText;
-        } catch {
-          // Ignore
-        }
-      }
-
-      return null;
     };
 
     const insertText = (
