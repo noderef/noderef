@@ -30,6 +30,9 @@ const TYPE_MAPPINGS: Record<string, string> = {
   bool: 'boolean',
   Date: 'Date',
   any: 'any',
+  JavaInteger: 'number',
+  JavaString: 'string',
+  JavaBoolean: 'boolean',
 };
 
 /**
