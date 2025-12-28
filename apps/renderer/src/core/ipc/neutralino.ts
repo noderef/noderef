@@ -17,7 +17,6 @@
 // Shared Neutralino initialization and utilities
 import {
   app,
-  computer,
   events,
   init as neutralinoInit,
   window as neutralinoWindow,
@@ -27,6 +26,7 @@ import {
 let ready = false;
 let initPromise: Promise<void> | null = null;
 let minimizeOnCloseSetup = false;
+let cachedIsWindows: boolean | null = null;
 
 /**
  * Ensure Neutralino is initialized and ready
@@ -90,9 +90,50 @@ export const isNeutralinoMode = (): boolean => {
 };
 
 /**
+ * Detect if running on Windows using synchronous path-based detection
+ * This is more reliable than async API calls which can hang after idle time
+ */
+function detectIsWindows(): boolean {
+  if (cachedIsWindows !== null) {
+    return cachedIsWindows;
+  }
+
+  const nlPath = (window as any).NL_PATH || '';
+  // Windows detection: drive letter (C:, D:, etc.) or backslashes
+  const isWindows =
+    /^[A-Za-z]:/.test(nlPath) || // Drive letter
+    nlPath.includes('\\'); // Backslashes
+
+  cachedIsWindows = isWindows;
+  return isWindows;
+}
+
+/**
+ * Force exit the application - used as fallback when normal close fails
+ */
+function forceExit(): void {
+  try {
+    // Try multiple methods to ensure the app closes
+    app.killProcess().catch(() => {});
+  } catch {
+    // Ignore errors
+  }
+
+  // Also try window.close as backup
+  try {
+    window.close();
+  } catch {
+    // Ignore errors
+  }
+}
+
+/**
  * Set up window close behavior
  * On Windows: properly exit the app when close button is clicked
  * On macOS/Linux: minimize to keep app running in background
+ *
+ * Note: Uses synchronous path-based OS detection to avoid async hangs
+ * after long idle periods. Includes timeout fallback to force close.
  */
 function setupMinimizeOnClose(): void {
   if (minimizeOnCloseSetup || !isNeutralinoMode()) {
@@ -101,21 +142,42 @@ function setupMinimizeOnClose(): void {
 
   minimizeOnCloseSetup = true;
 
-  events.on('windowClose', async () => {
-    try {
-      // Detect OS using Neutralino API
-      const osInfo = await computer.getOSInfo();
-      const isWindows = osInfo.name.toLowerCase().includes('windows');
+  // Pre-cache OS detection at setup time (not during close)
+  const isWindows = detectIsWindows();
 
+  events.on('windowClose', async () => {
+    // For Windows: Set a safety timeout to force exit if normal close hangs
+    // This prevents the app from becoming unkillable after idle time
+    let forceExitTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    if (isWindows) {
+      forceExitTimeout = setTimeout(() => {
+        console.warn('[Neutralino] Close timeout - forcing exit');
+        forceExit();
+      }, 2000); // 2 second timeout
+    }
+
+    try {
       if (isWindows) {
         // On Windows, exit the app completely
         await app.killProcess();
+        // Clear timeout if killProcess succeeded
+        if (forceExitTimeout) {
+          clearTimeout(forceExitTimeout);
+        }
       } else {
         // On macOS/Linux, minimize to keep app running in background
         await neutralinoWindow.minimize();
       }
     } catch (error) {
       console.error('[Neutralino] Failed to handle window close:', error);
+      // On error for Windows, force exit
+      if (isWindows) {
+        if (forceExitTimeout) {
+          clearTimeout(forceExitTimeout);
+        }
+        forceExit();
+      }
     }
   });
 }
