@@ -46,6 +46,7 @@ export function JsConsoleEditor({ onAiRequest }: JsConsoleEditorProps) {
   const aiDecorationsRef = useRef<string[]>([]);
   const aiLinesRef = useRef<Set<number>>(new Set());
   const activeServerId = useActiveServerId();
+  const selectedServerIds = useJsConsoleStore(state => state.selectedServerIds);
   const importResolveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     aiRequestRef.current = onAiRequest;
@@ -54,10 +55,26 @@ export function JsConsoleEditor({ onAiRequest }: JsConsoleEditorProps) {
   const computedColorScheme = useComputedColorScheme('light', { getInitialValueInEffect: true });
   const monacoTheme = computedColorScheme === 'dark' ? 'vs-dark' : 'vs';
 
-  // Update import resolver with active server ID
+  // Update import resolver with appropriate server ID
+  // Use activeServerId if set (when on a specific server page),
+  // otherwise use the first selected server (when in NodeRef space)
   useEffect(() => {
-    importResolver.setServerId(activeServerId ?? null);
-  }, [activeServerId]);
+    const serverId = activeServerId ?? selectedServerIds[0] ?? null;
+    const previousServerId = importResolver.getServerId();
+
+    // Set server ID (this automatically clears imports if server changed)
+    importResolver.setServerId(serverId);
+
+    // If server changed and we have code with imports, re-resolve them
+    if (previousServerId !== serverId && serverId !== null) {
+      const currentCode = editorRef.current?.getValue();
+      if (currentCode && currentCode.includes('<import')) {
+        setTimeout(() => {
+          void importResolver.resolveImports(currentCode);
+        }, 100);
+      }
+    }
+  }, [activeServerId, selectedServerIds]);
 
   // Initialize Monaco Editor
   useEffect(() => {

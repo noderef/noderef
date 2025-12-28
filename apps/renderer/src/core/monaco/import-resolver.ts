@@ -27,6 +27,13 @@ export class ImportResolver {
   private isResolving = false;
 
   /**
+   * Get the current server ID
+   */
+  getServerId(): number | null {
+    return this.serverId;
+  }
+
+  /**
    * Set the active server ID
    */
   setServerId(serverId: number | null): void {
