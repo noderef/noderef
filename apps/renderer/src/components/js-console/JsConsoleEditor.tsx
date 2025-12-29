@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
+import { isNeutralinoMode } from '@/core/ipc/neutralino';
 import { IMPORT_TAG_REGEX_SOURCE } from '@/core/monaco/import-parser';
 import { importResolver } from '@/core/monaco/import-resolver';
 import { initMonaco } from '@/core/monaco/setup';
