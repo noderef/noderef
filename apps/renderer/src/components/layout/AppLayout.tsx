@@ -41,7 +41,6 @@ export function AppLayout({ sidebar, submenu, content }: AppLayoutProps) {
         height: '100vh',
         width: '100vw',
         minWidth: 800,
-        maxWidth: 2560,
         margin: '0 auto',
         overflow: 'hidden',
         paddingTop: 'var(--mantine-spacing-md)',
