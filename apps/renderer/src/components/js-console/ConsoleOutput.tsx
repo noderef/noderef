@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
 import { useJsConsoleStore } from '@/core/store/jsConsole';
 import { useServersStore } from '@/core/store/servers';
+import { writeClipboardText } from '@/core/utils/clipboard';
 import { formatRelativeTime } from '@/utils/formatTime';
 import {
   Accordion,
@@ -35,7 +35,6 @@ import {
   Tooltip,
   useComputedColorScheme,
 } from '@mantine/core';
-import { clipboard } from '@neutralinojs/lib';
 import {
   IconAlertCircle,
   IconCheck,
@@ -253,6 +252,7 @@ export function ConsoleOutput({ isNodeRefSpace }: { isNodeRefSpace: boolean }) {
     return cleanup;
   }, [activeTab, historyHasMore, historyLoading, loadMoreHistory]);
 
+  // Handle Ctrl/Cmd+C copy for console output
   useEffect(() => {
     const container = consoleContainerRef.current;
     if (!container) return;
@@ -278,54 +278,10 @@ export function ConsoleOutput({ isNodeRefSpace }: { isNodeRefSpace: boolean }) {
       return selection.toString();
     };
 
-    const writeClipboardText = async (text: string, event?: ClipboardEvent): Promise<boolean> => {
-      if (!text) return false;
-
-      const stopEvent = () => {
-        if (event) {
-          event.preventDefault();
-          event.stopPropagation();
-        }
-      };
-
-      if (event?.clipboardData) {
-        event.clipboardData.setData('text/plain', text);
-        stopEvent();
-        return true;
-      }
-
-      if (isNeutralinoMode()) {
-        try {
-          await ensureNeutralinoReady();
-          await clipboard.writeText(text);
-          stopEvent();
-          return true;
-        } catch (error) {
-          console.error('Neutralino clipboard write failed:', error);
-        }
-      }
-
-      if (navigator.clipboard?.writeText) {
-        try {
-          await navigator.clipboard.writeText(text);
-          stopEvent();
-          return true;
-        } catch {
-          // Ignore
-        }
-      }
-
-      return false;
-    };
-
     const handleCopy = async (event: ClipboardEvent) => {
       const text = getSelectedText();
       if (!text) return;
-      const success = await writeClipboardText(text, event);
-      if (success) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
+      await writeClipboardText(text, event);
     };
 
     const handleKeyDown = async (event: KeyboardEvent) => {

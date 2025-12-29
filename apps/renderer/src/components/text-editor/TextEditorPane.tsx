@@ -18,6 +18,8 @@ import { useEffect, useRef } from 'react';
 import { useComputedColorScheme } from '@mantine/core';
 import * as monaco from 'monaco-editor';
 import { initMonaco } from '@/core/monaco/setup';
+import { isNeutralinoMode } from '@/core/ipc/neutralino';
+import { readClipboardText, writeClipboardText } from '@/core/utils/clipboard';
 
 interface TextEditorPaneProps {
   value: string;
@@ -132,6 +134,103 @@ export function TextEditorPane({
     return () => {
       observer.disconnect();
       window.removeEventListener('resize', handleWindowResize);
+    };
+  }, []);
+
+  // Custom clipboard handling for desktop compatibility
+  useEffect(() => {
+    if (!editorRef.current || !containerRef.current) return;
+
+    const editor = editorRef.current;
+    const container = containerRef.current;
+
+    const getEditorSelectionText = (): string => {
+      const model = editor.getModel();
+      if (!model) return '';
+      const selection = editor.getSelection();
+      if (!selection || selection.isEmpty()) return '';
+      return model.getValueInRange(selection);
+    };
+
+    const performCopy = async (event?: ClipboardEvent): Promise<boolean> => {
+      const text = getEditorSelectionText();
+      if (!text) return false;
+      return writeClipboardText(text, event);
+    };
+
+    const performCut = async (event?: ClipboardEvent): Promise<boolean> => {
+      const model = editor.getModel();
+      const selection = editor.getSelection();
+      if (!model || !selection || selection.isEmpty()) return false;
+
+      const text = model.getValueInRange(selection);
+      const copied = await writeClipboardText(text, event);
+      if (!copied) return false;
+
+      editor.executeEdits('cut', [
+        {
+          range: selection,
+          text: '',
+        },
+      ]);
+      editor.pushUndoStop();
+      return true;
+    };
+
+    const performPaste = async (event?: ClipboardEvent): Promise<boolean> => {
+      const text = await readClipboardText(event);
+      if (!text) return false;
+
+      const selection = editor.getSelection();
+      if (!selection) return false;
+
+      editor.executeEdits('paste', [
+        {
+          range: selection,
+          text,
+        },
+      ]);
+      editor.pushUndoStop();
+      return true;
+    };
+
+    const handleCopy = async (event: ClipboardEvent) => {
+      await performCopy(event);
+    };
+
+    const handleCut = async (event: ClipboardEvent) => {
+      await performCut(event);
+    };
+
+    const handlePaste = async (event: ClipboardEvent) => {
+      await performPaste(event);
+    };
+
+    const handleContainerClick = (event: MouseEvent) => {
+      if (event.target === container) {
+        editor.focus();
+      }
+    };
+
+    // Only apply custom clipboard handling in Neutralino mode
+    if (isNeutralinoMode()) {
+      window.addEventListener('paste', handlePaste, true);
+      window.addEventListener('copy', handleCopy, true);
+      window.addEventListener('cut', handleCut, true);
+      container.addEventListener('click', handleContainerClick);
+
+      return () => {
+        container.removeEventListener('click', handleContainerClick);
+        window.removeEventListener('paste', handlePaste, true);
+        window.removeEventListener('copy', handleCopy, true);
+        window.removeEventListener('cut', handleCut, true);
+      };
+    }
+
+    // In browser mode, just add click handler
+    container.addEventListener('click', handleContainerClick);
+    return () => {
+      container.removeEventListener('click', handleContainerClick);
     };
   }, []);
 
