@@ -14,6 +14,7 @@
   "openInTextEditorSuccess": "Geopend in Teksteditor",
   "openInTextEditorFailed": "Openen in Teksteditor mislukt",
   "logFileOpened": "Logbestand '{{fileName}}' geopend in Teksteditor",
+  "logsTabLabel": "Logs",
   "textEditorTabTitle": "Logviewer",
   "textEditorEmptyState": "Selecteer een logbestand en kies \"Openen in Teksteditor\" om het hier te bekijken.",
   "loadingEditor": "Logbestand openen…",
