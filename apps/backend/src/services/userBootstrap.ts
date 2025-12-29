@@ -25,6 +25,7 @@ import { execFileSync } from 'child_process';
 import { existsSync } from 'fs';
 import path from 'path';
 import { getDatabasePath } from '../lib/paths';
+import { log } from '../lib/logger.js';
 import { findSchemaEngineBinary, getPrismaClient } from '../lib/prisma.js';
 
 function isMissingTableError(error: unknown): boolean {
@@ -174,7 +175,7 @@ async function runMigrations(prismaForFallback?: PrismaClient) {
       });
       return;
     } catch (err) {
-      console.error('Prisma migrate deploy failed (dev path):', err);
+      log.error({ err }, 'Prisma migrate deploy failed (dev path)');
     }
   }
 
@@ -205,7 +206,10 @@ export async function ensureSystemUser(prisma?: PrismaClient): Promise<number> {
         await runMigrations(client);
         existingUser = await client.user.findFirst();
       } catch (migrationError) {
-        console.error('Failed to auto-run migrations for system user bootstrap:', migrationError);
+        log.error(
+          { err: migrationError },
+          'Failed to auto-run migrations for system user bootstrap'
+        );
         throw migrationError;
       }
     } else {

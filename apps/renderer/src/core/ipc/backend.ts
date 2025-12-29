@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+/* eslint-disable no-console */
+
 /**
  * Typed RPC client for backend data services
  * Provides semantic helpers for consuming backend data RPC endpoints
@@ -51,7 +53,6 @@ export const backendRpc = {
       thumbnail: string | null;
     } | null;
   }> {
-    // eslint-disable-next-line no-console
     console.log('📦 Loading workspace...');
     const startTime = Date.now();
     try {
@@ -70,7 +71,6 @@ export const backendRpc = {
         } | null;
       }>('backend.workspace.load', {});
       const duration = Date.now() - startTime;
-      // eslint-disable-next-line no-console
       console.log(`📦 Workspace loaded (${duration}ms):`, {
         servers: result.servers?.length || 0,
         savedSearches: result.savedSearches?.length || 0,
@@ -78,7 +78,6 @@ export const backendRpc = {
       return result;
     } catch (error) {
       const duration = Date.now() - startTime;
-      // eslint-disable-next-line no-console
       console.error(`📦 Workspace load error (${duration}ms):`, error);
       throw error;
     }
@@ -106,7 +105,6 @@ export const backendRpc = {
      * Create a new server
      */
     async create(data: Omit<CreateServer, 'userId'>): Promise<PublicServer> {
-      // eslint-disable-next-line no-console
       console.log('➕ Creating server:', data.name);
       return rpc<PublicServer>('backend.servers.create', data);
     },
@@ -115,7 +113,6 @@ export const backendRpc = {
      * Update a server
      */
     async update(id: number, data: UpdateServer): Promise<PublicServer> {
-      // eslint-disable-next-line no-console
       console.log('✏️  Updating server:', id);
       return rpc<PublicServer>('backend.servers.update', { id, ...data });
     },
@@ -124,7 +121,6 @@ export const backendRpc = {
      * Delete a server
      */
     async delete(id: number): Promise<{ success: boolean }> {
-      // eslint-disable-next-line no-console
       console.log('🗑️  Deleting server:', id);
       return rpc<{ success: boolean }>('backend.servers.delete', { id });
     },
@@ -133,7 +129,6 @@ export const backendRpc = {
      * Reorder servers
      */
     async reorder(orders: Array<{ id: number; displayOrder: number }>): Promise<void> {
-      // eslint-disable-next-line no-console
       console.log('🔄 Reordering servers:', orders.length);
       return rpc<void>('backend.servers.reorder', { orders });
     },
@@ -260,7 +255,6 @@ export const backendRpc = {
       columns?: string | null;
       isDefault?: boolean;
     }): Promise<SavedSearch> {
-      // eslint-disable-next-line no-console
       console.log('➕ Creating saved search:', data.name);
       return rpc<SavedSearch>('backend.savedSearches.create', data);
     },
@@ -272,7 +266,6 @@ export const backendRpc = {
       id: number,
       data: { name?: string; query?: string; columns?: string | null; isDefault?: boolean }
     ): Promise<SavedSearch> {
-      // eslint-disable-next-line no-console
       console.log('✏️  Updating saved search:', id);
       return rpc<SavedSearch>('backend.savedSearches.update', { id, ...data });
     },
@@ -281,7 +274,6 @@ export const backendRpc = {
      * Delete a saved search
      */
     async delete(id: number): Promise<{ success: boolean }> {
-      // eslint-disable-next-line no-console
       console.log('🗑️  Deleting saved search:', id);
       return rpc<{ success: boolean }>('backend.savedSearches.delete', { id });
     },
@@ -322,7 +314,6 @@ export const backendRpc = {
       breadcrumb: RepositoryBreadcrumbItem[];
       pagination?: RepositoryPaginationInfo;
     }> {
-      // eslint-disable-next-line no-console
       console.log('📁 Fetching node children:', {
         serverId,
         nodeId: nodeId || '-root-',
@@ -355,7 +346,6 @@ export const backendRpc = {
         skipAddToFavorites?: boolean;
       }
     ): Promise<{ site: SiteEntry; node?: RepositoryNode | null }> {
-      // eslint-disable-next-line no-console
       console.log('🌐 Creating site:', {
         serverId,
         id: payload.id,
@@ -374,7 +364,6 @@ export const backendRpc = {
      * Get site details
      */
     async getSite(serverId: number, siteId: string): Promise<{ site: SiteEntry | null }> {
-      // eslint-disable-next-line no-console
       console.log('🌐 Fetching site:', { serverId, siteId });
       return rpc<{ site: SiteEntry | null }>('backend.repository.getSite', { serverId, siteId });
     },
@@ -387,7 +376,6 @@ export const backendRpc = {
       siteId: string,
       data: { title?: string; description?: string; visibility?: SiteVisibility }
     ): Promise<{ site: SiteEntry | null }> {
-      // eslint-disable-next-line no-console
       console.log('🌐 Updating site:', { serverId, siteId });
       return rpc<{ site: SiteEntry | null }>('backend.repository.updateSite', {
         serverId,
@@ -404,7 +392,6 @@ export const backendRpc = {
       siteId: string,
       permanent = false
     ): Promise<{ success: boolean }> {
-      // eslint-disable-next-line no-console
       console.log('🌐 Deleting site:', { serverId, siteId, permanent });
       return rpc<{ success: boolean }>('backend.repository.deleteSite', {
         serverId,
@@ -421,7 +408,6 @@ export const backendRpc = {
       nodeId: string,
       newName: string
     ): Promise<{ success: boolean; node: any }> {
-      // eslint-disable-next-line no-console
       console.log('✏️ Renaming node:', { serverId, nodeId, newName });
       return rpc<{ success: boolean; node: any }>('backend.repository.renameNode', {
         serverId,
@@ -438,7 +424,6 @@ export const backendRpc = {
       nodeId: string,
       permanent = false
     ): Promise<{ success: boolean }> {
-      // eslint-disable-next-line no-console
       console.log('🗑️ Deleting node:', { serverId, nodeId, permanent });
       return rpc<{ success: boolean }>('backend.repository.deleteNode', {
         serverId,
@@ -454,7 +439,6 @@ export const backendRpc = {
       serverId: number,
       nodeId: string
     ): Promise<{ nodeData: AlfrescoNodeDetails }> {
-      // eslint-disable-next-line no-console
       console.log('📄 Fetching node details:', { serverId, nodeId });
       return rpc<{ nodeData: AlfrescoNodeDetails }>('backend.repository.getNodeDetails', {
         serverId,
@@ -466,7 +450,6 @@ export const backendRpc = {
      * Fetch slingshot children for a node without full metadata payload
      */
     async getSlingshotChildren(serverId: number, nodeId: string): Promise<{ children: any[] }> {
-      // eslint-disable-next-line no-console
       console.log('🌲 Fetching slingshot children:', { serverId, nodeId });
       return rpc<{ children: any[] }>('backend.repository.getSlingshotChildren', {
         serverId,
@@ -481,7 +464,6 @@ export const backendRpc = {
       systemNodeId: string;
       children: any[];
     }> {
-      // eslint-disable-next-line no-console
       console.log('🌳 Fetching system tree root:', { serverId });
       return rpc<{ systemNodeId: string; children: any[] }>(
         'backend.repository.getSystemTreeRoot',
@@ -497,7 +479,6 @@ export const backendRpc = {
       nodeId: string,
       property: string = 'cm:content'
     ): Promise<{ buffer: { type: 'Buffer'; data: number[] }; contentType: string }> {
-      // eslint-disable-next-line no-console
       console.log('📥 Downloading content via slingshot:', { serverId, nodeId, property });
       return rpc<{ buffer: { type: 'Buffer'; data: number[] }; contentType: string }>(
         'backend.repository.getSlingshotContent',
@@ -515,7 +496,6 @@ export const backendRpc = {
    * Call this after mutations to keep UI in sync
    */
   async refreshCache(): Promise<void> {
-    // eslint-disable-next-line no-console
     console.log('🔄 Refreshing local cache...');
     // This could trigger a workspace reload or emit events for state management
     // For now, it's a placeholder that can be extended

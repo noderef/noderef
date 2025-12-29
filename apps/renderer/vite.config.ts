@@ -65,6 +65,7 @@ export default defineConfig(({ command }) => ({
         const neutralinoPublicDest = path.resolve(__dirname, './public/neutralino.js');
         try {
           copyFileSync(neutralinoSrc, neutralinoPublicDest);
+          // eslint-disable-next-line no-console
           console.log('✓ Copied neutralino.js to public/ for dev server');
         } catch (err) {
           console.warn('⚠ Failed to copy neutralino.js to public:', err);
@@ -89,6 +90,7 @@ export default defineConfig(({ command }) => ({
         const neutralinoDest = path.resolve(__dirname, '../../resources/neutralino.js');
         try {
           copyFileSync(neutralinoSrc, neutralinoDest);
+          // eslint-disable-next-line no-console
           console.log('✓ Copied neutralino.js to resources/');
         } catch (err) {
           console.warn('⚠ Failed to copy neutralino.js:', err);

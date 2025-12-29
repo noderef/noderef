@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+/* eslint-disable no-console */
 // Frontend RPC client for local HTTP backend
 import { events, os } from '@neutralinojs/lib';
 import {

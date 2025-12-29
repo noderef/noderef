@@ -256,7 +256,6 @@ function JsConsolePage() {
         type: 'log',
         content: `AI is generating code for: "${command.question}"`,
       });
-      console.debug('[AI] Executing command', { question: command.question });
 
       try {
         const selectionText = getSelectionText();

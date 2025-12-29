@@ -159,11 +159,7 @@ export const useSearchStore = create<SearchState & SearchActions>()(
                   skipCount: 0,
                 }
               );
-              console.debug(
-                '[SearchStore] executeSearch pagination',
-                server.name,
-                response.pagination
-              );
+              // Debug: executeSearch pagination
               return { server, response };
             })
           );
@@ -253,7 +249,7 @@ export const useSearchStore = create<SearchState & SearchActions>()(
                   skipCount,
                 }
               );
-              console.debug('[SearchStore] loadMore pagination', meta.name, response.pagination);
+              // Debug: loadMore pagination
               return {
                 server: { id: meta.serverId, baseUrl: meta.baseUrl, name: meta.name },
                 response,

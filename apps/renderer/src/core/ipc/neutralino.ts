@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+/* eslint-disable no-console */
 // Shared Neutralino initialization and utilities
 import {
   app,

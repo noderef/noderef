@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+/* eslint-disable no-console */
+
 import * as monaco from 'monaco-editor';
 import { alfrescoRpc } from '../ipc/alfresco';
 import { convertTernToTs } from './tern-converter';

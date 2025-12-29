@@ -69,12 +69,16 @@ export function registerServersHandlers(routes: Routes, ctx: RpcContext): void {
     }),
     handler: async params => {
       const userId = await getCurrentUserId();
-      const data = params as Omit<CreateServer, 'userId'>;
+      const data = params as Omit<CreateServer, 'userId'> & { tokenExpiry?: string | Date | null };
       // Convert tokenExpiry string to Date if provided
-      if (data.tokenExpiry && typeof data.tokenExpiry === 'string') {
-        (data as any).tokenExpiry = new Date(data.tokenExpiry);
-      }
-      return serverService.create(userId, data);
+      const processedData: Omit<CreateServer, 'userId'> = {
+        ...data,
+        tokenExpiry:
+          data.tokenExpiry && typeof data.tokenExpiry === 'string'
+            ? new Date(data.tokenExpiry)
+            : (data.tokenExpiry as Date | null | undefined),
+      };
+      return serverService.create(userId, processedData);
     },
   };
 
@@ -101,11 +105,17 @@ export function registerServersHandlers(routes: Routes, ctx: RpcContext): void {
     }),
     handler: async params => {
       const userId = await getCurrentUserId();
-      const { id, ...data } = params as { id: number } & UpdateServer;
+      const { id, ...rawData } = params as { id: number } & UpdateServer & {
+          tokenExpiry?: string | Date | null;
+        };
       // Convert tokenExpiry string to Date if provided
-      if (data.tokenExpiry && typeof data.tokenExpiry === 'string') {
-        (data as any).tokenExpiry = new Date(data.tokenExpiry);
-      }
+      const data: UpdateServer = {
+        ...rawData,
+        tokenExpiry:
+          rawData.tokenExpiry && typeof rawData.tokenExpiry === 'string'
+            ? new Date(rawData.tokenExpiry)
+            : (rawData.tokenExpiry as Date | null | undefined),
+      };
       return serverService.update(userId, id, data);
     },
   };

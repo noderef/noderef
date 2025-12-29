@@ -67,6 +67,7 @@ export function ReauthModal() {
   const [password, setPassword] = useState('');
   const pollingIntervalRef = useRef<number | null>(null);
   const popupCheckIntervalRef = useRef<number | null>(null);
+  const authTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const updateServer = useServersStore(state => state.updateServer);
 
   const modalPayload = payload as ReauthModalPayload | undefined;
@@ -83,6 +84,9 @@ export function ReauthModal() {
       }
       if (popupCheckIntervalRef.current) {
         clearInterval(popupCheckIntervalRef.current);
+      }
+      if (authTimeoutRef.current) {
+        clearTimeout(authTimeoutRef.current);
       }
     };
   }, []);
@@ -362,7 +366,9 @@ export function ReauthModal() {
               }, 1500);
             } catch (exchangeError) {
               console.error('Token exchange error:', exchangeError);
-              clearInterval(pollInterval);
+              if (pollInterval) {
+                clearInterval(pollInterval);
+              }
               pollingIntervalRef.current = null;
               setAuthenticating(false);
 
@@ -406,7 +412,7 @@ export function ReauthModal() {
       }
 
       // Authentication timeout
-      setTimeout(() => {
+      const authTimeout = setTimeout(() => {
         if (pollingIntervalRef.current) {
           clearInterval(pollingIntervalRef.current);
           pollingIntervalRef.current = null;
@@ -424,6 +430,7 @@ export function ReauthModal() {
           });
         }
       }, OIDC_AUTH_TIMEOUT);
+      authTimeoutRef.current = authTimeout;
     } catch (error) {
       console.error('Re-authentication error:', error);
       setAuthenticating(false);

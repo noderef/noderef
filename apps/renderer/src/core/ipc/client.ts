@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+/* eslint-disable no-console */
+
 import { events } from '@neutralinojs/lib';
 import { ensureNeutralinoReady, getDataDir } from './neutralino';
 

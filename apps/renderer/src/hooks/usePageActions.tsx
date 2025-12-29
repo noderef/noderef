@@ -227,7 +227,7 @@ export function usePageActions(options: UsePageActionsOptions) {
         setJsConsoleCode('');
       },
       onConsoleSettings: () => {
-        console.log('Console settings - to be implemented');
+        // Console settings - to be implemented
         // TODO: Open settings modal
       },
       onSetDocument: () => {
@@ -251,7 +251,7 @@ export function usePageActions(options: UsePageActionsOptions) {
         clearDocumentContext();
       },
       onHelp: () => {
-        console.log('Help clicked');
+        // Help clicked
         // TODO: Open help/documentation
       },
       onTextEditorToggleWrap: () => {

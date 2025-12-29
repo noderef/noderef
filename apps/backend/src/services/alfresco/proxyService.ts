@@ -110,7 +110,6 @@ export async function callMethod(
     const apiInstance = new ApiClass(api);
 
     // Get the method from the API instance
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const apiMethod = (apiInstance as any)[method];
     if (typeof apiMethod !== 'function') {
       throw new Error(`Method "${method}" not found on ${namespace} API`);
@@ -121,7 +120,6 @@ export async function callMethod(
     let result: unknown;
     if (Array.isArray(args)) {
       // Positional arguments: spread the array
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       result = await apiMethod.apply(apiInstance, args as any[]);
     } else if (args !== undefined && args !== null) {
       // Object arguments: pass as single argument
