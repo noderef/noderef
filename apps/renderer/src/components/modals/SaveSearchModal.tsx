@@ -20,7 +20,7 @@ import { MODAL_KEYS } from '@/core/store/keys';
 import { useSavedSearchesStore } from '@/core/store/savedSearches';
 import { useSearchStore } from '@/core/store/search';
 import { useServersStore } from '@/core/store/servers';
-import { readClipboardText, writeClipboardText } from '@/core/utils/clipboard';
+import { useDesktopClipboardHandlers } from '@/hooks/useDesktopClipboardHandlers';
 import { useModal } from '@/hooks/useModal';
 import { useActiveServerId } from '@/hooks/useNavigation';
 import { useSearchDictionary } from '@/hooks/useSearchDictionary';
@@ -40,7 +40,7 @@ import {
   useCombobox,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 type SaveSearchPayload = {
@@ -120,6 +120,57 @@ export function SaveSearchModal() {
     () => typeof window !== 'undefined' && isNeutralinoMode() && !!(window as any).Neutralino,
     []
   );
+  const handleInsertText = useCallback(
+    (editableTarget: HTMLInputElement | HTMLTextAreaElement | HTMLElement, text: string) => {
+      // Identify the field using data-field attribute
+      const fieldName = editableTarget.getAttribute('data-field') || '';
+
+      // For query field (textarea), use native insertText command to preserve quotes exactly
+      if (fieldName === 'query' && editableTarget instanceof HTMLTextAreaElement) {
+        if (document.activeElement !== editableTarget) {
+          editableTarget.focus();
+        }
+        document.execCommand('insertText', false, text);
+        setTimeout(() => {
+          setQuery(editableTarget.value);
+        }, 0);
+        return;
+      }
+
+      if (
+        editableTarget instanceof HTMLInputElement ||
+        editableTarget instanceof HTMLTextAreaElement
+      ) {
+        const { selectionStart, selectionEnd, value } = editableTarget;
+        const start = selectionStart ?? value.length;
+        const end = selectionEnd ?? value.length;
+        const newValue = value.slice(0, start) + text + value.slice(end);
+        const cursorPos = start + text.length;
+
+        switch (fieldName) {
+          case 'name':
+            setName(newValue);
+            break;
+        }
+
+        setTimeout(() => {
+          if (document.activeElement === editableTarget) {
+            editableTarget.setSelectionRange(cursorPos, cursorPos);
+          }
+        }, 0);
+      } else if (editableTarget.isContentEditable) {
+        document.execCommand('insertText', false, text);
+      }
+    },
+    [setName, setQuery]
+  );
+
+  useDesktopClipboardHandlers({
+    isEnabled: isOpen && isDesktopMode,
+    containerRef: modalContentRef,
+    onInsertText: handleInsertText,
+    enableCopyCut: true,
+  });
 
   useEffect(() => {
     if (!isOpen) {
@@ -231,218 +282,6 @@ export function SaveSearchModal() {
     propertiesCacheRef.current = {};
     setCurrentProperties([]);
   }, [serverId]);
-
-  // In browser mode, native paste behavior works correctly without custom handlers
-  useEffect(() => {
-    if (!isOpen || !isDesktopMode) {
-      return;
-    }
-    const getEditableTarget = (
-      target: EventTarget | null
-    ): HTMLInputElement | HTMLTextAreaElement | HTMLElement | null => {
-      if (!target) return null;
-      let node: HTMLElement | null = null;
-      if (target instanceof HTMLElement) {
-        node = target;
-      } else if (target instanceof Node && target.parentElement) {
-        node = target.parentElement;
-      }
-      while (node) {
-        if (
-          node instanceof HTMLInputElement ||
-          node instanceof HTMLTextAreaElement ||
-          node.isContentEditable
-        ) {
-          return node;
-        }
-        node = node.parentElement;
-      }
-      return null;
-    };
-
-    // Use a processing flag to prevent concurrent paste operations
-    let isProcessingPaste = false;
-
-    const getSelectedText = (editableTarget: HTMLInputElement | HTMLTextAreaElement): string => {
-      const { selectionStart, selectionEnd, value } = editableTarget;
-      if (selectionStart === null || selectionEnd === null) return '';
-      if (selectionStart === selectionEnd) return '';
-      return value.slice(selectionStart, selectionEnd);
-    };
-
-    const insertText = (
-      editableTarget: HTMLInputElement | HTMLTextAreaElement | HTMLElement,
-      text: string
-    ) => {
-      // Identify the field using data-field attribute
-      const fieldName = editableTarget.getAttribute('data-field') || '';
-
-      // For query field (textarea), use native insertText command to preserve quotes exactly
-      if (fieldName === 'query' && editableTarget instanceof HTMLTextAreaElement) {
-        // Focus the textarea if not already focused
-        if (document.activeElement !== editableTarget) {
-          editableTarget.focus();
-        }
-        // Use native insertText command which preserves text exactly without transformations
-        document.execCommand('insertText', false, text);
-        // Update React state to keep it in sync with the actual value
-        setTimeout(() => {
-          setQuery(editableTarget.value);
-        }, 0);
-        return;
-      }
-
-      if (
-        editableTarget instanceof HTMLInputElement ||
-        editableTarget instanceof HTMLTextAreaElement
-      ) {
-        const { selectionStart, selectionEnd, value } = editableTarget;
-        const start = selectionStart ?? value.length;
-        const end = selectionEnd ?? value.length;
-        const newValue = value.slice(0, start) + text + value.slice(end);
-        const cursorPos = start + text.length;
-
-        // For other fields, update React state normally
-        switch (fieldName) {
-          case 'name':
-            setName(newValue);
-            break;
-        }
-
-        // Update cursor position after React updates the DOM
-        setTimeout(() => {
-          if (document.activeElement === editableTarget) {
-            editableTarget.setSelectionRange(cursorPos, cursorPos);
-          }
-        }, 0);
-      } else if (editableTarget.isContentEditable) {
-        document.execCommand('insertText', false, text);
-      }
-    };
-
-    const handlePaste = async (event: ClipboardEvent) => {
-      // If already processing a paste, immediately block this one
-      if (isProcessingPaste) {
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
-
-      const container = modalContentRef.current;
-      if (!container) return;
-      const editableTarget = getEditableTarget(event.target);
-      if (!editableTarget) return;
-      if (!container.contains(editableTarget)) return;
-
-      // Prevent default BEFORE async operations
-      event.preventDefault();
-      event.stopPropagation();
-
-      // Set flag immediately to block concurrent operations
-      isProcessingPaste = true;
-
-      try {
-        const text = await readClipboardText(event);
-        if (text) {
-          insertText(editableTarget, text);
-        }
-      } finally {
-        // Clear flag after a short delay to prevent rapid duplicate events
-        setTimeout(() => {
-          isProcessingPaste = false;
-        }, 50);
-      }
-    };
-
-    const handleCopy = async (event: ClipboardEvent) => {
-      const container = modalContentRef.current;
-      if (!container) return;
-      const editableTarget = getEditableTarget(event.target);
-      if (!editableTarget) return;
-      if (!container.contains(editableTarget)) return;
-
-      if (
-        editableTarget instanceof HTMLInputElement ||
-        editableTarget instanceof HTMLTextAreaElement
-      ) {
-        const selectedText = getSelectedText(editableTarget);
-        if (selectedText) {
-          await writeClipboardText(selectedText, event);
-        }
-      }
-    };
-
-    const handleKeyDown = async (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey)) return;
-
-      const container = modalContentRef.current;
-      if (!container) return;
-      const editableTarget = getEditableTarget(event.target);
-      if (!editableTarget || !container.contains(editableTarget)) {
-        return;
-      }
-
-      const key = event.key.toLowerCase();
-
-      // Handle Ctrl+X (cut) or Ctrl+C (copy)
-      if (key === 'x' || key === 'c') {
-        if (
-          editableTarget instanceof HTMLInputElement ||
-          editableTarget instanceof HTMLTextAreaElement
-        ) {
-          const selectedText = getSelectedText(editableTarget);
-          if (selectedText) {
-            event.preventDefault();
-            event.stopPropagation();
-            const success = await writeClipboardText(selectedText);
-            if (success && key === 'x') {
-              insertText(editableTarget, '');
-            }
-          }
-        }
-        return;
-      }
-
-      // Handle Ctrl+V / Cmd+V (paste)
-      if (key !== 'v') return;
-
-      // If already processing a paste, immediately block this one
-      if (isProcessingPaste) {
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
-
-      // Prevent default BEFORE async operations
-      event.preventDefault();
-      event.stopPropagation();
-
-      // Set flag immediately to block concurrent operations
-      isProcessingPaste = true;
-
-      try {
-        const text = await readClipboardText();
-        if (text) {
-          insertText(editableTarget, text);
-        }
-      } finally {
-        // Clear flag after a short delay to prevent rapid duplicate events
-        setTimeout(() => {
-          isProcessingPaste = false;
-        }, 50);
-      }
-    };
-
-    window.addEventListener('paste', handlePaste, true);
-    window.addEventListener('copy', handleCopy, true);
-    window.addEventListener('keydown', handleKeyDown, true);
-
-    return () => {
-      window.removeEventListener('paste', handlePaste, true);
-      window.removeEventListener('copy', handleCopy, true);
-      window.removeEventListener('keydown', handleKeyDown, true);
-    };
-  }, [isOpen, isDesktopMode]);
 
   useEffect(() => {
     if (!serverId || !baseUrl || !propertyPrefix) {

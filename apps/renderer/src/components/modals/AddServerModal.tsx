@@ -16,11 +16,12 @@
 
 import { alfrescoRpc } from '@/core/ipc/alfresco';
 import { backendRpc, refreshWorkspace } from '@/core/ipc/backend';
-import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
+import { isNeutralinoMode } from '@/core/ipc/neutralino';
 import { getRpcBaseUrl } from '@/core/ipc/rpc';
 import type { ServerType } from '@/core/store/keys';
 import { MODAL_KEYS } from '@/core/store/keys';
 import { useServersStore } from '@/core/store/servers';
+import { useDesktopClipboardHandlers } from '@/hooks/useDesktopClipboardHandlers';
 import { useModal } from '@/hooks/useModal';
 import { useNavigation } from '@/hooks/useNavigation';
 import {
@@ -45,9 +46,9 @@ import {
   useMantineTheme,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { clipboard, os } from '@neutralinojs/lib';
+import { os } from '@neutralinojs/lib';
 import { IconAlertCircle, IconChevronRight, IconInfoCircle, IconServer } from '@tabler/icons-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 type AddServerStep = 'select-type' | 'configure';
@@ -93,117 +94,8 @@ export function AddServerModal() {
     () => typeof window !== 'undefined' && isNeutralinoMode() && !!(window as any).Neutralino,
     []
   );
-
-  // Reset form when modal closes
-  useEffect(() => {
-    if (!isOpen) {
-      setStep('select-type');
-      setServerType('');
-      setAuthType('basic');
-      setName('');
-      setBaseUrl('');
-      setUsername('');
-      setPassword('');
-      setCredentialsValidating(false);
-      setCredentialsValid(false);
-      setIsAdmin(false);
-      setValidationError(null);
-      setOidcHost('');
-      setOidcRealm('');
-      setOidcClientId('');
-      setOidcAuthenticated(false);
-      setOidcAuthenticating(false);
-      setOidcTokens(null);
-      setLoading(false);
-    }
-  }, [isOpen]);
-
-  // Track previous OIDC config values to detect actual changes
-  const prevOidcConfig = useRef({ authType, oidcHost, oidcRealm, oidcClientId });
-
-  // Reset OIDC authentication when auth type or OIDC fields actually change
-  // Note: baseUrl is intentionally excluded - changing Alfresco URL doesn't invalidate OIDC auth
-  useEffect(() => {
-    const prev = prevOidcConfig.current;
-    const configChanged =
-      prev.authType !== authType ||
-      prev.oidcHost !== oidcHost ||
-      prev.oidcRealm !== oidcRealm ||
-      prev.oidcClientId !== oidcClientId;
-
-    // Only reset if configuration actually changed (not just re-rendered)
-    if (configChanged && oidcAuthenticated) {
-      setOidcAuthenticated(false);
-      setOidcTokens(null);
-    }
-
-    // Update the ref for next comparison
-    prevOidcConfig.current = { authType, oidcHost, oidcRealm, oidcClientId };
-  }, [authType, oidcHost, oidcRealm, oidcClientId, oidcAuthenticated]);
-
-  // Custom paste handling for desktop mode to prevent duplicate pastes on Windows
-  // In browser mode, native paste behavior works correctly without custom handlers
-  useEffect(() => {
-    if (!isOpen || !isDesktopMode) {
-      return;
-    }
-    const getEditableTarget = (
-      target: EventTarget | null
-    ): HTMLInputElement | HTMLTextAreaElement | HTMLElement | null => {
-      if (!target) return null;
-      let node: HTMLElement | null = null;
-      if (target instanceof HTMLElement) {
-        node = target;
-      } else if (target instanceof Node && target.parentElement) {
-        node = target.parentElement;
-      }
-      while (node) {
-        if (
-          node instanceof HTMLInputElement ||
-          node instanceof HTMLTextAreaElement ||
-          node.isContentEditable
-        ) {
-          return node;
-        }
-        node = node.parentElement;
-      }
-      return null;
-    };
-
-    // Use a processing flag to prevent concurrent paste operations
-    let isProcessingPaste = false;
-
-    const readClipboardText = async (event?: ClipboardEvent): Promise<string | null> => {
-      const clipboardData = event?.clipboardData || (window as any).clipboardData;
-      const textFromEvent = clipboardData?.getData?.('text/plain');
-      if (textFromEvent) return textFromEvent;
-
-      if (isDesktopMode) {
-        try {
-          await ensureNeutralinoReady();
-          const neutralinoText = await clipboard.readText();
-          if (neutralinoText) return neutralinoText;
-        } catch (error) {
-          console.error('Neutralino clipboard read failed:', error);
-        }
-      }
-
-      if (navigator.clipboard?.readText) {
-        try {
-          const navigatorText = await navigator.clipboard.readText();
-          if (navigatorText) return navigatorText;
-        } catch {
-          // Ignore
-        }
-      }
-
-      return null;
-    };
-
-    const insertText = (
-      editableTarget: HTMLInputElement | HTMLTextAreaElement | HTMLElement,
-      text: string
-    ) => {
+  const handleInsertText = useCallback(
+    (editableTarget: HTMLInputElement | HTMLTextAreaElement | HTMLElement, text: string) => {
       if (
         editableTarget instanceof HTMLInputElement ||
         editableTarget instanceof HTMLTextAreaElement
@@ -251,88 +143,62 @@ export function AddServerModal() {
       } else if (editableTarget.isContentEditable) {
         document.execCommand('insertText', false, text);
       }
-    };
+    },
+    [setName, setBaseUrl, setUsername, setPassword, setOidcHost, setOidcRealm, setOidcClientId]
+  );
 
-    const handlePaste = async (event: ClipboardEvent) => {
-      // If already processing a paste, immediately block this one
-      if (isProcessingPaste) {
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
+  useDesktopClipboardHandlers({
+    isEnabled: isOpen && isDesktopMode,
+    containerRef: modalContentRef,
+    onInsertText: handleInsertText,
+  });
 
-      const container = modalContentRef.current;
-      if (!container) return;
-      const editableTarget = getEditableTarget(event.target);
-      if (!editableTarget) return;
-      if (!container.contains(editableTarget)) return;
+  // Reset form when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setStep('select-type');
+      setServerType('');
+      setAuthType('basic');
+      setName('');
+      setBaseUrl('');
+      setUsername('');
+      setPassword('');
+      setCredentialsValidating(false);
+      setCredentialsValid(false);
+      setIsAdmin(false);
+      setValidationError(null);
+      setOidcHost('');
+      setOidcRealm('');
+      setOidcClientId('');
+      setOidcAuthenticated(false);
+      setOidcAuthenticating(false);
+      setOidcTokens(null);
+      setLoading(false);
+    }
+  }, [isOpen]);
 
-      // Prevent default BEFORE async operations
-      event.preventDefault();
-      event.stopPropagation();
+  // Track previous OIDC config values to detect actual changes
+  const prevOidcConfig = useRef({ authType, oidcHost, oidcRealm, oidcClientId });
 
-      // Set flag immediately to block concurrent operations
-      isProcessingPaste = true;
+  // Reset OIDC authentication when auth type or OIDC fields actually change
+  // Note: baseUrl is intentionally excluded - changing Alfresco URL doesn't invalidate OIDC auth
+  useEffect(() => {
+    const prev = prevOidcConfig.current;
+    const configChanged =
+      prev.authType !== authType ||
+      prev.oidcHost !== oidcHost ||
+      prev.oidcRealm !== oidcRealm ||
+      prev.oidcClientId !== oidcClientId;
 
-      try {
-        const text = await readClipboardText(event);
-        if (text) {
-          insertText(editableTarget, text);
-        }
-      } finally {
-        // Clear flag after a short delay to prevent rapid duplicate events
-        setTimeout(() => {
-          isProcessingPaste = false;
-        }, 50);
-      }
-    };
+    // Only reset if configuration actually changed (not just re-rendered)
+    if (configChanged && oidcAuthenticated) {
+      setOidcAuthenticated(false);
+      setOidcTokens(null);
+    }
 
-    const handleKeyDown = async (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey)) return;
-      if (event.key.toLowerCase() !== 'v') return;
-
-      // If already processing a paste, immediately block this one
-      if (isProcessingPaste) {
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
-
-      const container = modalContentRef.current;
-      if (!container) return;
-      const editableTarget = getEditableTarget(event.target);
-      if (!editableTarget || !container.contains(editableTarget)) {
-        return;
-      }
-
-      // Prevent default BEFORE async operations
-      event.preventDefault();
-      event.stopPropagation();
-
-      // Set flag immediately to block concurrent operations
-      isProcessingPaste = true;
-
-      try {
-        const text = await readClipboardText();
-        if (text) {
-          insertText(editableTarget, text);
-        }
-      } finally {
-        // Clear flag after a short delay to prevent rapid duplicate events
-        setTimeout(() => {
-          isProcessingPaste = false;
-        }, 50);
-      }
-    };
-
-    window.addEventListener('paste', handlePaste, true);
-    window.addEventListener('keydown', handleKeyDown, true);
-
-    return () => {
-      window.removeEventListener('paste', handlePaste, true);
-      window.removeEventListener('keydown', handleKeyDown, true);
-    };
-  }, [isOpen, isDesktopMode]);
+    // Update the ref for next comparison
+    prevOidcConfig.current = { authType, oidcHost, oidcRealm, oidcClientId };
+  }, [authType, oidcHost, oidcRealm, oidcClientId, oidcAuthenticated]);
 
   // Validate Basic Auth credentials with debouncing
   useEffect(() => {

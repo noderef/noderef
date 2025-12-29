@@ -18,6 +18,7 @@ import { getAiSettings, listAiModels, saveAiSettings } from '@/core/ipc/aiSettin
 import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
 import { MODAL_KEYS } from '@/core/store/keys';
 import { useUIStore } from '@/core/store/ui';
+import { useDesktopClipboardHandlers } from '@/hooks/useDesktopClipboardHandlers';
 import { useModal } from '@/hooks/useModal';
 import {
   ActionIcon,
@@ -41,7 +42,7 @@ import {
   useMantineColorScheme,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { clipboard, os } from '@neutralinojs/lib';
+import { os } from '@neutralinojs/lib';
 import {
   IconBrandGithub,
   IconBrandX,
@@ -98,6 +99,47 @@ export function SettingsModal() {
     () => typeof window !== 'undefined' && isNeutralinoMode() && !!(window as any).Neutralino,
     []
   );
+  const handleInsertText = useCallback(
+    (editableTarget: HTMLInputElement | HTMLTextAreaElement | HTMLElement, text: string) => {
+      if (
+        editableTarget instanceof HTMLInputElement ||
+        editableTarget instanceof HTMLTextAreaElement
+      ) {
+        const { selectionStart, selectionEnd, value } = editableTarget;
+        const start = selectionStart ?? value.length;
+        const end = selectionEnd ?? value.length;
+        const newValue = value.slice(0, start) + text + value.slice(end);
+        const cursorPos = start + text.length;
+
+        // Identify the field using data-field attribute and update React state
+        const fieldName = editableTarget.getAttribute('data-field') || '';
+
+        if (fieldName === 'aiToken') {
+          setAiTokenInput(newValue);
+          if (newValue.trim().length > 0) {
+            setAiTokenValid(false);
+            setAiTokenError(null);
+          }
+        }
+
+        // Update cursor position after React updates the DOM
+        setTimeout(() => {
+          if (document.activeElement === editableTarget) {
+            editableTarget.setSelectionRange(cursorPos, cursorPos);
+          }
+        }, 0);
+      } else if (editableTarget.isContentEditable) {
+        document.execCommand('insertText', false, text);
+      }
+    },
+    [setAiTokenInput, setAiTokenValid, setAiTokenError]
+  );
+
+  useDesktopClipboardHandlers({
+    isEnabled: isOpen && isDesktopMode,
+    containerRef: modalContentRef,
+    onInsertText: handleInsertText,
+  });
 
   const currentVersion = getCurrentVersion();
   const checkForUpdates = useUpdateStore(state => state.checkForUpdates);
@@ -178,183 +220,6 @@ export function SettingsModal() {
     }
     window.open(url, '_blank', 'noreferrer');
   }, []);
-
-  // Custom paste handling for desktop mode to prevent duplicate pastes on Windows
-  // and enable paste functionality on Mac
-  useEffect(() => {
-    if (!isOpen || !isDesktopMode) {
-      return;
-    }
-
-    const getEditableTarget = (
-      target: EventTarget | null
-    ): HTMLInputElement | HTMLTextAreaElement | HTMLElement | null => {
-      if (!target) return null;
-      let node: HTMLElement | null = null;
-      if (target instanceof HTMLElement) {
-        node = target;
-      } else if (target instanceof Node && target.parentElement) {
-        node = target.parentElement;
-      }
-      while (node) {
-        if (
-          node instanceof HTMLInputElement ||
-          node instanceof HTMLTextAreaElement ||
-          node.isContentEditable
-        ) {
-          return node;
-        }
-        node = node.parentElement;
-      }
-      return null;
-    };
-
-    // Use a processing flag to prevent concurrent paste operations
-    let isProcessingPaste = false;
-
-    const readClipboardText = async (event?: ClipboardEvent): Promise<string | null> => {
-      const clipboardData = event?.clipboardData || (window as any).clipboardData;
-      const textFromEvent = clipboardData?.getData?.('text/plain');
-      if (textFromEvent) return textFromEvent;
-
-      if (isDesktopMode) {
-        try {
-          await ensureNeutralinoReady();
-          const neutralinoText = await clipboard.readText();
-          if (neutralinoText) return neutralinoText;
-        } catch (error) {
-          console.error('Neutralino clipboard read failed:', error);
-        }
-      }
-
-      if (navigator.clipboard?.readText) {
-        try {
-          const navigatorText = await navigator.clipboard.readText();
-          if (navigatorText) return navigatorText;
-        } catch {
-          // Ignore
-        }
-      }
-
-      return null;
-    };
-
-    const insertText = (
-      editableTarget: HTMLInputElement | HTMLTextAreaElement | HTMLElement,
-      text: string
-    ) => {
-      if (
-        editableTarget instanceof HTMLInputElement ||
-        editableTarget instanceof HTMLTextAreaElement
-      ) {
-        const { selectionStart, selectionEnd, value } = editableTarget;
-        const start = selectionStart ?? value.length;
-        const end = selectionEnd ?? value.length;
-        const newValue = value.slice(0, start) + text + value.slice(end);
-        const cursorPos = start + text.length;
-
-        // Identify the field using data-field attribute and update React state
-        const fieldName = editableTarget.getAttribute('data-field') || '';
-
-        if (fieldName === 'aiToken') {
-          setAiTokenInput(newValue);
-          if (newValue.trim().length > 0) {
-            setAiTokenValid(false);
-            setAiTokenError(null);
-          }
-        }
-
-        // Update cursor position after React updates the DOM
-        setTimeout(() => {
-          if (document.activeElement === editableTarget) {
-            editableTarget.setSelectionRange(cursorPos, cursorPos);
-          }
-        }, 0);
-      } else if (editableTarget.isContentEditable) {
-        document.execCommand('insertText', false, text);
-      }
-    };
-
-    const handlePaste = async (event: ClipboardEvent) => {
-      // If already processing a paste, immediately block this one
-      if (isProcessingPaste) {
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
-
-      const container = modalContentRef.current;
-      if (!container) return;
-      const editableTarget = getEditableTarget(event.target);
-      if (!editableTarget) return;
-      if (!container.contains(editableTarget)) return;
-
-      // Prevent default BEFORE async operations
-      event.preventDefault();
-      event.stopPropagation();
-
-      // Set flag immediately to block concurrent operations
-      isProcessingPaste = true;
-
-      try {
-        const text = await readClipboardText(event);
-        if (text) {
-          insertText(editableTarget, text);
-        }
-      } finally {
-        // Clear flag after a short delay to prevent rapid duplicate events
-        setTimeout(() => {
-          isProcessingPaste = false;
-        }, 50);
-      }
-    };
-
-    const handleKeyDown = async (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey)) return;
-      if (event.key.toLowerCase() !== 'v') return;
-
-      // If already processing a paste, immediately block this one
-      if (isProcessingPaste) {
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
-
-      const container = modalContentRef.current;
-      if (!container) return;
-      const editableTarget = getEditableTarget(event.target);
-      if (!editableTarget || !container.contains(editableTarget)) {
-        return;
-      }
-
-      // Prevent default BEFORE async operations
-      event.preventDefault();
-      event.stopPropagation();
-
-      // Set flag immediately to block concurrent operations
-      isProcessingPaste = true;
-
-      try {
-        const text = await readClipboardText();
-        if (text) {
-          insertText(editableTarget, text);
-        }
-      } finally {
-        // Clear flag after a short delay to prevent rapid duplicate events
-        setTimeout(() => {
-          isProcessingPaste = false;
-        }, 50);
-      }
-    };
-
-    window.addEventListener('paste', handlePaste, true);
-    window.addEventListener('keydown', handleKeyDown, true);
-
-    return () => {
-      window.removeEventListener('paste', handlePaste, true);
-      window.removeEventListener('keydown', handleKeyDown, true);
-    };
-  }, [isOpen, isDesktopMode]);
 
   const fetchAiModels = useCallback(
     async ({
