@@ -15,10 +15,12 @@
  */
 
 import { backendRpc, type SavedSearch } from '@/core/ipc/backend';
+import { isNeutralinoMode } from '@/core/ipc/neutralino';
 import { MODAL_KEYS } from '@/core/store/keys';
 import { useSavedSearchesStore } from '@/core/store/savedSearches';
 import { useSearchStore } from '@/core/store/search';
 import { useServersStore } from '@/core/store/servers';
+import { readClipboardText, writeClipboardText } from '@/core/utils/clipboard';
 import { useModal } from '@/hooks/useModal';
 import { useActiveServerId } from '@/hooks/useNavigation';
 import { useSearchDictionary } from '@/hooks/useSearchDictionary';
@@ -33,8 +35,8 @@ import {
   Stack,
   Switch,
   Text,
-  TextInput,
   Textarea,
+  TextInput,
   useCombobox,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
@@ -113,6 +115,11 @@ export function SaveSearchModal() {
   const propertiesCacheRef = useRef<Record<string, { values: string[]; timestamp: number }>>({});
   const [currentProperties, setCurrentProperties] = useState<string[]>([]);
   const [isLoadingDynamicProps, setIsLoadingDynamicProps] = useState(false);
+  const modalContentRef = useRef<HTMLDivElement | null>(null);
+  const isDesktopMode = useMemo(
+    () => typeof window !== 'undefined' && isNeutralinoMode() && !!(window as any).Neutralino,
+    []
+  );
 
   useEffect(() => {
     if (!isOpen) {
@@ -224,6 +231,218 @@ export function SaveSearchModal() {
     propertiesCacheRef.current = {};
     setCurrentProperties([]);
   }, [serverId]);
+
+  // In browser mode, native paste behavior works correctly without custom handlers
+  useEffect(() => {
+    if (!isOpen || !isDesktopMode) {
+      return;
+    }
+    const getEditableTarget = (
+      target: EventTarget | null
+    ): HTMLInputElement | HTMLTextAreaElement | HTMLElement | null => {
+      if (!target) return null;
+      let node: HTMLElement | null = null;
+      if (target instanceof HTMLElement) {
+        node = target;
+      } else if (target instanceof Node && target.parentElement) {
+        node = target.parentElement;
+      }
+      while (node) {
+        if (
+          node instanceof HTMLInputElement ||
+          node instanceof HTMLTextAreaElement ||
+          node.isContentEditable
+        ) {
+          return node;
+        }
+        node = node.parentElement;
+      }
+      return null;
+    };
+
+    // Use a processing flag to prevent concurrent paste operations
+    let isProcessingPaste = false;
+
+    const getSelectedText = (editableTarget: HTMLInputElement | HTMLTextAreaElement): string => {
+      const { selectionStart, selectionEnd, value } = editableTarget;
+      if (selectionStart === null || selectionEnd === null) return '';
+      if (selectionStart === selectionEnd) return '';
+      return value.slice(selectionStart, selectionEnd);
+    };
+
+    const insertText = (
+      editableTarget: HTMLInputElement | HTMLTextAreaElement | HTMLElement,
+      text: string
+    ) => {
+      // Identify the field using data-field attribute
+      const fieldName = editableTarget.getAttribute('data-field') || '';
+
+      // For query field (textarea), use native insertText command to preserve quotes exactly
+      if (fieldName === 'query' && editableTarget instanceof HTMLTextAreaElement) {
+        // Focus the textarea if not already focused
+        if (document.activeElement !== editableTarget) {
+          editableTarget.focus();
+        }
+        // Use native insertText command which preserves text exactly without transformations
+        document.execCommand('insertText', false, text);
+        // Update React state to keep it in sync with the actual value
+        setTimeout(() => {
+          setQuery(editableTarget.value);
+        }, 0);
+        return;
+      }
+
+      if (
+        editableTarget instanceof HTMLInputElement ||
+        editableTarget instanceof HTMLTextAreaElement
+      ) {
+        const { selectionStart, selectionEnd, value } = editableTarget;
+        const start = selectionStart ?? value.length;
+        const end = selectionEnd ?? value.length;
+        const newValue = value.slice(0, start) + text + value.slice(end);
+        const cursorPos = start + text.length;
+
+        // For other fields, update React state normally
+        switch (fieldName) {
+          case 'name':
+            setName(newValue);
+            break;
+        }
+
+        // Update cursor position after React updates the DOM
+        setTimeout(() => {
+          if (document.activeElement === editableTarget) {
+            editableTarget.setSelectionRange(cursorPos, cursorPos);
+          }
+        }, 0);
+      } else if (editableTarget.isContentEditable) {
+        document.execCommand('insertText', false, text);
+      }
+    };
+
+    const handlePaste = async (event: ClipboardEvent) => {
+      // If already processing a paste, immediately block this one
+      if (isProcessingPaste) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      const container = modalContentRef.current;
+      if (!container) return;
+      const editableTarget = getEditableTarget(event.target);
+      if (!editableTarget) return;
+      if (!container.contains(editableTarget)) return;
+
+      // Prevent default BEFORE async operations
+      event.preventDefault();
+      event.stopPropagation();
+
+      // Set flag immediately to block concurrent operations
+      isProcessingPaste = true;
+
+      try {
+        const text = await readClipboardText(event);
+        if (text) {
+          insertText(editableTarget, text);
+        }
+      } finally {
+        // Clear flag after a short delay to prevent rapid duplicate events
+        setTimeout(() => {
+          isProcessingPaste = false;
+        }, 50);
+      }
+    };
+
+    const handleCopy = async (event: ClipboardEvent) => {
+      const container = modalContentRef.current;
+      if (!container) return;
+      const editableTarget = getEditableTarget(event.target);
+      if (!editableTarget) return;
+      if (!container.contains(editableTarget)) return;
+
+      if (
+        editableTarget instanceof HTMLInputElement ||
+        editableTarget instanceof HTMLTextAreaElement
+      ) {
+        const selectedText = getSelectedText(editableTarget);
+        if (selectedText) {
+          await writeClipboardText(selectedText, event);
+        }
+      }
+    };
+
+    const handleKeyDown = async (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey)) return;
+
+      const container = modalContentRef.current;
+      if (!container) return;
+      const editableTarget = getEditableTarget(event.target);
+      if (!editableTarget || !container.contains(editableTarget)) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+
+      // Handle Ctrl+X (cut) or Ctrl+C (copy)
+      if (key === 'x' || key === 'c') {
+        if (
+          editableTarget instanceof HTMLInputElement ||
+          editableTarget instanceof HTMLTextAreaElement
+        ) {
+          const selectedText = getSelectedText(editableTarget);
+          if (selectedText) {
+            event.preventDefault();
+            event.stopPropagation();
+            const success = await writeClipboardText(selectedText);
+            if (success && key === 'x') {
+              insertText(editableTarget, '');
+            }
+          }
+        }
+        return;
+      }
+
+      // Handle Ctrl+V / Cmd+V (paste)
+      if (key !== 'v') return;
+
+      // If already processing a paste, immediately block this one
+      if (isProcessingPaste) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      // Prevent default BEFORE async operations
+      event.preventDefault();
+      event.stopPropagation();
+
+      // Set flag immediately to block concurrent operations
+      isProcessingPaste = true;
+
+      try {
+        const text = await readClipboardText();
+        if (text) {
+          insertText(editableTarget, text);
+        }
+      } finally {
+        // Clear flag after a short delay to prevent rapid duplicate events
+        setTimeout(() => {
+          isProcessingPaste = false;
+        }, 50);
+      }
+    };
+
+    window.addEventListener('paste', handlePaste, true);
+    window.addEventListener('copy', handleCopy, true);
+    window.addEventListener('keydown', handleKeyDown, true);
+
+    return () => {
+      window.removeEventListener('paste', handlePaste, true);
+      window.removeEventListener('copy', handleCopy, true);
+      window.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [isOpen, isDesktopMode]);
 
   useEffect(() => {
     if (!serverId || !baseUrl || !propertyPrefix) {
@@ -431,156 +650,164 @@ export function SaveSearchModal() {
 
   return (
     <Modal opened={isOpen} onClose={close} title={modalTitle} size="lg" centered>
-      <Stack gap="md">
-        <Text size="sm" c="dimmed">
-          {modalDescription}
-        </Text>
-
-        {isEditMode && (
-          <Switch
-            label={t('search:setAsDefault')}
-            description={t('search:setAsDefaultDescription')}
-            checked={isDefault}
-            onChange={event => setIsDefault(event.currentTarget.checked)}
-            disabled={formDisabled}
-          />
-        )}
-
-        <Select
-          label={t('search:server')}
-          placeholder={t('search:selectServer')}
-          data={serverOptions}
-          value={serverId ? serverId.toString() : null}
-          onChange={value => setServerId(value ? parseInt(value, 10) : null)}
-          searchable
-          nothingFoundMessage={t('search:noServerAvailable')}
-          disabled={formDisabled || isEditMode}
-        />
-
-        <TextInput
-          label={t('search:searchName')}
-          placeholder={t('search:searchNamePlaceholder')}
-          value={name}
-          onChange={e => setName(e.target.value)}
-          required
-          disabled={formDisabled}
-        />
-
-        <Textarea
-          label={t('search:searchQuery')}
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          minRows={4}
-          autosize
-          disabled={formDisabled}
-        />
-
-        <div>
-          <Text size="sm" fw={500} mb={4}>
-            {t('search:columns')}
+      <div ref={modalContentRef} style={{ display: 'contents' }}>
+        <Stack gap="md">
+          <Text size="sm" c="dimmed">
+            {modalDescription}
           </Text>
-          {columnsHelper && (
-            <Text size="xs" c="dimmed" mb="xs">
-              {columnsHelper}
-            </Text>
+
+          {isEditMode && (
+            <Switch
+              label={t('search:setAsDefault')}
+              description={t('search:setAsDefaultDescription')}
+              checked={isDefault}
+              onChange={event => setIsDefault(event.currentTarget.checked)}
+              disabled={formDisabled}
+            />
           )}
-          <Combobox
-            store={combobox}
-            withinPortal={false}
-            onOptionSubmit={val => {
-              handleAddColumn(val);
-              combobox.closeDropdown();
-            }}
-          >
-            <Combobox.DropdownTarget>
-              <PillsInput onClick={() => combobox.openDropdown()} disabled={formDisabled}>
-                <Pill.Group>
-                  {columns.map(column => (
-                    <Pill
-                      key={column}
-                      withRemoveButton
-                      onRemove={() => handleRemoveColumn(column)}
-                      styles={{ root: { borderRadius: '4px' } }}
-                    >
-                      {column}
-                    </Pill>
-                  ))}
-                  <Combobox.EventsTarget>
-                    <PillsInput.Field
-                      value={propertyInput}
-                      disabled={formDisabled}
-                      placeholder={
-                        loadingDictionary
-                          ? t('search:loadingPropertiesShort')
-                          : t('search:columnsPlaceholder')
-                      }
-                      onChange={event => {
-                        const value = event.currentTarget.value;
-                        const hasColon = value.includes(':');
-                        setPropertyInput(value);
-                        if (hasColon) {
-                          combobox.openDropdown();
-                        } else {
-                          combobox.closeDropdown();
+
+          <Select
+            label={t('search:server')}
+            placeholder={t('search:selectServer')}
+            data={serverOptions}
+            value={serverId ? serverId.toString() : null}
+            onChange={value => setServerId(value ? parseInt(value, 10) : null)}
+            searchable
+            nothingFoundMessage={t('search:noServerAvailable')}
+            disabled={formDisabled || isEditMode}
+          />
+
+          <TextInput
+            label={t('search:searchName')}
+            placeholder={t('search:searchNamePlaceholder')}
+            value={name}
+            onChange={e => setName(e.target.value)}
+            required
+            disabled={formDisabled}
+            data-field="name"
+          />
+
+          <Textarea
+            label={t('search:searchQuery')}
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            minRows={4}
+            autosize
+            disabled={formDisabled}
+            data-field="query"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+          />
+
+          <div>
+            <Text size="sm" fw={500} mb={4}>
+              {t('search:columns')}
+            </Text>
+            {columnsHelper && (
+              <Text size="xs" c="dimmed" mb="xs">
+                {columnsHelper}
+              </Text>
+            )}
+            <Combobox
+              store={combobox}
+              withinPortal={false}
+              onOptionSubmit={val => {
+                handleAddColumn(val);
+                combobox.closeDropdown();
+              }}
+            >
+              <Combobox.DropdownTarget>
+                <PillsInput onClick={() => combobox.openDropdown()} disabled={formDisabled}>
+                  <Pill.Group>
+                    {columns.map(column => (
+                      <Pill
+                        key={column}
+                        withRemoveButton
+                        onRemove={() => handleRemoveColumn(column)}
+                        styles={{ root: { borderRadius: '4px' } }}
+                      >
+                        {column}
+                      </Pill>
+                    ))}
+                    <Combobox.EventsTarget>
+                      <PillsInput.Field
+                        value={propertyInput}
+                        disabled={formDisabled}
+                        placeholder={
+                          loadingDictionary
+                            ? t('search:loadingPropertiesShort')
+                            : t('search:columnsPlaceholder')
                         }
-                      }}
-                      onKeyDown={event => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault();
-                          if (propertyInput.trim()) {
-                            const match = findMatchingProperty(propertyInput);
-                            if (match) {
-                              handleAddColumn(match);
-                              combobox.closeDropdown();
-                            }
+                        onChange={event => {
+                          const value = event.currentTarget.value;
+                          const hasColon = value.includes(':');
+                          setPropertyInput(value);
+                          if (hasColon) {
+                            combobox.openDropdown();
+                          } else {
+                            combobox.closeDropdown();
                           }
-                        } else if (
-                          event.key === 'Backspace' &&
-                          !propertyInput &&
-                          columns.length > 0
-                        ) {
-                          event.preventDefault();
-                          const last = columns[columns.length - 1];
-                          handleRemoveColumn(last);
-                        }
-                      }}
-                    />
-                  </Combobox.EventsTarget>
-                </Pill.Group>
-              </PillsInput>
-            </Combobox.DropdownTarget>
+                        }}
+                        onKeyDown={event => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            if (propertyInput.trim()) {
+                              const match = findMatchingProperty(propertyInput);
+                              if (match) {
+                                handleAddColumn(match);
+                                combobox.closeDropdown();
+                              }
+                            }
+                          } else if (
+                            event.key === 'Backspace' &&
+                            !propertyInput &&
+                            columns.length > 0
+                          ) {
+                            event.preventDefault();
+                            const last = columns[columns.length - 1];
+                            handleRemoveColumn(last);
+                          }
+                        }}
+                      />
+                    </Combobox.EventsTarget>
+                  </Pill.Group>
+                </PillsInput>
+              </Combobox.DropdownTarget>
 
-            <Combobox.Dropdown>
-              <Combobox.Options mah={200} style={{ overflowY: 'auto' }}>
-                {(loadingDictionary || isLoadingDynamicProps) && (
-                  <Combobox.Empty>{t('search:loadingPropertiesShort')}</Combobox.Empty>
-                )}
-                {!loadingDictionary &&
-                  !isLoadingDynamicProps &&
-                  availableProperties.length === 0 && (
-                    <Combobox.Empty>
-                      {serverId ? t('search:noProperties') : t('search:selectServerToLoadProps')}
-                    </Combobox.Empty>
+              <Combobox.Dropdown>
+                <Combobox.Options mah={200} style={{ overflowY: 'auto' }}>
+                  {(loadingDictionary || isLoadingDynamicProps) && (
+                    <Combobox.Empty>{t('search:loadingPropertiesShort')}</Combobox.Empty>
                   )}
-                {availableProperties.map(prop => (
-                  <Combobox.Option value={prop} key={prop}>
-                    {prop}
-                  </Combobox.Option>
-                ))}
-              </Combobox.Options>
-            </Combobox.Dropdown>
-          </Combobox>
-        </div>
+                  {!loadingDictionary &&
+                    !isLoadingDynamicProps &&
+                    availableProperties.length === 0 && (
+                      <Combobox.Empty>
+                        {serverId ? t('search:noProperties') : t('search:selectServerToLoadProps')}
+                      </Combobox.Empty>
+                    )}
+                  {availableProperties.map(prop => (
+                    <Combobox.Option value={prop} key={prop}>
+                      {prop}
+                    </Combobox.Option>
+                  ))}
+                </Combobox.Options>
+              </Combobox.Dropdown>
+            </Combobox>
+          </div>
 
-        <Group justify="flex-end" mt="md">
-          <Button variant="subtle" onClick={close} disabled={formDisabled}>
-            {t('common:cancel')}
-          </Button>
-          <Button onClick={handleSave} loading={saving} disabled={!canSave}>
-            {isEditMode ? t('common:save') : t('common:save')}
-          </Button>
-        </Group>
-      </Stack>
+          <Group justify="flex-end" mt="md">
+            <Button variant="subtle" onClick={close} disabled={formDisabled}>
+              {t('common:cancel')}
+            </Button>
+            <Button onClick={handleSave} loading={saving} disabled={!canSave}>
+              {isEditMode ? t('common:save') : t('common:save')}
+            </Button>
+          </Group>
+        </Stack>
+      </div>
     </Modal>
   );
 }
