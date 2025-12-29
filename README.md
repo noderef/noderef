@@ -287,7 +287,7 @@ The backend compiles to `resources/node-src/dist/server.js` and this command pro
 
 ## Changelog
 
-See [GitHub Releases](../../releases) for version history.
+See [GitHub Releases](https://github.com/noderef/noderef/releases) for version history.
 
 ## License
 
