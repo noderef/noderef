@@ -166,6 +166,19 @@ export function SettingsModal() {
     window.open(target, '_blank', 'noreferrer');
   }, [hasUpdateAvailable, latestVersion, updateDownloadUrl]);
 
+  const handleOpenUrl = useCallback(async (url: string) => {
+    if (isNeutralinoMode()) {
+      try {
+        await ensureNeutralinoReady();
+        await os.open(url);
+        return;
+      } catch (error) {
+        console.warn('Neutralino open failed, falling back to window.open', error);
+      }
+    }
+    window.open(url, '_blank', 'noreferrer');
+  }, []);
+
   // Custom paste handling for desktop mode to prevent duplicate pastes on Windows
   // and enable paste functionality on Mac
   useEffect(() => {
@@ -970,10 +983,7 @@ export function SettingsModal() {
                         <Group gap="md" justify="center" mt="sm">
                           <Tooltip label="GitHub" withArrow>
                             <ActionIcon
-                              component="a"
-                              href={t('settings:githubLink')}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                              onClick={() => handleOpenUrl(t('settings:githubLink'))}
                               variant="subtle"
                               size="lg"
                               aria-label="GitHub"
@@ -983,10 +993,7 @@ export function SettingsModal() {
                           </Tooltip>
                           <Tooltip label="X (Twitter)" withArrow>
                             <ActionIcon
-                              component="a"
-                              href={t('settings:twitterLink')}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                              onClick={() => handleOpenUrl(t('settings:twitterLink'))}
                               variant="subtle"
                               size="lg"
                               aria-label="X (Twitter)"
@@ -1020,12 +1027,10 @@ export function SettingsModal() {
                             }}
                           />
                           <Anchor
-                            href={t('settings:ootbeeGithubLink')}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                            onClick={() => handleOpenUrl(t('settings:ootbeeGithubLink'))}
                             size="sm"
                             fw={500}
-                            style={{ textAlign: 'center' }}
+                            style={{ textAlign: 'center', cursor: 'pointer' }}
                           >
                             {t('settings:ootbeeTitle')}
                           </Anchor>
