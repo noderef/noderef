@@ -40,4 +40,3 @@ export function healthHandler({ version, buildId }: HealthRouteOptions): Request
     });
   };
 }
-

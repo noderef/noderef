@@ -276,7 +276,12 @@ function handleStreamResult(result: any, res: any): void {
   }
 
   // Handle Node.js stream directly
-  if (result && typeof result === 'object' && 'pipe' in result && typeof result.pipe === 'function') {
+  if (
+    result &&
+    typeof result === 'object' &&
+    'pipe' in result &&
+    typeof result.pipe === 'function'
+  ) {
     (result as NodeJS.ReadableStream).pipe(res);
     return;
   }
@@ -392,7 +397,13 @@ export function rpcStreamHandler({ serverService, contracts }: RpcStreamOptions)
       if (method === 'nodes.getNodeContent' || method === 'nodes.getContent') {
         try {
           if (authenticatedApi && serverId !== undefined) {
-            const handled = await handleNodeContentDownload(authenticatedApi, baseUrl, args, rest, res);
+            const handled = await handleNodeContentDownload(
+              authenticatedApi,
+              baseUrl,
+              args,
+              rest,
+              res
+            );
             if (handled) return;
           }
         } catch (directHttpError) {
@@ -410,7 +421,13 @@ export function rpcStreamHandler({ serverService, contracts }: RpcStreamOptions)
         if (scriptPath?.includes('log4j-log-file')) {
           try {
             if (authenticatedApi && serverId !== undefined) {
-              const handled = await handleLogFileWebscript(authenticatedApi, baseUrl, serverId, scriptPath, res);
+              const handled = await handleLogFileWebscript(
+                authenticatedApi,
+                baseUrl,
+                serverId,
+                scriptPath,
+                res
+              );
               if (handled) return;
             }
           } catch (directHttpError) {
@@ -431,4 +448,3 @@ export function rpcStreamHandler({ serverService, contracts }: RpcStreamOptions)
     }
   };
 }
-

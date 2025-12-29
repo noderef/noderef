@@ -119,4 +119,3 @@ export function applySecurityMiddleware(app: Express): void {
   app.use('/rpc-binary', binaryRateLimiter());
   app.use('/rpc-stream', streamRateLimiter());
 }
-

@@ -39,8 +39,9 @@ export function corsMiddleware(): RequestHandler {
       // For loopback-only service, '*' is safe (no credentials used)
       res.setHeader('Access-Control-Allow-Origin', origin || '*');
     } else {
-      // Block everything else by default
-      res.setHeader('Access-Control-Allow-Origin', '*');
+      // Block everything else - don't set CORS header, let browser block it
+      // This prevents the backend from being accessed from arbitrary web origins
+      res.setHeader('Access-Control-Allow-Origin', 'null');
     }
 
     res.setHeader('Vary', 'Origin');
@@ -55,4 +56,3 @@ export function corsMiddleware(): RequestHandler {
     next();
   };
 }
-

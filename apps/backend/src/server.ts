@@ -183,7 +183,9 @@ async function initializeEncryption(): Promise<void> {
 /**
  * Initialize Prisma and set SQLite pragmas
  */
-async function initializePrisma(): Promise<ReturnType<typeof getPrismaClient> extends Promise<infer T> ? T : never> {
+async function initializePrisma(): Promise<
+  ReturnType<typeof getPrismaClient> extends Promise<infer T> ? T : never
+> {
   const prisma = await getPrismaClient();
   await prisma.$queryRawUnsafe('PRAGMA journal_mode = WAL;');
   await prisma.$queryRawUnsafe('PRAGMA foreign_keys = ON;');
@@ -328,8 +330,7 @@ async function main() {
 
   // RPC routes
   const routes: Routes = {};
-  const isNeutralino =
-    Array.isArray((globalThis as any).NL_ARGS) || process.versions?.electron === undefined;
+  const isNeutralino = Array.isArray((globalThis as any).NL_ARGS);
   const exposeDebug =
     process.env.DEBUG === '1' || process.env.EXPOSE_DEBUG === '1' || isDev || isNeutralino;
 

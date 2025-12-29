@@ -24,6 +24,35 @@ import type { RequestHandler } from 'express';
 import { log } from '../lib/logger.js';
 
 /**
+ * Escape HTML to prevent XSS
+ */
+function escapeHtml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+/**
+ * Escape JavaScript string for safe embedding in JS code
+ */
+function escapeJs(unsafe: string): string {
+  return unsafe
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .replace(/\t/g, '\\t')
+    .replace(/\f/g, '\\f')
+    .replace(/\v/g, '\\v')
+    .replace(/\0/g, '\\0')
+    .replace(/<\/script>/gi, '<\\/script>');
+}
+
+/**
  * OAuth callback route handler
  */
 export function oauthCallbackHandler(): RequestHandler {
@@ -31,6 +60,7 @@ export function oauthCallbackHandler(): RequestHandler {
     const { code, state, error, error_description } = req.query;
 
     if (error) {
+      const errorMsg = String(error_description || error || 'Unknown error');
       log.error({ error, error_description }, 'OAuth callback error');
       res.send(`
         <!DOCTYPE html>
@@ -38,11 +68,11 @@ export function oauthCallbackHandler(): RequestHandler {
           <head><title>Authentication Failed</title></head>
           <body>
             <h1>Authentication Failed</h1>
-            <p>${error_description || error}</p>
+            <p>${escapeHtml(errorMsg)}</p>
             <p>You can close this window and try again.</p>
             <script>
               // Store error in localStorage so the app can detect it
-              localStorage.setItem('oauth_error', '${error_description || error}');
+              localStorage.setItem('oauth_error', '${escapeJs(errorMsg)}');
               setTimeout(() => window.close(), 3000);
             </script>
           </body>
@@ -57,18 +87,23 @@ export function oauthCallbackHandler(): RequestHandler {
     }
 
     try {
+      // Validate and sanitize inputs
+      const authCode = String(code || '');
+      const authState = String(state || '');
+      const timestamp = Date.now();
+
       // Store the authorization code in a temporary location
       // The frontend will poll for this and exchange it for tokens
       const authData = {
-        code: code as string,
-        state: state as string,
-        timestamp: Date.now(),
+        code: authCode,
+        state: authState,
+        timestamp,
       };
 
       // Use a simple in-memory store (in production, use Redis or similar)
       (global as any).__oauth_pending_auth = authData;
 
-      log.info({ state }, 'OAuth callback received, authorization code stored');
+      log.info({ state: authState }, 'OAuth callback received, authorization code stored');
 
       // Send a success page that closes itself
       res.send(`
@@ -81,8 +116,8 @@ export function oauthCallbackHandler(): RequestHandler {
             <script>
               // Store success flag in localStorage so the app can detect it
               localStorage.setItem('oauth_success', 'true');
-              localStorage.setItem('oauth_code', '${code}');
-              localStorage.setItem('oauth_timestamp', '${Date.now()}');
+              localStorage.setItem('oauth_code', '${escapeJs(authCode)}');
+              localStorage.setItem('oauth_timestamp', '${timestamp}');
               
               // Try to close the window after a short delay
               setTimeout(() => {
@@ -102,4 +137,3 @@ export function oauthCallbackHandler(): RequestHandler {
     }
   };
 }
-

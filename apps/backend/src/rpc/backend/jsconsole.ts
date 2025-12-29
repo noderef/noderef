@@ -111,7 +111,10 @@ export function registerJsConsoleHandlers(routes: Routes, ctx: RpcContext): void
               executeResult &&
               (executeResult.scriptPerf !== undefined || executeResult.error !== undefined)
             ) {
-              log.debug({ serverId, resultChannel, immediate: true }, 'Script completed immediately');
+              log.debug(
+                { serverId, resultChannel, immediate: true },
+                'Script completed immediately'
+              );
 
               const output = executeResult?.printOutput
                 ? Array.isArray(executeResult.printOutput)
@@ -341,7 +344,8 @@ export function registerJsConsoleHandlers(routes: Routes, ctx: RpcContext): void
                 return {
                   resource: importItem.resource,
                   content: null,
-                  error: 'Classpath resources cannot be loaded (they exist in server Java classpath)',
+                  error:
+                    'Classpath resources cannot be loaded (they exist in server Java classpath)',
                 };
               }
 

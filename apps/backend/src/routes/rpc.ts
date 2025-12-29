@@ -93,4 +93,3 @@ export function registerPingRoute(routes: Routes, PingRequestSchema: z.ZodTypeAn
     },
   };
 }
-

@@ -104,7 +104,11 @@ export async function registerRoutes({
 
   // Binary upload endpoint
   const upload = createUploadMiddleware();
-  app.post('/rpc-binary', upload.single('filedata'), rpcBinaryHandler({ serverService, contracts }));
+  app.post(
+    '/rpc-binary',
+    upload.single('filedata'),
+    rpcBinaryHandler({ serverService, contracts })
+  );
 
   // Stream download endpoint
   app.get('/rpc-stream', rpcStreamHandler({ serverService, contracts }));
@@ -112,4 +116,3 @@ export async function registerRoutes({
   // AI endpoints for JS console assistance
   app.use('/rpc/ai', aiRouter);
 }
-
