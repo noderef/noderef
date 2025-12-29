@@ -50,6 +50,14 @@ interface ScriptNode {
   parent?: ScriptNode | null;
   children?: ScriptNode[];
 
+  // Explicit properties for DSL convenience
+  mimetype: string;
+  content: string;
+  size: number;
+  isContainer: boolean;
+  isDocument: boolean;
+  isLocked: boolean;
+
   // Basic info
   getName(): string;
   setName(name: string): void;

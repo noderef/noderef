@@ -1614,11 +1614,16 @@ export async function registerBackendRpc(
     }),
     handler: async params => {
       const userId = await getCurrentUserId();
-      const { serverId, script, documentNodeRef } = params as {
+      const { serverId, documentNodeRef } = params as {
         serverId: number;
         script: string;
         documentNodeRef?: string;
       };
+      const script = (params as any).script as string;
+
+      // The <import resource="..."> tags are natively supported by Alfresco's RhinoScriptProcessor
+      // and the OOTBee JavaScript Console. We pass them through unchanged.
+      // Our import processing in the frontend is only for Monaco Editor IntelliSense.
 
       // Get server details
       const server = await serverService.findById(userId, serverId);
@@ -1980,6 +1985,158 @@ export async function registerBackendRpc(
         };
       } catch (error) {
         log.error({ err: error, serverId, nodeId }, 'Failed to load script file');
+        throw error;
+      }
+    },
+  };
+
+  // Resolve and load imported scripts from <import resource="..."> tags
+  routes['backend.jsconsole.resolveImportedScripts'] = {
+    schema: z.object({
+      serverId: z.number(),
+      imports: z.array(
+        z.object({
+          resource: z.string(),
+          type: z.enum(['path', 'noderef', 'classpath']),
+        })
+      ),
+    }),
+    handler: async params => {
+      const userId = await getCurrentUserId();
+      const { serverId, imports } = params as {
+        serverId: number;
+        imports: Array<{ resource: string; type: 'path' | 'noderef' | 'classpath' }>;
+      };
+
+      // Get server details
+      const server = await serverService.findById(userId, serverId);
+      if (!server) {
+        AppErrors.notFound('Server', serverId);
+      }
+
+      const serverDefined = server!;
+
+      // Use centralized authentication with automatic token refresh (DRY principle)
+      const api = await getAuthenticatedClientWithRefresh(
+        userId,
+        serverId,
+        serverDefined.baseUrl,
+        prisma
+      );
+      if (!api) {
+        AppErrors.unauthorized('No stored credentials found for server');
+      }
+
+      try {
+        const { NodesApi, SearchApi } = await import('@alfresco/js-api');
+        const nodesApi = new NodesApi(api);
+        const searchApi = new SearchApi(api);
+
+        const resolveImportItem = async (
+          importItem: (typeof imports)[0]
+        ): Promise<{ resource: string; content: string | null; error?: string }> => {
+          try {
+            if (importItem.type === 'classpath') {
+              return {
+                resource: importItem.resource,
+                content: null,
+                error: 'Classpath resources cannot be loaded (they exist in server Java classpath)',
+              };
+            }
+
+            let nodeId: string | null = null;
+
+            if (importItem.type === 'noderef') {
+              // Extract node ID from noderef (workspace://SpacesStore/{nodeId})
+              const match = importItem.resource.match(
+                /(?:workspace|spacesstore):\/\/(?:SpacesStore|spacesstore)\/([a-f0-9-]+)/i
+              );
+              if (match) {
+                nodeId = match[1];
+              } else {
+                return {
+                  resource: importItem.resource,
+                  content: null,
+                  error: 'Invalid NodeRef format',
+                };
+              }
+            } else if (importItem.type === 'path') {
+              // Resolve path to node ID using search
+              const pathParts = importItem.resource.split('/').filter(p => p);
+              const fileName = pathParts[pathParts.length - 1];
+
+              // Build path query: PATH:"/app:company_home/app:dictionary/app:scripts//filename"
+              const pathQuery = `PATH:"/app:company_home/app:dictionary/app:scripts//${fileName}" AND TYPE:"cm:content"`;
+
+              const searchResult = await searchApi.search({
+                query: { query: pathQuery, language: 'afts' },
+                fields: ['id'],
+              });
+
+              if (searchResult.list?.entries?.length) {
+                nodeId = (searchResult.list.entries[0] as any).entry.id;
+              } else {
+                // Try a simpler name-based search as fallback
+                const nameQuery = `NAME:"${fileName}" AND PATH:"/app:company_home/app:dictionary/app:scripts//*"`;
+                const nameSearchResult = await searchApi.search({
+                  query: { query: nameQuery, language: 'afts' },
+                  fields: ['id'],
+                });
+
+                if (nameSearchResult.list?.entries?.length) {
+                  nodeId = (nameSearchResult.list.entries[0] as any).entry.id;
+                } else {
+                  return {
+                    resource: importItem.resource,
+                    content: null,
+                    error: 'Script file not found in repository',
+                  };
+                }
+              }
+            }
+
+            if (!nodeId) {
+              return {
+                resource: importItem.resource,
+                content: null,
+                error: 'Could not resolve resource to node ID',
+              };
+            }
+
+            // Fetch script content
+            const content = await nodesApi.getNodeContent(nodeId);
+            let scriptContent = '';
+
+            if (content instanceof Blob) {
+              scriptContent = await content.text();
+            } else if (typeof content === 'string') {
+              scriptContent = content;
+            } else {
+              scriptContent = String(content);
+            }
+
+            return {
+              resource: importItem.resource,
+              content: scriptContent,
+            };
+          } catch (error) {
+            log.error(
+              { err: error, serverId, resource: importItem.resource },
+              'Failed to resolve import'
+            );
+            return {
+              resource: importItem.resource,
+              content: null,
+              error: error instanceof Error ? error.message : 'Unknown error',
+            };
+          }
+        };
+
+        const results = await Promise.all(imports.map(resolveImportItem));
+
+        return { results };
+      } catch (error) {
+        log.error({ err: error, serverId }, 'Failed to resolve imported scripts');
         throw error;
       }
     },
