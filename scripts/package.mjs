@@ -600,6 +600,200 @@ async function packageWin() {
   }
 }
 
+function mapArchToDebian(arch) {
+  // Map Neutralino arch names to Debian package architecture names
+  const archMap = {
+    x64: 'amd64',
+    arm64: 'arm64',
+    armhf: 'armhf',
+  };
+  return archMap[arch] || arch;
+}
+
+function generateDebianControl(version, debArch, description) {
+  // Convert version to Debian format (e.g., "0.2.0" -> "0.2.0-1")
+  const debVersion = `${version}-1`;
+
+  return `Package: noderef
+Version: ${debVersion}
+Architecture: ${debArch}
+Maintainer: NodeRef <support@noderef.com>
+Description: ${description}
+ NodeRef - The desktop app every Alfresco admin deserves
+Depends: libgtk-3-0, libwebkit2gtk-4.1-0
+Priority: optional
+Section: utils
+`;
+}
+
+function generateDebianPostinst() {
+  return `#!/bin/bash
+# Update desktop database
+if command -v update-desktop-database >/dev/null 2>&1; then
+  update-desktop-database /usr/share/applications 2>/dev/null || true
+fi
+# Update icon cache
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+  gtk-update-icon-cache /usr/share/icons/hicolor 2>/dev/null || true
+fi
+`;
+}
+
+function generateDebianPostrm() {
+  return `#!/bin/bash
+# Update desktop database
+if command -v update-desktop-database >/dev/null 2>&1; then
+  update-desktop-database /usr/share/applications 2>/dev/null || true
+fi
+# Update icon cache
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+  gtk-update-icon-cache /usr/share/icons/hicolor 2>/dev/null || true
+fi
+`;
+}
+
+async function createDebPackage(buildPath, appDir, arch, version, iconPath) {
+  const debArch = mapArchToDebian(arch);
+  const debName = `noderef_${version}-1_${debArch}.deb`;
+  const debPath = path.join(installersDir, debName);
+  const tempDebDir = path.join(distDir, `temp_deb_${arch}`);
+
+  try {
+    // Create temp directory for Debian package
+    if (fs.existsSync(tempDebDir)) {
+      fs.rmSync(tempDebDir, { recursive: true, force: true });
+    }
+    fs.mkdirSync(tempDebDir, { recursive: true });
+
+    // Read config to get installation paths
+    const configPath = path.join(projectRoot, 'neutralino.config.json');
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    const appName = config.buildScript.linux.appName || 'NodeRef';
+    const appPath = config.buildScript.linux.appPath || '/usr/share/noderef';
+    const appIconPath = config.buildScript.linux.appIconPath || '/usr/share/noderef/icon.png';
+    const appExec = `${appPath}/noderef-linux_${arch}`;
+
+    // Create DEBIAN directory
+    const debianDir = path.join(tempDebDir, 'DEBIAN');
+    fs.mkdirSync(debianDir, { recursive: true });
+
+    // Generate control file
+    const controlContent = generateDebianControl(
+      version,
+      debArch,
+      'NodeRef - The desktop app every Alfresco admin deserves'
+    );
+    fs.writeFileSync(path.join(debianDir, 'control'), controlContent, 'utf8');
+
+    // Generate postinst script
+    const postinstContent = generateDebianPostinst();
+    const postinstPath = path.join(debianDir, 'postinst');
+    fs.writeFileSync(postinstPath, postinstContent, 'utf8');
+    run(`chmod +x "${postinstPath}"`);
+
+    // Generate postrm script
+    const postrmContent = generateDebianPostrm();
+    const postrmPath = path.join(debianDir, 'postrm');
+    fs.writeFileSync(postrmPath, postrmContent, 'utf8');
+    run(`chmod +x "${postrmPath}"`);
+
+    // Create package directory structure
+    const packageRoot = path.join(tempDebDir, appPath.substring(1)); // Remove leading /
+    fs.mkdirSync(packageRoot, { recursive: true });
+
+    // Copy application files
+    console.log(`Copying application files to package...`);
+    if (fs.existsSync(appDir)) {
+      // Copy all files from appDir to packageRoot
+      const copyRecursive = (src, dest) => {
+        const entries = fs.readdirSync(src, { withFileTypes: true });
+        for (const entry of entries) {
+          const srcPath = path.join(src, entry.name);
+          const destPath = path.join(dest, entry.name);
+          if (entry.isDirectory()) {
+            fs.mkdirSync(destPath, { recursive: true });
+            copyRecursive(srcPath, destPath);
+          } else {
+            fs.copyFileSync(srcPath, destPath);
+          }
+        }
+      };
+      copyRecursive(appDir, packageRoot);
+    } else {
+      throw new Error(`Application directory not found: ${appDir}`);
+    }
+
+    // Copy icon to icon path
+    const iconDestDir = path.join(
+      tempDebDir,
+      appIconPath.substring(1).split('/').slice(0, -1).join('/')
+    );
+    fs.mkdirSync(iconDestDir, { recursive: true });
+    if (fs.existsSync(iconPath)) {
+      const iconDest = path.join(tempDebDir, appIconPath.substring(1));
+      fs.copyFileSync(iconPath, iconDest);
+      console.log(`Copied icon to ${iconDest}`);
+    }
+
+    // Create desktop entry
+    const desktopDir = path.join(tempDebDir, 'usr/share/applications');
+    fs.mkdirSync(desktopDir, { recursive: true });
+    const desktopContent = `[Desktop Entry]
+Version=1.0
+Encoding=UTF-8
+Name=${appName}
+Icon=${appIconPath}
+Exec=${appExec}
+Path=${appPath}
+Terminal=false
+Type=Application
+Categories=Utility;Development;
+`;
+    const desktopPath = path.join(desktopDir, `${appName.toLowerCase()}.desktop`);
+    fs.writeFileSync(desktopPath, desktopContent, 'utf8');
+
+    // Create symlink in /usr/bin for command-line access
+    const binDir = path.join(tempDebDir, 'usr/bin');
+    fs.mkdirSync(binDir, { recursive: true });
+    const binLink = path.join(binDir, appName.toLowerCase());
+    // We'll create a wrapper script instead of a symlink for better compatibility
+    const wrapperScript = `#!/bin/bash
+exec "${appExec}" "$@"
+`;
+    fs.writeFileSync(binLink, wrapperScript, 'utf8');
+    run(`chmod +x "${binLink}"`);
+
+    // Build .deb package using dpkg-deb
+    console.log(`Building .deb package...`);
+    if (fs.existsSync(debPath)) {
+      fs.unlinkSync(debPath);
+    }
+
+    // Check if dpkg-deb is available
+    try {
+      execSync('which dpkg-deb', { stdio: 'ignore' });
+    } catch {
+      throw new Error('dpkg-deb not found. Install it with: sudo apt-get install dpkg-dev');
+    }
+
+    run(`dpkg-deb --build "${tempDebDir}" "${debPath}"`);
+    console.log(`Successfully created ${debPath}`);
+    return debPath;
+  } catch (err) {
+    console.error(`Failed to create .deb package: ${err.message}`);
+    throw err;
+  } finally {
+    // Cleanup temp directory
+    if (fs.existsSync(tempDebDir)) {
+      try {
+        fs.rmSync(tempDebDir, { recursive: true, force: true });
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+  }
+}
+
 async function packageLinux() {
   console.log('Packaging for Linux...');
 
@@ -619,6 +813,12 @@ async function packageLinux() {
     console.log('No Linux builds found in dist/. Skipping Linux packaging.');
     return;
   }
+
+  // Read version from package.json
+  const packageJson = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
+  const version = packageJson.version || '0.0.0';
+
+  const iconPath = path.join(projectRoot, 'resources', 'icons', 'appIcon.png');
 
   for (const build of linuxBuilds) {
     const buildPath = path.join(distDir, build.name);
@@ -666,6 +866,20 @@ async function packageLinux() {
       const appImageDest = path.join(installersDir, `NodeRef-linux-${arch}.AppImage`);
       fs.copyFileSync(appImageSrc, appImageDest);
       console.log(`Copied AppImage to ${appImageDest}`);
+    }
+
+    // Create .deb package only for x64 architecture if dpkg-deb is available
+    if (arch === 'x64') {
+      try {
+        execSync('which dpkg-deb', { stdio: 'ignore' });
+        await createDebPackage(buildPath, appDir, arch, version, iconPath);
+      } catch (err) {
+        console.warn(
+          `Warning: dpkg-deb not available. .deb package will not be created for ${build.name}.`
+        );
+        console.warn('  Install it with: sudo apt-get install dpkg-dev');
+        // Continue even if .deb creation fails
+      }
     }
   }
 }

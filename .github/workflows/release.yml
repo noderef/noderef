@@ -208,8 +208,12 @@ jobs:
         with:
           node-version: 22
 
-      - name: Package Linux (tar.gz + AppImage)
+      - name: Install dpkg-dev for .deb packaging
+        run: sudo apt-get update && sudo apt-get install -y dpkg-dev
+
+      - name: Package Linux (tar.gz + AppImage + .deb for x64 only)
         # Uses dist/linux_*/NodeRef and NodeRef.AppImage
+        # Creates .deb package only for x64 architecture
         run: pnpm package:linux
 
       - name: Upload Linux installers
@@ -219,6 +223,7 @@ jobs:
           path: |
             dist/installers/NodeRef-linux-*.tar.gz
             dist/installers/NodeRef-linux-*.AppImage
+            dist/installers/noderef_*.deb
           if-no-files-found: error
 
   # 5) Build and push Docker image to GHCR
