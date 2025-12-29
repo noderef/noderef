@@ -26,6 +26,7 @@ import {
 } from './neutralino';
 
 const DEFAULT_PORT = 5111;
+const DEFAULT_RPC_TIMEOUT_MS = 7000;
 
 // Detect if we're running in Docker/SERVE_STATIC mode (frontend served by backend)
 // In this case, use the current window location port instead of DEFAULT_PORT
@@ -916,15 +917,20 @@ async function doStartBackend(): Promise<void> {
   }
 }
 
-export async function rpc<T = unknown>(method: string, params?: unknown): Promise<T> {
+export async function rpc<T = unknown>(
+  method: string,
+  params?: unknown,
+  options?: { timeoutMs?: number }
+): Promise<T> {
   try {
+    const timeoutMs = options?.timeoutMs ?? DEFAULT_RPC_TIMEOUT_MS;
     const res = await withTimeout(
       fetch(`${baseURL}/rpc`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ method, params }),
       }),
-      7000
+      timeoutMs
     );
 
     // Read response as text first, then parse as JSON

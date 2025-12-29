@@ -57,7 +57,9 @@ interface JsConsoleState {
 
 interface JsConsoleActions {
   setCode: (code: string) => void;
-  addOutput: (output: Omit<ConsoleOutput, 'id' | 'timestamp'>) => void;
+  addOutput: (output: Omit<ConsoleOutput, 'id' | 'timestamp'> & { id?: string }) => string;
+  updateOutput: (id: string, content: string) => void;
+  finalizeOutput: (id: string, content: string, type: ConsoleOutput['type']) => void;
   setHistory: (history: ConsoleHistoryItem[]) => void;
   appendHistory: (items: ConsoleHistoryItem[], hasMore: boolean, nextCursor: number | null) => void;
   setHistoryLoading: (loading: boolean) => void;
@@ -107,13 +109,33 @@ export const useJsConsoleStore = create<JsConsoleState & JsConsoleActions>()(
       setCode: code => set({ code }),
 
       addOutput: output => {
+        const outputId = output.id || `output-${Date.now()}-${Math.random()}`;
         const newOutput: ConsoleOutput = {
-          ...output,
-          id: `output-${Date.now()}-${Math.random()}`,
+          type: output.type,
+          content: output.content,
+          serverId: output.serverId,
+          id: outputId,
           timestamp: new Date(),
         };
         set(state => ({
           outputs: [...state.outputs, newOutput],
+        }));
+        return outputId;
+      },
+
+      updateOutput: (id, content) => {
+        set(state => ({
+          outputs: state.outputs.map(output =>
+            output.id === id ? { ...output, content } : output
+          ),
+        }));
+      },
+
+      finalizeOutput: (id, content, type) => {
+        set(state => ({
+          outputs: state.outputs.map(output =>
+            output.id === id ? { ...output, content, type } : output
+          ),
         }));
       },
 

@@ -16,11 +16,22 @@
 
 /**
  * JavaScript Console RPC handlers
- * Handles all backend.jsconsole.* RPC methods
+ *
+ * Architecture:
+ * - backend.jsconsole.execute: Initiates script execution with async mode (resultChannel)
+ *   - Quick scripts (< 2s): Returns immediate result
+ *   - Long scripts: Returns resultChannel for polling, POST continues in background
+ * - backend.jsconsole.pollExecutionResult: Polls for incremental progress updates
+ * - backend.jsconsole.getExecuteCompletionResult: Retrieves final result from background POST
+ *
+ * The initial POST to /execute waits for the complete result (all printOutput lines).
+ * Polling provides incremental progress, but the final complete result comes from the POST.
  */
 
 import { NodesApi, SearchApi, WebscriptApi } from '@alfresco/js-api';
+import axios from 'axios';
 import { z } from 'zod';
+import { buildAlfrescoUrl } from '../../lib/alfresco-url.js';
 import { AppErrors } from '../../lib/errors.js';
 import { createLogger } from '../../lib/logger.js';
 import { extractParentRefFromNodeEntry, normalizeNodeRef } from './helpers.js';
@@ -28,6 +39,79 @@ import type { Routes, RpcContext } from './types.js';
 import { getCurrentUserId, withAuth, withAuthAndCredentials } from './withAuth.js';
 
 const log = createLogger('backend.rpc.jsconsole');
+
+// Store pending POST execute promises keyed by resultChannel
+// The POST to /execute returns the complete result, polling just shows progress
+const pendingExecuteResults = new Map<string, Promise<any>>();
+
+// Cleanup timeout for completed executions (1 minute)
+const EXECUTE_RESULT_CLEANUP_DELAY_MS = 60000;
+
+// Quick script detection timeout (2 seconds)
+const QUICK_SCRIPT_TIMEOUT_MS = 2000;
+
+/**
+ * Helper: Format printOutput to string for history storage
+ */
+const formatPrintOutputForHistory = (printOutput: unknown): string | null => {
+  if (!printOutput) return null;
+  return Array.isArray(printOutput) ? printOutput.join('\n') : String(printOutput);
+};
+
+/**
+ * Helper: Format error to string for history storage
+ * Handles Alfresco's error formats: error, callstack, or message fields
+ */
+const formatErrorForHistory = (result: any): string | null => {
+  if (!result) return null;
+
+  // Check for error field
+  if (result.error) {
+    return typeof result.error === 'string' ? result.error : JSON.stringify(result.error);
+  }
+
+  // Check for callstack field (contains full stack trace)
+  if (result.callstack) {
+    return typeof result.callstack === 'string'
+      ? result.callstack
+      : JSON.stringify(result.callstack);
+  }
+
+  // Check for message field with error status
+  if (result.message && result.status?.code >= 400) {
+    return typeof result.message === 'string' ? result.message : JSON.stringify(result.message);
+  }
+
+  return null;
+};
+
+/**
+ * Helper: Check if execution is complete based on result
+ * Checks for scriptPerf (success), error/callstack/message (failure), or explicit result
+ */
+const isExecutionComplete = (result: any): boolean => {
+  if (!result || typeof result !== 'object') {
+    return false;
+  }
+  // Success indicators
+  if (result.scriptPerf !== undefined) {
+    return true;
+  }
+  // Error indicators - Alfresco JS Console uses different fields for errors
+  if (result.error !== undefined) {
+    return true;
+  }
+  if (result.callstack !== undefined) {
+    return true; // Error with full stack trace
+  }
+  if (result.message !== undefined && result.status?.code >= 400) {
+    return true; // Error message with error status
+  }
+  if ('result' in result) {
+    return true;
+  }
+  return false;
+};
 
 /**
  * Register all JavaScript Console related RPC handlers
@@ -58,17 +142,215 @@ export function registerJsConsoleHandlers(routes: Routes, ctx: RpcContext): void
       serverId: z.number(),
       script: z.string(),
       documentNodeRef: z.string().optional(),
+      stream: z.boolean().optional(),
     }),
     handler: async params => {
       const userId = await getCurrentUserId();
-      const { serverId, documentNodeRef } = params as {
+      const { serverId, documentNodeRef, stream } = params as {
         serverId: number;
         script: string;
         documentNodeRef?: string;
+        stream?: boolean;
       };
       const script = (params as any).script as string;
 
-      return withAuthAndCredentials(ctx, serverId, async ({ api, server, username }) => {
+      return withAuthAndCredentials(
+        ctx,
+        serverId,
+        async ({ api, server, username, token, authType }) => {
+          const jsConsoleEndpoint = server.jsconsoleEndpoint;
+          if (!jsConsoleEndpoint) {
+            return AppErrors.invalidInput(
+              'JavaScript Console endpoint not configured for this server. Please configure it in server settings.'
+            );
+          }
+
+          const jsConsoleEndpointClean = jsConsoleEndpoint.replace(/^\/+/, '');
+
+          try {
+            const resultChannel = `jsconsole-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+            const webscriptApi = new WebscriptApi(api);
+
+            const executePayload = {
+              script,
+              template: '',
+              spaceNodeRef: '',
+              transaction: 'readwrite',
+              runas: username || '',
+              urlargs: '',
+              documentNodeRef: documentNodeRef || '',
+              resultChannel,
+            };
+
+            // Build the webscript URL using utility function
+            const executeUrl = buildAlfrescoUrl(
+              server.baseUrl,
+              `/service/${jsConsoleEndpointClean}/execute`
+            );
+
+            // Build auth header based on auth type
+            let authHeader: Record<string, string>;
+
+            if (authType === 'openid_connect') {
+              // OAuth2/OIDC: use Bearer token
+              if (!token) {
+                throw new Error('No OAuth2 access token available for JS Console execution');
+              }
+              authHeader = {
+                Authorization: `Bearer ${token}`,
+              };
+            } else {
+              // Basic Auth
+              if (!username || !token) {
+                throw new Error('Missing username or password for Basic Auth');
+              }
+              authHeader = {
+                Authorization: `Basic ${Buffer.from(`${username}:${token}`).toString('base64')}`,
+              };
+            }
+
+            // Start the POST call - it will wait until script completes and return complete result
+            const executePromise = axios
+              .post(executeUrl, executePayload, {
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...authHeader,
+                },
+                // Allow status codes that indicate script errors (500) to be handled
+                validateStatus: status => status < 600,
+              })
+              .then(response => {
+                // If the server returned an error status but with a valid JS Console response,
+                // return it (it will have the error/callstack field with stack trace)
+                return response.data;
+              })
+              .catch(error => {
+                log.error({ err: error, serverId, resultChannel }, 'Execute POST failed');
+                // Extract error details from response if available
+                if (error.response?.data) {
+                  return error.response.data;
+                }
+                throw error;
+              })
+              .finally(() => {
+                setTimeout(() => {
+                  pendingExecuteResults.delete(resultChannel);
+                }, EXECUTE_RESULT_CLEANUP_DELAY_MS);
+              });
+
+            pendingExecuteResults.set(resultChannel, executePromise);
+
+            if (stream) {
+              // Check if script completes quickly (within 2 seconds)
+              const quickResult = await Promise.race([
+                executePromise,
+                new Promise(resolve => setTimeout(() => resolve(null), QUICK_SCRIPT_TIMEOUT_MS)),
+              ]);
+
+              // If script completed quickly, return immediate result
+              if (quickResult && isExecutionComplete(quickResult)) {
+                const output = formatPrintOutputForHistory(quickResult.printOutput);
+                const error = formatErrorForHistory(quickResult);
+                await jsConsoleHistoryService.create({ userId, serverId, script, output, error });
+                return { success: true, result: quickResult, done: true };
+              }
+
+              // Script still running - return channel for polling
+              return { success: true, done: false, resultChannel };
+            }
+
+            // Fallback: Poll for results (non-stream mode)
+            const maxPolls = 60;
+            let result: any = null;
+
+            for (let poll = 1; poll <= maxPolls; poll++) {
+              await new Promise(resolve => setTimeout(resolve, 1000));
+
+              try {
+                result = await webscriptApi.executeWebScript(
+                  'GET',
+                  `${jsConsoleEndpointClean}/${resultChannel}/executionResult`,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined
+                );
+
+                if (isExecutionComplete(result)) {
+                  break;
+                }
+              } catch (pollError) {
+                log.debug({ serverId, poll }, 'Poll attempt failed');
+              }
+            }
+
+            const output = formatPrintOutputForHistory(result?.printOutput);
+            const error = formatErrorForHistory(result);
+            await jsConsoleHistoryService.create({ userId, serverId, script, output, error });
+
+            return { success: true, result };
+          } catch (error) {
+            log.error({ err: error, serverId }, 'JavaScript execution failed');
+
+            // Extract error details from axios response if available
+            let errorMessage: string;
+            let errorResult: any = null;
+
+            if (error && typeof error === 'object' && 'response' in error) {
+              const axiosError = error as any;
+              if (axiosError.response?.data?.error) {
+                // Server returned an error response with error details
+                errorMessage =
+                  typeof axiosError.response.data.error === 'string'
+                    ? axiosError.response.data.error
+                    : JSON.stringify(axiosError.response.data.error);
+                errorResult = axiosError.response.data;
+              } else {
+                errorMessage = axiosError.message || String(error);
+              }
+            } else if (error instanceof Error) {
+              errorMessage = error.message;
+            } else {
+              errorMessage = String(error);
+            }
+
+            await jsConsoleHistoryService.create({
+              userId,
+              serverId,
+              script,
+              output: null,
+              error: errorMessage,
+            });
+
+            // If we have a structured error result, return it instead of throwing
+            if (errorResult) {
+              return { success: false, result: errorResult, error: errorMessage };
+            }
+
+            throw error;
+          }
+        }
+      );
+    },
+  };
+
+  routes['backend.jsconsole.pollExecutionResult'] = {
+    schema: z.object({
+      serverId: z.number(),
+      resultChannel: z.string(),
+      script: z.string().optional(),
+      documentNodeRef: z.string().optional(),
+    }),
+    handler: async params => {
+      const { serverId, resultChannel } = params as {
+        serverId: number;
+        resultChannel: string;
+        script?: string;
+        documentNodeRef?: string;
+      };
+
+      return withAuthAndCredentials(ctx, serverId, async ({ api, server }) => {
         const jsConsoleEndpoint = server.jsconsoleEndpoint;
         if (!jsConsoleEndpoint) {
           return AppErrors.invalidInput(
@@ -77,139 +359,73 @@ export function registerJsConsoleHandlers(routes: Routes, ctx: RpcContext): void
         }
 
         const jsConsoleEndpointClean = jsConsoleEndpoint.replace(/^\/+/, '');
-
-        log.debug({ serverId, endpoint: jsConsoleEndpointClean }, 'Executing JavaScript on server');
+        const webscriptApi = new WebscriptApi(api);
 
         try {
-          const resultChannel = Date.now().toString();
+          const result = await webscriptApi.executeWebScript(
+            'GET',
+            `${jsConsoleEndpointClean}/${resultChannel}/executionResult`,
+            undefined,
+            undefined,
+            undefined,
+            undefined
+          );
 
-          const webscriptApi = new WebscriptApi(api);
+          const done = isExecutionComplete(result);
 
-          const executePayload = {
-            script,
-            template: '',
-            spaceNodeRef: '',
-            transaction: 'readwrite',
-            runas: username || '',
-            urlargs: '',
-            documentNodeRef: documentNodeRef || '',
-            resultChannel,
-          };
-
-          // Step 1: POST to /execute
-          try {
-            const executeResult = await webscriptApi.executeWebScript(
-              'POST',
-              `${jsConsoleEndpointClean}/execute`,
-              undefined,
-              undefined,
-              undefined,
-              executePayload
-            );
-
-            if (
-              executeResult &&
-              (executeResult.scriptPerf !== undefined || executeResult.error !== undefined)
-            ) {
-              log.debug(
-                { serverId, resultChannel, immediate: true },
-                'Script completed immediately'
-              );
-
-              const output = executeResult?.printOutput
-                ? Array.isArray(executeResult.printOutput)
-                  ? executeResult.printOutput.join('\n')
-                  : String(executeResult.printOutput)
-                : null;
-
-              const error = executeResult?.error
-                ? typeof executeResult.error === 'string'
-                  ? executeResult.error
-                  : JSON.stringify(executeResult.error)
-                : null;
-
-              await jsConsoleHistoryService.create({ userId, serverId, script, output, error });
-
-              return { success: true, result: executeResult };
-            }
-          } catch (executeError: any) {
-            if (executeError.status !== 408) {
-              log.error({ err: executeError, serverId }, 'Execute POST failed');
-              throw executeError;
-            }
-            log.debug({ serverId, resultChannel }, 'Execute returned 408, will poll for results');
-          }
-
-          // Step 2: Poll for results
-          const maxPolls = 60;
-          let result: any = null;
-
-          for (let poll = 1; poll <= maxPolls; poll++) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            try {
-              result = await webscriptApi.executeWebScript(
-                'GET',
-                `${jsConsoleEndpointClean}/${resultChannel}/executionResult`,
-                undefined,
-                undefined,
-                undefined,
-                undefined
-              );
-
-              const isComplete =
-                result?.error !== undefined ||
-                Array.isArray(result?.result) ||
-                result?.scriptPerf !== undefined;
-
-              if (isComplete) {
-                log.debug(
-                  { serverId, poll, printOutputLength: result.printOutput?.length || 0 },
-                  'Script execution completed'
-                );
-                break;
-              }
-
-              if (poll % 5 === 0) {
-                log.debug(
-                  { serverId, poll, printOutputLength: result?.printOutput?.length || 0 },
-                  'Polling...'
-                );
-              }
-            } catch (pollError) {
-              log.debug({ serverId, poll, error: pollError }, 'Poll attempt failed');
-            }
-          }
-
-          const output = result?.printOutput
-            ? Array.isArray(result.printOutput)
-              ? result.printOutput.join('\n')
-              : String(result.printOutput)
-            : null;
-
-          const error = result?.error
-            ? typeof result.error === 'string'
-              ? result.error
-              : JSON.stringify(result.error)
-            : null;
-
-          await jsConsoleHistoryService.create({ userId, serverId, script, output, error });
-
-          return { success: true, result };
+          return { success: true, result, done };
         } catch (error) {
-          log.error({ err: error, serverId }, 'JavaScript execution failed');
-
-          await jsConsoleHistoryService.create({
-            userId,
-            serverId,
-            script,
-            output: null,
-            error: error instanceof Error ? error.message : String(error),
-          });
-
+          log.error(
+            { err: error, serverId, resultChannel },
+            'Polling executionResult failed for JavaScript console'
+          );
           throw error;
         }
       });
+    },
+  };
+
+  // Get the complete result from the original POST /execute call
+  // This should be called when polling shows done=true to get the full result
+  routes['backend.jsconsole.getExecuteCompletionResult'] = {
+    schema: z.object({
+      serverId: z.number(),
+      resultChannel: z.string(),
+      script: z.string().optional(),
+    }),
+    handler: async params => {
+      const userId = await getCurrentUserId();
+      const { serverId, resultChannel, script } = params as {
+        serverId: number;
+        resultChannel: string;
+        script?: string;
+      };
+
+      const pendingPromise = pendingExecuteResults.get(resultChannel);
+
+      if (!pendingPromise) {
+        log.warn({ serverId, resultChannel }, 'No pending execute result found');
+        return { success: false, error: 'No pending result found for this channel' };
+      }
+
+      try {
+        const result = await pendingPromise;
+
+        // Save to history
+        if (script) {
+          const output = formatPrintOutputForHistory(result.printOutput);
+          const error = formatErrorForHistory(result);
+          await jsConsoleHistoryService.create({ userId, serverId, script, output, error });
+        }
+
+        return { success: true, result, done: true };
+      } catch (error) {
+        log.error(
+          { err: error, serverId, resultChannel },
+          'Failed to get execute completion result'
+        );
+        throw error;
+      }
     },
   };
 
@@ -235,11 +451,6 @@ export function registerJsConsoleHandlers(routes: Routes, ctx: RpcContext): void
 
           const searchResult = await searchApi.search(searchRequest);
 
-          log.debug(
-            { serverId, searchResult: JSON.stringify(searchResult, null, 2) },
-            'Search result from Alfresco'
-          );
-
           const jsFiles = (searchResult.list?.entries || [])
             .map((entry: any) => entry.entry)
             .filter(
@@ -253,7 +464,6 @@ export function registerJsConsoleHandlers(routes: Routes, ctx: RpcContext): void
               size: node.content?.sizeInBytes || 0,
             }));
 
-          log.debug({ serverId, count: jsFiles.length, jsFiles }, 'JavaScript files found');
           return jsFiles;
         } catch (error) {
           log.error({ err: error, serverId }, 'Failed to search for script files');
