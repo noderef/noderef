@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-import { Router, type Response, type Router as ExpressRouter } from 'express';
+import { Router, type Router as ExpressRouter, type Response } from 'express';
 import { log } from '../lib/logger.js';
-import { getCurrentUserId } from '../services/userBootstrap.js';
 import { resolveUserAiConfig } from '../services/ai/userSettingsService.js';
+import { getCurrentUserId } from '../services/userBootstrap.js';
 import { getAiAssistantEnabled } from '../services/userSettings.js';
 import { callAnthropic } from './anthropic.js';
 import { buildExecutionPrompt } from './executePrompt.js';
-import { buildRouterPrompt } from './routerPrompt.js';
 import { loadLibs } from './loadLibs.js';
+import { buildRouterPrompt } from './routerPrompt.js';
 
 const router: ExpressRouter = Router();
 
@@ -138,7 +138,7 @@ router.post('/execute', async (req, res) => {
       apiKey: aiConfig.apiKey,
       model: aiConfig.model,
       prompt,
-      maxTokens: 1200,
+      maxTokens: 8192,
     });
 
     const parsed = parseDslResponse(raw);
@@ -241,15 +241,24 @@ function extractJsonArray(raw: string): string {
 const VALID_DSL_TYPES = new Set(['replace_selection', 'replace_file'] as const);
 
 function parseDslResponse(raw: string) {
+  let payload = '';
+
+  // 1. Try to find <changes>...</changes>
   const match = raw.match(/<changes>([\s\S]*?)<\/changes>/i);
-  if (!match) {
+  if (match) {
+    payload = match[1].trim();
+  } else {
+    // 2. Fallback: Try to find a JSON object directly
+    payload = extractJsonObject(raw);
+  }
+
+  if (!payload) {
     throw new AiError({
       code: 'AI_DSL_MISSING',
-      message: 'AI response is missing the <changes> block.',
+      message: 'AI response is missing the <changes> block and no valid JSON found.',
     });
   }
 
-  const payload = match[1].trim();
   try {
     const json = JSON.parse(payload);
     if (!VALID_DSL_TYPES.has(json.type) || typeof json.code !== 'string') {
@@ -262,6 +271,27 @@ function parseDslResponse(raw: string) {
       message: `Failed to parse DSL response: ${(err as Error).message}`,
     });
   }
+}
+
+function extractJsonObject(raw: string): string {
+  const trimmed = raw.trim();
+  // Handle markdown code blocks if present
+  if (trimmed.startsWith('```')) {
+    const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenceMatch?.[1]) {
+      return fenceMatch[1].trim();
+    }
+  }
+
+  // Find outer-most braces
+  const firstBrace = trimmed.indexOf('{');
+  const lastBrace = trimmed.lastIndexOf('}');
+
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    return trimmed.slice(firstBrace, lastBrace + 1);
+  }
+
+  return '';
 }
 
 function handleError(res: Response, err: Error, durationMs: number, route: string) {
