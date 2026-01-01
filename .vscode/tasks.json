@@ -92,6 +92,24 @@
       }
     },
     {
+      "label": "test",
+      "type": "shell",
+      "command": "pnpm test",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false
+      },
+      "runOptions": {
+        "runOn": "default"
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+    {
       "label": "format",
       "type": "shell",
       "command": "pnpm format",
