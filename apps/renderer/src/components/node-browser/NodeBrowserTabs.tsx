@@ -15,9 +15,12 @@
  */
 
 import { BrandLogo } from '@/components/BrandLogo';
+import { isNeutralinoMode } from '@/core/ipc/neutralino';
+import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
+import { useDesktopClipboardHandlers } from '@/hooks/useDesktopClipboardHandlers';
 import { Tabs, Text } from '@mantine/core';
 import { IconX } from '@tabler/icons-react';
-import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
+import { useMemo, useRef } from 'react';
 import { NodeBrowser } from './NodeBrowser';
 
 export function NodeBrowserTabs() {
@@ -25,6 +28,19 @@ export function NodeBrowserTabs() {
   const activeTabId = useNodeBrowserTabsStore(state => state.activeTabId);
   const setActiveTab = useNodeBrowserTabsStore(state => state.setActiveTab);
   const closeTab = useNodeBrowserTabsStore(state => state.closeTab);
+
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const isDesktopMode = useMemo(
+    () => typeof window !== 'undefined' && isNeutralinoMode() && !!(window as any).Neutralino,
+    []
+  );
+
+  // Enable Ctrl+C copy for selected text in NodeBrowser tables
+  useDesktopClipboardHandlers({
+    isEnabled: isDesktopMode,
+    containerRef,
+    enableReadOnlyCopy: true,
+  });
 
   if (tabs.length === 0) {
     return (
@@ -59,68 +75,70 @@ export function NodeBrowserTabs() {
   }
 
   return (
-    <Tabs
-      value={activeTabId}
-      onChange={value => value && setActiveTab(value)}
-      style={{ height: '100%' }}
-    >
-      <Tabs.List>
-        {tabs.map(tab => (
-          <Tabs.Tab
-            key={tab.id}
-            value={tab.id}
-            rightSection={
-              <span
-                onClick={e => {
-                  e.stopPropagation();
-                  closeTab(tab.id);
-                }}
+    <div ref={containerRef} style={{ height: '100%' }}>
+      <Tabs
+        value={activeTabId}
+        onChange={value => value && setActiveTab(value)}
+        style={{ height: '100%' }}
+      >
+        <Tabs.List>
+          {tabs.map(tab => (
+            <Tabs.Tab
+              key={tab.id}
+              value={tab.id}
+              rightSection={
+                <span
+                  onClick={e => {
+                    e.stopPropagation();
+                    closeTab(tab.id);
+                  }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    opacity: 0.6,
+                    transition: 'opacity 150ms ease',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.opacity = '1';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.opacity = '0.6';
+                  }}
+                >
+                  <IconX size={14} />
+                </span>
+              }
+            >
+              <Text
+                size="sm"
+                truncate
                 style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  opacity: 0.6,
-                  transition: 'opacity 150ms ease',
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.opacity = '1';
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.opacity = '0.6';
+                  maxWidth: '200px',
                 }}
               >
-                <IconX size={14} />
-              </span>
-            }
-          >
-            <Text
-              size="sm"
-              truncate
-              style={{
-                maxWidth: '200px',
-              }}
-            >
-              {tab.nodeName}
-            </Text>
-          </Tabs.Tab>
-        ))}
-      </Tabs.List>
+                {tab.nodeName}
+              </Text>
+            </Tabs.Tab>
+          ))}
+        </Tabs.List>
 
-      {tabs.map(tab => (
-        <Tabs.Panel
-          key={tab.id}
-          value={tab.id}
-          style={{ height: 'calc(100% - 42px)', overflow: 'auto' }}
-        >
-          <NodeBrowser
-            tabId={tab.id}
-            serverId={tab.serverId}
-            nodeId={tab.nodeId}
-            nodeName={tab.nodeName}
-          />
-        </Tabs.Panel>
-      ))}
-    </Tabs>
+        {tabs.map(tab => (
+          <Tabs.Panel
+            key={tab.id}
+            value={tab.id}
+            style={{ height: 'calc(100% - 42px)', overflow: 'auto' }}
+          >
+            <NodeBrowser
+              tabId={tab.id}
+              serverId={tab.serverId}
+              nodeId={tab.nodeId}
+              nodeName={tab.nodeName}
+            />
+          </Tabs.Panel>
+        ))}
+      </Tabs>
+    </div>
   );
 }
