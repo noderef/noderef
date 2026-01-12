@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-import { Router, type Response, type Router as ExpressRouter } from 'express';
+import { Router, type Router as ExpressRouter, type Response } from 'express';
 import { log } from '../lib/logger.js';
-import { getCurrentUserId } from '../services/userBootstrap.js';
 import { resolveUserAiConfig } from '../services/ai/userSettingsService.js';
+import { getCurrentUserId } from '../services/userBootstrap.js';
 import { getAiAssistantEnabled } from '../services/userSettings.js';
 import { callAnthropic } from './anthropic.js';
 import { buildExecutionPrompt } from './executePrompt.js';
-import { buildRouterPrompt } from './routerPrompt.js';
 import { loadLibs } from './loadLibs.js';
+import { buildRouterPrompt } from './routerPrompt.js';
 
 const router: ExpressRouter = Router();
 
@@ -222,7 +222,7 @@ function parseSelectedLibraries(raw: string, manifest: Record<string, unknown>):
   }
 }
 
-function extractJsonArray(raw: string): string {
+function extractJson(raw: string, charPair: [string, string]): string {
   const trimmed = raw.trim();
   if (trimmed.startsWith('```')) {
     const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -230,26 +230,32 @@ function extractJsonArray(raw: string): string {
       return fenceMatch[1].trim();
     }
   }
-  const firstBracket = trimmed.indexOf('[');
-  const lastBracket = trimmed.lastIndexOf(']');
-  if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-    return trimmed.slice(firstBracket, lastBracket + 1);
+  const firstChar = trimmed.indexOf(charPair[0]);
+  const lastChar = trimmed.lastIndexOf(charPair[1]);
+  if (firstChar !== -1 && lastChar !== -1 && lastChar > firstChar) {
+    return trimmed.slice(firstChar, lastChar + 1);
   }
   return trimmed;
 }
 
+function extractJsonArray(raw: string): string {
+  return extractJson(raw, ['[', ']']);
+}
+
+function extractJsonObject(raw: string): string {
+  return extractJson(raw, ['{', '}']);
+}
+
 const VALID_DSL_TYPES = new Set(['replace_selection', 'replace_file'] as const);
+type VAlidDslType = 'replace_selection' | 'replace_file';
 
 function parseDslResponse(raw: string) {
   const match = raw.match(/<changes>([\s\S]*?)<\/changes>/i);
-  if (!match) {
-    throw new AiError({
-      code: 'AI_DSL_MISSING',
-      message: 'AI response is missing the <changes> block.',
-    });
-  }
+  let payload = match ? match[1].trim() : raw.trim();
 
-  const payload = match[1].trim();
+  // Handle markdown fences and extract object
+  payload = extractJsonObject(payload);
+
   try {
     const json = JSON.parse(payload);
     if (!VALID_DSL_TYPES.has(json.type) || typeof json.code !== 'string') {
@@ -257,6 +263,12 @@ function parseDslResponse(raw: string) {
     }
     return json;
   } catch (err) {
+    if (!match) {
+      throw new AiError({
+        code: 'AI_DSL_MISSING',
+        message: 'AI response is missing the <changes> block and no valid JSON was found.',
+      });
+    }
     throw new AiError({
       code: 'AI_DSL_INVALID',
       message: `Failed to parse DSL response: ${(err as Error).message}`,
