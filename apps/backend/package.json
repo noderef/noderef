@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "run-p ai:watch dev:server",
     "dev:server": "NODE_OPTIONS='--disable-warning=DEP0128' nodemon",
+    "test": "vitest",
+    "test:run": "vitest run",
     "ai:build:src": "tsx src/ai/scripts/build-libs.ts --outDir src",
     "ai:build:dist": "tsx src/ai/scripts/build-libs.ts --outDir dist",
     "ai:build": "pnpm run ai:build:src",
@@ -19,31 +21,34 @@
   },
   "dependencies": {
     "@alfresco/js-api": "9.1.1",
-    "@app/contracts": "workspace:*",
     "@anthropic-ai/sdk": "^0.69.0",
+    "@app/contracts": "workspace:*",
     "@prisma/client": "^6.19.0",
     "@types/multer": "^2.0.0",
     "compression": "1.7.4",
     "dotenv": "^17.2.3",
+    "esbuild": "^0.19.12",
     "express": "5.1.0",
     "express-rate-limit": "8.1.0",
     "helmet": "8.1.0",
     "multer": "^2.0.2",
     "pino": "10.0.0",
     "prisma": "^6.19.0",
-    "esbuild": "^0.19.12",
     "zod": "3.22.4"
   },
   "devDependencies": {
     "@types/compression": "^1.7.5",
     "@types/express": "^5.0.0",
     "@types/node": "^20.19.24",
+    "@types/supertest": "^6.0.3",
     "axios": "^1.13.2",
-    "npm-run-all": "^4.1.5",
     "nodemon": "^3.1.10",
+    "npm-run-all": "^4.1.5",
     "pino-pretty": "^10.3.1",
+    "supertest": "^7.1.4",
     "ts-node": "^10.9.2",
     "tsx": "^4.7.0",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.0",
+    "vitest": "^4.0.16"
   }
 }

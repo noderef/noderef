@@ -215,6 +215,7 @@ noderef/
 | `pnpm dev:browser`      | Browser-only dev loop (renderer + backend, no Neutralino window)              |
 | `pnpm dev:renderer`     | Run the renderer only (Vite dev server)                                       |
 | `pnpm dev:backend`      | Run the backend only with nodemon                                             |
+| `pnpm test`             | Run backend integration tests                                                 |
 | `pnpm migrate:dev`      | Run Prisma migrations against the local SQLite DB                             |
 | `pnpm build:installers` | Build macOS, Windows, and Linux installers via Neutralino + packaging scripts |
 | `pnpm package[:target]` | Produce ready-to-ship bundles (`:mac`, `:win`, `:linux` targets available)    |
@@ -236,6 +237,16 @@ noderef/
   ```bash
   pnpm --filter @app/backend prisma:generate
   ```
+
+### **Testing**
+
+NodeRef uses integration tests for the backend to verify RPC handlers and database operations. Running tests by using the following command:
+
+```bash
+pnpm test
+```
+
+Tests use an isolated `test.db` database.
 
 ### **Packaging & installers**
 
