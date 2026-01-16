@@ -3,11 +3,7 @@
   <img src="./assets/logo-center-black.svg#gh-light-mode-only" alt="NodeRef" width="260" />
   <img src="./assets/logo-center-white.svg#gh-dark-mode-only" alt="NodeRef" width="260" />
 
-  <h3>
-    <b>
-    Everything you do in Alfresco, now faster on desktop
-    </b>
-  </h3>
+  <h3>Desktop client for Alfresco</h3>
 
 </p>
 
@@ -51,47 +47,22 @@
 
 </div>
 
-### **Features**
+### ✨ **Features**
 
-One clean desktop space to manage, debug, and explore Alfresco.
+- **Activity overview** — Dashboard heatmap and timeline of recent nodes.
+- **Query builder** — Search by property, aspect, type, path, or site. No CMIS/AFTS syntax required.
+- **Saved & recent searches** — Store queries with custom result columns, reuse across servers.
+- **Multi-server workspace** — Connect prod, test, and dev at the same time. Switch between admin tools and logs.
+- **JavaScript console** — Run scripts on one or more servers. Monaco editor, Alfresco helpers, execution history, `/ai` assist.
+- **Tabbed node browser** — Open nodes side-by-side, follow references, compare structures.
+- **File viewer & editor** — Edit JS or text content directly from the repository.
+- **System tree** — Browse users, groups, permissions, and credentials per server.
+- **Personalization** — Themes, languages, personal scripts, `Cmd+K` command palette.
+- **Credentials encryption** — AES-256-GCM; master key stored outside the database.
 
-- 🗂 **Activity overview**  
-  Stay oriented with a dashboard heatmap and timeline of recent nodes so jumping back into ongoing work is instant.
+Built for Alfresco admins, developers, and support engineers.
 
-- 🔎 **Query builder**  
-  Build complex searches across properties, aspects, types, paths, or sites without memorizing query strings.
-
-- 💾 **Saved & recent searches**  
-  Store favorite queries with custom result columns, reuse them across servers, and rerun anything from history in one click.
-
-- 🖥 **Multi-server workspace**  
-  Connect prod, test, and dev simultaneously, label each server clearly, jump into admin tools, and review logs from a single desktop window.
-
-- 🧑‍💻 **Powerful JavaScript console**  
-  Run scripts against one or many servers with execution history, Monaco editor, Alfresco-specific helpers, and optional `/ai` assistance when needed.
-
-- 📑 **Tabbed node browser**  
-  Open multiple nodes side-by-side, follow references, compare structures, and debug without losing your place.
-
-- 📝 **File viewer & editor**  
-  Inspect and edit JavaScript or other text-based content directly from the repository browser without leaving NodeRef.
-
-- 🌳 **System tree insight**  
-  Browse users, groups, permissions, and remote credentials per server using a clear, searchable tree.
-
-- 🎛 **Workspace personalization**  
-  Switch themes or languages, organize personal scripts and text files, and use the `Cmd+K` command palette to stay fast.
-
-- 🔐 **Secure credentials**  
-  Credentials remain encrypted with AES-256-GCM and a master key that never lives inside the database.
-
-### **Who benefits?**
-
-- **Alfresco admins** – browse repository data, review permissions, and run fast searches.
-- **Alfresco developers** – iterate on scripts, inspect node structures, and debug quickly.
-- **Support engineers** – connect to multiple client environments.
-
-### **Prerequisites**
+### 📋 **Prerequisites**
 
 Before running NodeRef, make sure both your workstation and target Alfresco servers have the basics covered:
 
@@ -109,9 +80,7 @@ Before running NodeRef, make sure both your workstation and target Alfresco serv
 
 - The [OOTBee Support Tools](https://github.com/OrderOfTheBee/ootbee-support-tools) module installed so the JavaScript console and related APIs are available.
 
-### **Quick start**
-
-Spin up the full desktop environment in minutes with just two commands:
+### 🚀 **Quick start**
 
 ```bash
 # 1. Install dependencies and download Neutralino binaries
@@ -126,9 +95,9 @@ Desktop dev mode opens:
 - A **Chrome** window at `http://127.0.0.1:3000` with full DevTools
 - A **Neutralino** window that mirrors how the production app behaves
 
-### **Docker**
+### 🐳 **Docker**
 
-When network policies prevent the desktop app from reaching your Alfresco servers, deploy NodeRef directly inside your infrastructure. Test the image locally:
+Deploy inside your infrastructure when network policies block the desktop app:
 
 ```bash
 docker run -p 5111:5111 ghcr.io/noderef/noderef:latest
@@ -136,9 +105,7 @@ docker run -p 5111:5111 ghcr.io/noderef/noderef:latest
 
 Then open [http://localhost:5111](http://localhost:5111) — data persists inside the container at `/data`.
 
-### **Tech stack**
-
-NodeRef relies on TypeScript/Neutralino stack:
+### 🛠 **Tech stack**
 
 - **Desktop framework:** [Neutralino.js](https://github.com/neutralinojs/neutralinojs)
 - **Frontend:** [React](https://github.com/facebook/react), [Vite](https://github.com/vitejs/vite), [Mantine UI](https://github.com/mantinedev/mantine), [Monaco Editor](https://github.com/microsoft/monaco-editor)
@@ -147,7 +114,7 @@ NodeRef relies on TypeScript/Neutralino stack:
 - **Language:** [TypeScript](https://github.com/microsoft/TypeScript) end-to-end
 - **Package manager:** [`pnpm`](https://github.com/pnpm/pnpm) monorepo workspace
 
-### **Database & storage**
+### 💾 **Database & storage**
 
 Default paths depend on the runtime target:
 
@@ -157,11 +124,11 @@ Default paths depend on the runtime target:
 
 Override the database location with the `DATABASE_URL` environment variable when needed.
 
-### **Credentials encryption**
+### 🔐 **Credentials encryption**
 
 Sensitive fields (passwords, API tokens) are encrypted with **AES-256-GCM**. A 32-byte master key is generated on first run and stored in `{dataDir}/.runtime/master.key`.
 
-### **OIDC / OpenID Connect authentication**
+### 🔑 **OIDC / OpenID Connect authentication**
 
 NodeRef supports OIDC authentication (e.g., Keycloak) for connecting to Alfresco servers. When configuring your identity provider:
 
@@ -189,9 +156,9 @@ https://{alfresco-host}/auth
 
 Replace `{alfresco-host}` with your Alfresco server's hostname or IP address.
 
-### **Development**
+### 💻 **Development**
 
-Everything runs inside a pnpm powered monorepo, so frontend, backend, and shared contracts evolve together. Use the layout overview and command palette below to navigate the workspace.
+pnpm monorepo with frontend, backend, and shared contracts.
 
 #### Workspace layout
 
@@ -238,9 +205,9 @@ noderef/
   pnpm --filter @app/backend prisma:generate
   ```
 
-### **Testing**
+### 🧪 **Testing**
 
-NodeRef uses integration tests for the backend to verify RPC handlers and database operations. Running tests by using the following command:
+Integration tests cover RPC handlers and database operations:
 
 ```bash
 pnpm test
@@ -248,9 +215,7 @@ pnpm test
 
 Tests use an isolated `test.db` database.
 
-### **Packaging & installers**
-
-Ship binaries for every platform. The workflow below covers raw Neutralino builds, installer generation, and quick verification for macOS, Windows, and Linux.
+### 📦 **Packaging & installers**
 
 <p align="left">
   <img src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white" alt="macOS" />
@@ -268,10 +233,10 @@ The backend compiles to `resources/node-src/dist/server.js` and this command pro
 
 #### Platform outputs
 
-- 🍎 **macOS:** `noderef-mac_x64`, `noderef-mac_arm64`, `noderef-mac_universal`
-- 🪟 **Windows:** `noderef-win_x64.exe` (and MSI installers: `dist/noderef-win_x64.msi`)
-- 🐧 **Linux / Ubuntu:** `noderef-linux_x64`, `noderef-linux_arm64`, `noderef-linux_armhf`
-- 📦 **Resources bundle:** `resources.neu`
+- **macOS:** `noderef-mac_x64`, `noderef-mac_arm64`, `noderef-mac_universal`
+- **Windows:** `noderef-win_x64.exe` (MSI: `dist/noderef-win_x64.msi`)
+- **Linux:** `noderef-linux_x64`, `noderef-linux_arm64`, `noderef-linux_armhf`
+- **Resources bundle:** `resources.neu`
 
 #### Build installers
 
@@ -296,11 +261,11 @@ The backend compiles to `resources/node-src/dist/server.js` and this command pro
 ./dist/noderef-win_x64.exe       # Windows preview
 ```
 
-## Changelog
+## 📝 Changelog
 
-See [GitHub Releases](https://github.com/noderef/noderef/releases) for version history.
+See [GitHub releases](https://github.com/noderef/noderef/releases) for version history.
 
-## License
+## 📄 License
 
 NodeRef is licensed under the **Apache License 2.0**.
 
