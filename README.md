@@ -52,8 +52,8 @@
 - **Activity overview** — Dashboard heatmap and timeline of recent nodes.
 - **Query builder** — Search by property, aspect, type, path, or site. No CMIS/AFTS syntax required.
 - **Saved & recent searches** — Store queries with custom result columns, reuse across servers.
-- **Multi-server workspace** — Connect prod, test, and dev at the same time. Switch between admin tools and logs.
-- **JavaScript console** — Run scripts on one or more servers. Monaco editor, Alfresco helpers, execution history, `/ai` assist.
+- **Multi-server workspace** — Connect prod, test, and dev environments simultaneously.
+- **JavaScript console** — Execute scripts across servers, view history, and `/ai` assist.
 - **Tabbed node browser** — Open nodes side-by-side, follow references, compare structures.
 - **File viewer & editor** — Edit JS or text content directly from the repository.
 - **System tree** — Browse users, groups, permissions, and credentials per server.
