@@ -9,8 +9,18 @@ services:
       PORT: 5001
       DEBUG: "1"
       DATA_DIR: /data
+      # SERVER_URL: "http://alfresco.local:8080/alfresco"
+      # SERVER_NAME: "Alfresco"
+      # SERVER_USERNAME: "admin"
+      # SERVER_PASSWORD: "admin"
+      # SERVER_JSCONSOLE_ENDPOINT: "ootbee/jsconsole"
     volumes:
       - noderef_data:/data
+    #networks:
+    #  - dev_network
 
 volumes:
   noderef_data:
+# networks:
+#   dev_network:
+#     external: true
