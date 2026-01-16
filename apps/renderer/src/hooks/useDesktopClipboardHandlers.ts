@@ -22,8 +22,12 @@ export type EditableTarget = HTMLInputElement | HTMLTextAreaElement | HTMLElemen
 type DesktopClipboardHandlersOptions = {
   isEnabled: boolean;
   containerRef: RefObject<HTMLElement | null>;
-  onInsertText: (target: EditableTarget, text: string) => void;
+  /** Handler for inserting pasted text. Required when paste support is needed. */
+  onInsertText?: (target: EditableTarget, text: string) => void;
+  /** Enable copy/cut for editable targets (input fields, textareas) */
   enableCopyCut?: boolean;
+  /** Enable Ctrl+C copy for selected text in read-only (non-editable) content areas */
+  enableReadOnlyCopy?: boolean;
   getSelectedText?: (target: HTMLInputElement | HTMLTextAreaElement) => string;
 };
 
@@ -55,11 +59,20 @@ const defaultGetSelectedText = (target: HTMLInputElement | HTMLTextAreaElement):
   return value.slice(selectionStart, selectionEnd);
 };
 
+/**
+ * Centralized clipboard handler for desktop (Neutralino) mode.
+ *
+ * Supports:
+ * - Paste into editable targets (requires onInsertText)
+ * - Copy/cut from editable targets (enableCopyCut)
+ * - Copy selected text from read-only content (enableReadOnlyCopy) - useful for NodeBrowser tables
+ */
 export const useDesktopClipboardHandlers = ({
   isEnabled,
   containerRef,
   onInsertText,
   enableCopyCut = false,
+  enableReadOnlyCopy = false,
   getSelectedText = defaultGetSelectedText,
 }: DesktopClipboardHandlersOptions) => {
   useEffect(() => {
@@ -70,6 +83,8 @@ export const useDesktopClipboardHandlers = ({
     let isProcessingPaste = false;
 
     const handlePaste = async (event: ClipboardEvent) => {
+      if (!onInsertText) return;
+
       if (isProcessingPaste) {
         event.preventDefault();
         event.stopPropagation();
@@ -99,21 +114,44 @@ export const useDesktopClipboardHandlers = ({
     };
 
     const handleCopy = async (event: ClipboardEvent) => {
-      if (!enableCopyCut) return;
-
       const container = containerRef.current;
       if (!container) return;
-      const editableTarget = getEditableTarget(event.target);
-      if (!editableTarget) return;
-      if (!container.contains(editableTarget)) return;
 
-      if (
-        editableTarget instanceof HTMLInputElement ||
-        editableTarget instanceof HTMLTextAreaElement
-      ) {
-        const selectedText = getSelectedText(editableTarget);
-        if (selectedText) {
-          await writeClipboardText(selectedText, event);
+      const target = event.target as HTMLElement | null;
+      if (!target || !container.contains(target)) return;
+
+      // Handle copy from editable targets
+      if (enableCopyCut) {
+        const editableTarget = getEditableTarget(event.target);
+        if (
+          editableTarget &&
+          (editableTarget instanceof HTMLInputElement ||
+            editableTarget instanceof HTMLTextAreaElement)
+        ) {
+          const selectedText = getSelectedText(editableTarget);
+          if (selectedText) {
+            await writeClipboardText(selectedText, event);
+            return;
+          }
+        }
+      }
+
+      // Handle copy from read-only content (e.g., tables in NodeBrowser)
+      if (enableReadOnlyCopy) {
+        const editableTarget = getEditableTarget(event.target);
+        // Only handle if not in an editable element
+        if (!editableTarget) {
+          const selection = window.getSelection();
+          const selectedText = selection?.toString() || '';
+          if (selectedText) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (event.clipboardData) {
+              event.clipboardData.setData('text/plain', selectedText);
+            } else {
+              await writeClipboardText(selectedText);
+            }
+          }
         }
       }
     };
@@ -122,75 +160,94 @@ export const useDesktopClipboardHandlers = ({
       if (!(event.metaKey || event.ctrlKey)) return;
 
       const key = event.key.toLowerCase();
+      const container = containerRef.current;
+      if (!container) return;
 
-      if (enableCopyCut && (key === 'c' || key === 'x')) {
-        const container = containerRef.current;
-        if (!container) return;
+      const target = event.target as HTMLElement | null;
+      if (!target || !container.contains(target)) return;
+
+      // Handle Ctrl+C/X for copy/cut
+      if (key === 'c' || key === 'x') {
         const editableTarget = getEditableTarget(event.target);
-        if (!editableTarget || !container.contains(editableTarget)) {
+
+        // Handle editable targets (enableCopyCut)
+        if (enableCopyCut && editableTarget) {
+          if (
+            editableTarget instanceof HTMLInputElement ||
+            editableTarget instanceof HTMLTextAreaElement
+          ) {
+            const selectedText = getSelectedText(editableTarget);
+            if (!selectedText) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            const success = await writeClipboardText(selectedText);
+            if (success && key === 'x' && onInsertText) {
+              onInsertText(editableTarget, '');
+            }
+          }
           return;
         }
 
-        if (
-          editableTarget instanceof HTMLInputElement ||
-          editableTarget instanceof HTMLTextAreaElement
-        ) {
-          const selectedText = getSelectedText(editableTarget);
-          if (!selectedText) return;
-
-          event.preventDefault();
-          event.stopPropagation();
-          const success = await writeClipboardText(selectedText);
-          if (success && key === 'x') {
-            onInsertText(editableTarget, '');
+        // Handle read-only content (enableReadOnlyCopy) - only for copy, not cut
+        if (enableReadOnlyCopy && key === 'c' && !editableTarget) {
+          const selection = window.getSelection();
+          const selectedText = selection?.toString() || '';
+          if (selectedText) {
+            event.preventDefault();
+            event.stopPropagation();
+            await writeClipboardText(selectedText);
           }
         }
         return;
       }
 
-      if (key !== 'v') return;
+      // Handle Ctrl+V for paste
+      if (key === 'v' && onInsertText) {
+        if (isProcessingPaste) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
 
-      if (isProcessingPaste) {
+        const editableTarget = getEditableTarget(event.target);
+        if (!editableTarget) return;
+
         event.preventDefault();
         event.stopPropagation();
-        return;
-      }
+        isProcessingPaste = true;
 
-      const container = containerRef.current;
-      if (!container) return;
-      const editableTarget = getEditableTarget(event.target);
-      if (!editableTarget || !container.contains(editableTarget)) {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-      isProcessingPaste = true;
-
-      try {
-        const text = await readClipboardText();
-        if (text) {
-          onInsertText(editableTarget, text);
+        try {
+          const text = await readClipboardText();
+          if (text) {
+            onInsertText(editableTarget, text);
+          }
+        } finally {
+          setTimeout(() => {
+            isProcessingPaste = false;
+          }, 50);
         }
-      } finally {
-        setTimeout(() => {
-          isProcessingPaste = false;
-        }, 50);
       }
     };
 
-    window.addEventListener('paste', handlePaste, true);
-    if (enableCopyCut) {
+    // Add paste handler only if onInsertText is provided
+    if (onInsertText) {
+      window.addEventListener('paste', handlePaste, true);
+    }
+    // Add copy handler if any copy feature is enabled
+    if (enableCopyCut || enableReadOnlyCopy) {
       window.addEventListener('copy', handleCopy, true);
     }
     window.addEventListener('keydown', handleKeyDown, true);
 
     return () => {
-      window.removeEventListener('paste', handlePaste, true);
-      if (enableCopyCut) {
+      if (onInsertText) {
+        window.removeEventListener('paste', handlePaste, true);
+      }
+      if (enableCopyCut || enableReadOnlyCopy) {
         window.removeEventListener('copy', handleCopy, true);
       }
       window.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [isEnabled, containerRef, onInsertText, enableCopyCut, getSelectedText]);
+  }, [isEnabled, containerRef, onInsertText, enableCopyCut, enableReadOnlyCopy, getSelectedText]);
 };
