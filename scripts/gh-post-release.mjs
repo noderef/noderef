@@ -18,10 +18,10 @@ import { execSync } from 'child_process';
 
 // Patterns to find issue numbers
 // 1. Standard: "Closes #123", "Fixes #123"
-// 2. Branch merges: "Merge branch '...-#123'"
+// 2. Branch merges: "Merge branch '...-#123'" (local) or "from owner/...-#123" (GitHub PR)
 const ISSUE_PATTERNS = [
   /(?:close[s|d]?|fix(?:es|ed)?|resolve[s|d]?)\s+#(\d+)/gi,
-  /-\#(\d+)'/g, // captures #123 from 'feature/foo-#123'
+  /-#(\d+)(?:'|$|\s|\n)/g, // captures #123 from branch names in merge commits
 ];
 
 function getTags() {
