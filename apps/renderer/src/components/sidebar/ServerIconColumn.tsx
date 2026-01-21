@@ -73,14 +73,11 @@ export function ServerIconColumn({
       navigate(server?.serverType === 'alfresco' ? 'repo' : 'dashboard');
     }
 
-    // Update last accessed (fire-and-forget)
-    backendRpc.servers.updateLastAccessed(serverId).catch(err => {
-      console.error('Failed to update last accessed:', err);
-      notifications.show({
-        title: 'Warning',
-        message: 'Failed to update last accessed time',
-        color: 'yellow',
-      });
+    // Update last accessed (fire-and-forget, silent failure)
+    // This is a non-critical operation - don't show notifications on failure
+    // to avoid confusing errors when switching from an unavailable server
+    backendRpc.servers.updateLastAccessed(serverId).catch(() => {
+      // Silently ignore - this is a non-critical operation
     });
   };
 
