@@ -83,7 +83,8 @@ function generateChangelog() {
     // Skip release commits or merges usually?
     if (commit.subject.startsWith('Release v') || commit.subject.startsWith(':rocket: Release'))
       return;
-    if (commit.subject.startsWith('Merge branch')) return; // explicit merges for now, unless we want them
+    // Skip merge commits (including "Merge branch", "Merge remote-tracking branch", etc.)
+    if (commit.subject.startsWith('Merge ')) return;
 
     let matched = false;
     for (const cat of CATEGORIES) {
