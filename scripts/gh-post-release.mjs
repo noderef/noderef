@@ -14,14 +14,19 @@
  * limitations under the License.
  */
 
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 
-// Patterns to find issue numbers
-// 1. Standard: "Closes #123", "Fixes #123"
-// 2. Branch merges: "Merge branch '...-#123'" (local) or "from owner/...-#123" (GitHub PR)
-const ISSUE_PATTERNS = [
-  /(?:close[s|d]?|fix(?:es|ed)?|resolve[s|d]?)\s+#(\d+)/gi,
-  /-#(\d+)(?:'|$|\s|\n)/g, // captures #123 from branch names in merge commits
+// Patterns to find issue numbers in commit messages, PR titles, and PR bodies
+// These match explicit references like "Closes #123", "Fixes #123", "Resolves #123"
+const ISSUE_REF_PATTERNS = [
+  /(?:close(?:s|d)?|fix(?:es|ed)?|resolve(?:s|d)?)\s+#(\d+)/gi,
+];
+
+// Patterns to find issue numbers in branch names
+// Matches branch naming conventions with -#123 (e.g., "fix/issue-#123" or "feature-#456")
+// Note: Only matches patterns with a dash before #, not bare "#123" or "issue/#123"
+const ISSUE_BRANCH_PATTERNS = [
+  /-#(\d+)\b/g, // matches -#123 in branch names
 ];
 
 function getTags() {
@@ -46,13 +51,11 @@ function getGitLog(fromTag, toTag) {
 
 function findIssues(log) {
   const issues = new Set();
-
-  // normalized log content
   const content = log;
 
-  for (const pattern of ISSUE_PATTERNS) {
+  // Check commit messages for explicit issue references
+  for (const pattern of ISSUE_REF_PATTERNS) {
     let match;
-    // reset regex state just in case
     pattern.lastIndex = 0;
     while ((match = pattern.exec(content)) !== null) {
       if (match[1]) {
@@ -60,6 +63,182 @@ function findIssues(log) {
       }
     }
   }
+  return Array.from(issues);
+}
+
+function getMergedPRsInRange(previousTag, currentTag) {
+  const repo = process.env.GITHUB_REPOSITORY;
+  if (!repo) {
+    console.warn('GITHUB_REPOSITORY not set, skipping PR-based issue detection');
+    return [];
+  }
+
+  const [owner, repoName] = repo.split('/');
+  if (!owner || !repoName) {
+    console.warn(`Invalid GITHUB_REPOSITORY format: ${repo}`);
+    return [];
+  }
+
+  try {
+    // For initial releases (no previous tag), skip PR-based detection to avoid
+    // querying potentially huge commit ranges. Commit message scanning will still work.
+    if (!previousTag) {
+      console.log('No previous tag found - skipping PR-based issue detection for initial release');
+      return [];
+    }
+
+    // Use GitHub compare API to get commits in the release range
+    // This is deterministic and works for all merge types (merge, squash, rebase)
+    const base = previousTag;
+    const head = currentTag;
+
+    let compareData;
+    try {
+      const compareJson = execFileSync(
+        'gh',
+        ['api', `repos/${owner}/${repoName}/compare/${base}...${head}`],
+        { encoding: 'utf-8', stdio: 'pipe' }
+      );
+      compareData = JSON.parse(compareJson);
+    } catch (e) {
+      console.warn(`Warning: Could not fetch compare data: ${e.message}`);
+      return [];
+    }
+
+    if (!compareData.commits || compareData.commits.length === 0) {
+      return [];
+    }
+
+    // Check if compare API truncated results (can happen for large ranges)
+    if (
+      typeof compareData.total_commits === 'number' &&
+      compareData.total_commits !== compareData.commits.length
+    ) {
+      console.warn(
+        `Warning: compare API returned ${compareData.commits.length}/${compareData.total_commits} commits. ` +
+        `PR detection may be incomplete for large ranges.`
+      );
+      // Fallback: use git log to get all commit SHAs in range
+      try {
+        const range = `${base}..${head}`;
+        const gitLogSHAs = execSync(`git log ${range} --pretty=format:"%H"`, {
+          encoding: 'utf-8',
+          stdio: 'pipe',
+        })
+          .split('\n')
+          .filter(Boolean);
+        console.log(`Using git log fallback: found ${gitLogSHAs.length} commits in range`);
+        // Use git log SHAs instead of compare API commits
+        compareData.commits = gitLogSHAs.map(sha => ({ sha }));
+      } catch (e) {
+        console.warn(`Warning: Could not use git log fallback: ${e.message}`);
+      }
+    }
+
+    // For each commit, query which PRs it belongs to
+    // This works for all merge types because GitHub tracks PR associations
+    const prNumbers = new Set();
+    const commitSHAs = compareData.commits.map(c => c.sha);
+
+    for (const sha of commitSHAs) {
+      try {
+        // Use the commits/{sha}/pulls endpoint with stable API headers
+        const pullsJson = execFileSync(
+          'gh',
+          [
+            'api',
+            `repos/${owner}/${repoName}/commits/${sha}/pulls`,
+            '-H',
+            'Accept: application/vnd.github+json',
+            '-H',
+            'X-GitHub-Api-Version: 2022-11-28',
+          ],
+          { encoding: 'utf-8', stdio: 'pipe' }
+        );
+        const pulls = JSON.parse(pullsJson);
+        
+        for (const pr of pulls) {
+          if (pr.number) {
+            prNumbers.add(pr.number.toString());
+          }
+        }
+      } catch (e) {
+        // Commit might not be associated with a PR, or API call failed - skip
+        continue;
+      }
+    }
+
+    if (prNumbers.size === 0) {
+      return [];
+    }
+
+    // Fetch PR details for issue extraction
+    const prDetails = [];
+    for (const prNum of Array.from(prNumbers)) {
+      try {
+        const prJson = execFileSync(
+          'gh',
+          ['pr', 'view', prNum, '--repo', repo, '--json', 'headRefName,title,body'],
+          { encoding: 'utf-8', stdio: 'pipe' }
+        );
+        prDetails.push(JSON.parse(prJson));
+      } catch (e) {
+        // PR might not exist or be accessible, skip
+        continue;
+      }
+    }
+
+    return prDetails;
+  } catch (e) {
+    console.warn(`Warning: Error fetching merged PRs: ${e.message}`);
+    return [];
+  }
+}
+
+function findIssuesInPRs(prs) {
+  const issues = new Set();
+
+  for (const pr of prs) {
+    // Check branch name - use branch-specific patterns
+    if (pr.headRefName) {
+      for (const pattern of ISSUE_BRANCH_PATTERNS) {
+        let match;
+        pattern.lastIndex = 0;
+        while ((match = pattern.exec(pr.headRefName)) !== null) {
+          if (match[1]) {
+            issues.add(match[1]);
+          }
+        }
+      }
+    }
+
+    // Check title - use reference patterns (e.g., "Fixes #123")
+    if (pr.title) {
+      for (const pattern of ISSUE_REF_PATTERNS) {
+        let match;
+        pattern.lastIndex = 0;
+        while ((match = pattern.exec(pr.title)) !== null) {
+          if (match[1]) {
+            issues.add(match[1]);
+          }
+        }
+      }
+    }
+
+    // Check body - use reference patterns (e.g., "Closes #123")
+    if (pr.body) {
+      for (const pattern of ISSUE_REF_PATTERNS) {
+        let match;
+        pattern.lastIndex = 0;
+        while ((match = pattern.exec(pr.body)) !== null) {
+          if (match[1]) {
+            issues.add(match[1]);
+          }
+        }
+      }
+    }
+  }
+
   return Array.from(issues);
 }
 
@@ -75,8 +254,17 @@ function processIssues() {
 
   console.log(`Searching for issues between ${previousTag || 'initial'} and ${currentTag}...`);
 
-  const log = getGitLog(previousTag, 'HEAD'); // Assuming HEAD is the release commit/tag
-  const issueIds = findIssues(log);
+  // Check commit messages (works for merge commits and direct commits)
+  const log = getGitLog(previousTag, currentTag);
+  const issueIdsFromCommits = findIssues(log);
+
+  // Check merged PRs (works for all merge types: merge, squash, rebase)
+  const mergedPRs = getMergedPRsInRange(previousTag, currentTag);
+  const issueIdsFromPRs = findIssuesInPRs(mergedPRs);
+
+  // Combine issues from both sources
+  const allIssueIds = new Set([...issueIdsFromCommits, ...issueIdsFromPRs]);
+  const issueIds = Array.from(allIssueIds).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
 
   if (issueIds.length === 0) {
     console.log('No linked issues found to close.');
@@ -84,18 +272,27 @@ function processIssues() {
   }
 
   console.log(`Found issues: ${issueIds.join(', ')}`);
+  if (issueIdsFromPRs.length > 0 || issueIdsFromCommits.length > 0) {
+    const sources = [];
+    if (issueIdsFromCommits.length > 0) sources.push(`commits: ${issueIdsFromCommits.join(', ')}`);
+    if (issueIdsFromPRs.length > 0) sources.push(`PRs: ${issueIdsFromPRs.join(', ')}`);
+    console.log(`  (from ${sources.join(', ')})`);
+  }
 
   issueIds.forEach(id => {
     try {
       const commentLink = `[${currentTag}](https://github.com/${process.env.GITHUB_REPOSITORY}/releases/tag/${currentTag})`;
       const commentBody = `🚀 Released in ${commentLink}`;
 
-      // Check current status
-      const checkCmd = `gh issue view ${id} --json state --jq .state`;
-
+      // Check current status - use execFileSync to avoid shell quoting issues
       let state;
       try {
-        state = execSync(checkCmd, { encoding: 'utf-8' }).trim();
+        const stateJson = execFileSync(
+          'gh',
+          ['issue', 'view', id, '--json', 'state', '--jq', '.state'],
+          { encoding: 'utf-8', stdio: 'pipe' }
+        );
+        state = stateJson.trim();
       } catch (e) {
         console.warn(`Skipping #${id}: Unable to fetch details (might be a PR or not found)`);
         return;
@@ -103,7 +300,11 @@ function processIssues() {
 
       if (state === 'OPEN') {
         console.log(`Closing #${id}...`);
-        execSync(`gh issue close ${id} --comment "${commentBody}"`, { stdio: 'inherit' });
+        execFileSync(
+          'gh',
+          ['issue', 'close', id, '--comment', commentBody],
+          { stdio: 'inherit' }
+        );
       } else {
         console.log(`Skipping #${id}: Issue is already closed.`);
       }
