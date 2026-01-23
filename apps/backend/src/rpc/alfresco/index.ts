@@ -340,7 +340,8 @@ export function registerAlfrescoRpc(
                     needsEncoding = !isLetter && !isUnderscore;
                   } else {
                     // Subsequent chars: encode special chars (but keep letters, digits, underscore, hyphen, period)
-                    needsEncoding = !isLetter && !isDigit && !isUnderscore && !isHyphen && !isPeriod;
+                    needsEncoding =
+                      !isLetter && !isDigit && !isUnderscore && !isHyphen && !isPeriod;
                   }
 
                   if (needsEncoding) {
@@ -365,7 +366,7 @@ export function registerAlfrescoRpc(
                   'Data Dictionary': 'app:dictionary',
                   'Guest Home': 'app:guest_home',
                   'User Homes': 'app:user_homes',
-                  'Shared': 'app:shared',
+                  Shared: 'app:shared',
                   'Imap Attachments': 'app:imap_attachments',
                   'IMAP Home': 'app:imap_home',
                 };
