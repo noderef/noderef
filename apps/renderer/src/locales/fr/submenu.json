@@ -74,6 +74,7 @@
   "openInNewTab": "Nouvel onglet",
   "nodeBrowser": "Navigateur de nœuds",
   "fileFolderBrowser": "Parcourir",
+  "managePermissionsAction": "Gestion des droits",
   "renameAction": "Renommer",
   "deleteAction": "Supprimer",
   "openInJsConsole": "Ouvrir dans la JavaScript Console",

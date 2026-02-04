@@ -417,6 +417,29 @@ export const backendRpc = {
     },
 
     /**
+     * Update node permissions
+     */
+    async updateNodePermissions(
+      serverId: number,
+      nodeId: string,
+      permissions: {
+        isInheritanceEnabled?: boolean;
+        locallySet: Array<{
+          authorityId: string;
+          name: string;
+          accessStatus?: 'ALLOWED' | 'DENIED';
+        }>;
+      }
+    ): Promise<{ success: boolean; node: any }> {
+      console.log('🔐 Updating node permissions:', { serverId, nodeId });
+      return rpc<{ success: boolean; node: any }>('backend.repository.updateNodePermissions', {
+        serverId,
+        nodeId,
+        permissions,
+      });
+    },
+
+    /**
      * Delete a node
      */
     async deleteNode(

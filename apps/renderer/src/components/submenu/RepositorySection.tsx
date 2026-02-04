@@ -23,11 +23,13 @@ import {
 } from '@/core/ipc/backend';
 import { useFileFolderBrowserTabsStore } from '@/core/store/fileFolderBrowserTabs';
 import { useJsConsoleStore } from '@/core/store/jsConsole';
+import { MODAL_KEYS } from '@/core/store/keys';
 import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
 import { useServersStore } from '@/core/store/servers';
 import { useTextEditorStore } from '@/core/store/textEditor';
 import { useUIStore } from '@/core/store/ui';
 import { isTextLikeFile } from '@/features/text-editor/language';
+import { useModal } from '@/hooks/useModal';
 import { useActiveServerId, useNavigation } from '@/hooks/useNavigation';
 import { markNodesTemporary } from '@/utils/markNodesTemporary';
 import {
@@ -57,6 +59,7 @@ import {
   IconFileSearch,
   IconFolder,
   IconFolderOpen,
+  IconLock,
   IconTextWrap,
   IconTrash,
   IconWorld,
@@ -341,6 +344,7 @@ export function RepositorySection({
   const setLoadedScript = useJsConsoleStore(state => state.setLoadedScript);
   const setDocumentContext = useJsConsoleStore(state => state.setDocumentContext);
   const loadRemoteTextFile = useTextEditorStore(state => state.loadRemoteFile);
+  const { open: openPermissionsModal } = useModal(MODAL_KEYS.NODE_PERMISSIONS);
 
   useEffect(() => {
     onOpenedChange?.(opened);
@@ -414,6 +418,16 @@ export function RepositorySection({
     setContextMenuPosition({ x: e.clientX, y: e.clientY });
     setSelectedNode(node);
     setContextMenuOpened(true);
+  };
+
+  const handleManagePermissions = () => {
+    if (!selectedNode || !activeServerId) return;
+    openPermissionsModal({
+      serverId: activeServerId,
+      nodeId: selectedNode.value,
+      nodeName: selectedNode.label,
+    });
+    setContextMenuOpened(false);
   };
 
   const handleRenameStart = () => {
@@ -1459,7 +1473,7 @@ export function RepositorySection({
                   onChange={setContextMenuOpened}
                   withinPortal
                   shadow="md"
-                  width={200}
+                  width={240}
                   position="bottom-start"
                   offset={0}
                   transitionProps={{ duration: 0 }}
@@ -1515,6 +1529,15 @@ export function RepositorySection({
                             </Menu.Item>
                           );
                           sections.push(fileSection);
+                          sections.push([
+                            <Menu.Item
+                              key="manage-permissions"
+                              leftSection={<IconLock size={14} />}
+                              onClick={handleManagePermissions}
+                            >
+                              {t('submenu:managePermissionsAction')}
+                            </Menu.Item>,
+                          ]);
                         }
 
                         if (selectedNode.isFolder && !isSitesRoot && !isSiteNode) {
@@ -1534,9 +1557,34 @@ export function RepositorySection({
                               {t('submenu:jsConsole')}
                             </Menu.Item>,
                           ]);
+                          sections.push([
+                            <Menu.Item
+                              key="folder-manage-permissions"
+                              leftSection={<IconLock size={14} />}
+                              onClick={handleManagePermissions}
+                            >
+                              {t('submenu:managePermissionsAction')}
+                            </Menu.Item>,
+                          ]);
                         }
 
                         if (isSitesRoot) {
+                          sections.push([
+                            <Menu.Item
+                              key="sites-node-browser"
+                              leftSection={<IconFileSearch size={14} />}
+                              onClick={handleOpenInNodeBrowser}
+                            >
+                              {t('submenu:nodeBrowser')}
+                            </Menu.Item>,
+                            <Menu.Item
+                              key="sites-manage-permissions"
+                              leftSection={<IconLock size={14} />}
+                              onClick={handleManagePermissions}
+                            >
+                              {t('submenu:managePermissionsAction')}
+                            </Menu.Item>,
+                          ]);
                           sections.push([
                             <Menu.Item
                               key="create-site"
@@ -1549,6 +1597,22 @@ export function RepositorySection({
                         }
 
                         if (isSiteNode) {
+                          sections.push([
+                            <Menu.Item
+                              key="site-node-browser"
+                              leftSection={<IconFileSearch size={14} />}
+                              onClick={handleOpenInNodeBrowser}
+                            >
+                              {t('submenu:nodeBrowser')}
+                            </Menu.Item>,
+                            <Menu.Item
+                              key="site-manage-permissions"
+                              leftSection={<IconLock size={14} />}
+                              onClick={handleManagePermissions}
+                            >
+                              {t('submenu:managePermissionsAction')}
+                            </Menu.Item>,
+                          ]);
                           sections.push([
                             <Menu.Item
                               key="edit-site"

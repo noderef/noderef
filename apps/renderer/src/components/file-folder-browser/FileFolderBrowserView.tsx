@@ -28,12 +28,14 @@ import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
 import { useFileFolderBrowserActionsStore } from '@/core/store/fileFolderBrowserActions';
 import { useFileFolderBrowserTabsStore } from '@/core/store/fileFolderBrowserTabs';
 import { useJsConsoleStore } from '@/core/store/jsConsole';
+import { MODAL_KEYS } from '@/core/store/keys';
 import { useNavigationStore } from '@/core/store/navigation';
 import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
 import { useServersStore } from '@/core/store/servers';
 import { useTextEditorStore } from '@/core/store/textEditor';
 import { isTextLikeFile } from '@/features/text-editor/language';
 import { useColumnResize } from '@/hooks/useColumnResize';
+import { useModal } from '@/hooks/useModal';
 import { formatRelativeTime } from '@/utils/formatTime';
 import { markNodesTemporary as markNodesTemporaryRpc } from '@/utils/markNodesTemporary';
 import {
@@ -71,6 +73,7 @@ import {
   IconEdit,
   IconFileSearch,
   IconFolder,
+  IconLock,
   IconPhoto,
   IconPlus,
   IconRefresh,
@@ -448,6 +451,7 @@ export function FileFolderBrowserView({
   const setLoadedScript = useJsConsoleStore(state => state.setLoadedScript);
   const setDocumentContext = useJsConsoleStore(state => state.setDocumentContext);
   const openFolderTab = useFileFolderBrowserTabsStore(state => state.openTab);
+  const { open: openPermissionsModal } = useModal(MODAL_KEYS.NODE_PERMISSIONS);
   const loadRemoteTextFile = useTextEditorStore(state => state.loadRemoteFile);
   const isCompact = useMediaQuery('(max-width: 1024px)');
   const tableColumnCount = isCompact ? 4 : 5;
@@ -1181,6 +1185,16 @@ export function FileFolderBrowserView({
       { pinned: true }
     );
     navigate('node-browser');
+    setContextMenuOpened(false);
+  };
+
+  const handleManagePermissions = () => {
+    if (!selectedItem) return;
+    openPermissionsModal({
+      serverId,
+      nodeId: selectedItem.id,
+      nodeName: selectedItem.name,
+    });
     setContextMenuOpened(false);
   };
 
@@ -1939,7 +1953,7 @@ export function FileFolderBrowserView({
         onChange={setContextMenuOpened}
         withinPortal
         shadow="md"
-        width={200}
+        width={240}
         position="bottom-start"
         offset={0}
         transitionProps={{ duration: 0 }}
@@ -1982,6 +1996,10 @@ export function FileFolderBrowserView({
                 onClick={handleOpenInNodeBrowser}
               >
                 {t('submenu:nodeBrowser')}
+              </Menu.Item>
+              <Menu.Divider />
+              <Menu.Item leftSection={<IconLock size={14} />} onClick={handleManagePermissions}>
+                {t('submenu:managePermissionsAction')}
               </Menu.Item>
             </>
           )}

@@ -74,6 +74,7 @@
   "openInNewTab": "New Tab",
   "nodeBrowser": "Node Browser",
   "fileFolderBrowser": "Browse",
+  "managePermissionsAction": "Permission management",
   "renameAction": "Rename",
   "deleteAction": "Delete",
   "openInJsConsole": "Open in JavaScript Console",

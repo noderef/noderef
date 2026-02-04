@@ -462,6 +462,60 @@ export function registerRepositoryHandlers(routes: Routes, ctx: RpcContext): voi
     },
   };
 
+  routes['backend.repository.updateNodePermissions'] = {
+    schema: z.object({
+      serverId: z.number(),
+      nodeId: z.string(),
+      permissions: z.object({
+        isInheritanceEnabled: z.boolean().optional(),
+        locallySet: z.array(
+          z.object({
+            authorityId: z.string().min(1),
+            name: z.string().min(1),
+            accessStatus: z.enum(['ALLOWED', 'DENIED']).optional(),
+          })
+        ),
+      }),
+    }),
+    handler: async params => {
+      const { serverId, nodeId, permissions } = params as {
+        serverId: number;
+        nodeId: string;
+        permissions: {
+          isInheritanceEnabled?: boolean;
+          locallySet: Array<{
+            authorityId: string;
+            name: string;
+            accessStatus?: 'ALLOWED' | 'DENIED';
+          }>;
+        };
+      };
+
+      return withAuth(ctx, serverId, async api => {
+        const nodesApi = new NodesApi(api);
+        const sanitizedLocallySet = (permissions.locallySet || []).map(entry => ({
+          authorityId: entry.authorityId,
+          name: entry.name,
+          accessStatus: entry.accessStatus ?? 'ALLOWED',
+        }));
+
+        const result = await nodesApi.updateNode(nodeId, {
+          permissions: {
+            isInheritanceEnabled: permissions.isInheritanceEnabled,
+            locallySet: sanitizedLocallySet,
+          },
+        });
+
+        log.debug(
+          { serverId, nodeId, locallySetCount: sanitizedLocallySet.length },
+          'Node permissions updated successfully'
+        );
+
+        return { success: true, node: result.entry };
+      });
+    },
+  };
+
   routes['backend.repository.deleteNode'] = {
     schema: z.object({
       serverId: z.number(),
