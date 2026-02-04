@@ -595,7 +595,7 @@ export function NodePermissionsModal() {
                 value={entry.name}
                 onChange={value => handlePermissionChange(entry.authorityId, value)}
                 size="xs"
-                comboboxProps={{ withinPortal: false }}
+                comboboxProps={{ withinPortal: true, position: 'bottom-start', offset: 6 }}
               />
             ) : (
               <Text size="sm">{roleLabel(entry.name)}</Text>
