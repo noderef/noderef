@@ -55,8 +55,8 @@
   "contentDownloaded": "Content downloaded successfully",
   "downloadError": "Download failed",
   "downloadContent": "Download content",
-  "managePermissions": "Permission management",
-  "permissionsManageTitle": "Permission management",
+  "managePermissions": "Permissions",
+  "permissionsManageTitle": "Permissions",
   "permissionsServerMissing": "Server not found",
   "permissionsSiteBadge": "Site: {{siteId}}",
   "permissionsInheritLabel": "Inherit permissions",
@@ -91,5 +91,11 @@
   "permissionsLoadErrorTitle": "Failed to load authorities",
   "permissionsRemove": "Remove permission",
   "permissionsUser": "User",
-  "permissionsGroup": "Group"
+  "permissionsGroup": "Group",
+  "permissionsManageMembers": "Manage members",
+  "permissionsManageMembersTitle": "Manage members: {{group}}",
+  "permissionsMembersTitle": "Members",
+  "permissionsMemberSearchPlaceholder": "Search users or groups…",
+  "permissionsNoMembers": "No members found",
+  "permissionsRemoveMember": "Remove member"
 }

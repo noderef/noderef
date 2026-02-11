@@ -55,8 +55,8 @@
   "contentDownloaded": "Inhalt erfolgreich heruntergeladen",
   "downloadError": "Download fehlgeschlagen",
   "downloadContent": "Inhalt herunterladen",
-  "managePermissions": "Berechtigungsverwaltung",
-  "permissionsManageTitle": "Berechtigungsverwaltung",
+  "managePermissions": "Berechtigungen",
+  "permissionsManageTitle": "Berechtigungen",
   "permissionsServerMissing": "Server nicht gefunden",
   "permissionsSiteBadge": "Site: {{siteId}}",
   "permissionsInheritLabel": "Berechtigungen übernehmen",
@@ -91,5 +91,11 @@
   "permissionsLoadErrorTitle": "Autoritäten konnten nicht geladen werden",
   "permissionsRemove": "Berechtigung entfernen",
   "permissionsUser": "Benutzer",
-  "permissionsGroup": "Gruppe"
+  "permissionsGroup": "Gruppe",
+  "permissionsManageMembers": "Mitglieder verwalten",
+  "permissionsManageMembersTitle": "Mitglieder verwalten: {{group}}",
+  "permissionsMembersTitle": "Mitglieder",
+  "permissionsMemberSearchPlaceholder": "Benutzer oder Gruppen suchen…",
+  "permissionsNoMembers": "Keine Mitglieder gefunden",
+  "permissionsRemoveMember": "Mitglied entfernen"
 }

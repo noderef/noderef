@@ -55,8 +55,8 @@
   "contentDownloaded": "Contenu téléchargé avec succès",
   "downloadError": "Échec du téléchargement",
   "downloadContent": "Télécharger le contenu",
-  "managePermissions": "Gestion des droits",
-  "permissionsManageTitle": "Gestion des droits",
+  "managePermissions": "Permissions",
+  "permissionsManageTitle": "Permissions",
   "permissionsServerMissing": "Serveur introuvable",
   "permissionsSiteBadge": "Site : {{siteId}}",
   "permissionsInheritLabel": "Hériter des droits",
@@ -91,5 +91,11 @@
   "permissionsLoadErrorTitle": "Échec du chargement des autorités",
   "permissionsRemove": "Retirer le droit",
   "permissionsUser": "Utilisateur",
-  "permissionsGroup": "Groupe"
+  "permissionsGroup": "Groupe",
+  "permissionsManageMembers": "Gérer les membres",
+  "permissionsManageMembersTitle": "Gérer les membres : {{group}}",
+  "permissionsMembersTitle": "Membres",
+  "permissionsMemberSearchPlaceholder": "Rechercher des utilisateurs ou des groupes…",
+  "permissionsNoMembers": "Aucun membre trouvé",
+  "permissionsRemoveMember": "Retirer un membre"
 }

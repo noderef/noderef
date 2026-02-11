@@ -55,8 +55,8 @@
   "contentDownloaded": "Inhoud succesvol gedownload",
   "downloadError": "Download mislukt",
   "downloadContent": "Download inhoud",
-  "managePermissions": "Rechtenbeheer",
-  "permissionsManageTitle": "Rechtenbeheer",
+  "managePermissions": "Rechten",
+  "permissionsManageTitle": "Rechten",
   "permissionsServerMissing": "Server niet gevonden",
   "permissionsSiteBadge": "Site: {{siteId}}",
   "permissionsInheritLabel": "Rechten overnemen",
@@ -91,5 +91,11 @@
   "permissionsLoadErrorTitle": "Autoriteiten laden mislukt",
   "permissionsRemove": "Recht verwijderen",
   "permissionsUser": "Gebruiker",
-  "permissionsGroup": "Groep"
+  "permissionsGroup": "Groep",
+  "permissionsManageMembers": "Leden beheren",
+  "permissionsManageMembersTitle": "Leden beheren: {{group}}",
+  "permissionsMembersTitle": "Leden",
+  "permissionsMemberSearchPlaceholder": "Zoek gebruikers of groepen…",
+  "permissionsNoMembers": "Geen leden gevonden",
+  "permissionsRemoveMember": "Lid verwijderen"
 }
