@@ -327,6 +327,9 @@ export function RepositorySection({
   const [renamingNode, setRenamingNode] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const renameInputRef = useRef<HTMLInputElement>(null);
+  // Track current server ID in a ref for async operations to check if server changed
+  const currentServerIdRef = useRef<number | null>(activeServerId);
+  currentServerIdRef.current = activeServerId;
   const activeServer = useServersStore(state =>
     activeServerId ? (state.servers.find(s => s.id === activeServerId) ?? null) : null
   );
@@ -833,15 +836,25 @@ export function RepositorySection({
   const loadRootNodes = async () => {
     if (!activeServerId) return;
 
+    // Capture the server ID at the start of this request
+    // to avoid applying results to a different server after switching
+    const requestServerId = activeServerId;
+
     setLoading(true);
     setError(null);
     const attemptNumber = rootLoadAttempts + 1;
     setRootLoadAttempts(attemptNumber);
 
     try {
-      const result = await backendRpc.repository.getNodeChildren(activeServerId, undefined, {
+      const result = await backendRpc.repository.getNodeChildren(requestServerId, undefined, {
         maxItems: NODE_CHILD_PAGE_SIZE,
       });
+
+      // Check if server changed while request was in flight - if so, discard results
+      if (requestServerId !== currentServerIdRef.current) {
+        return;
+      }
+
       const nodes = convertNodesToTree(result.nodes);
       const hasMoreChildren = (result.pagination?.hasMoreItems ?? false) && nodes.length > 0;
       updatePaginationState(ROOT_NODE_ID, result.pagination, nodes.length);
@@ -853,6 +866,11 @@ export function RepositorySection({
       );
       setLoadedNodes(new Set([ROOT_NODE_ID]));
     } catch (err) {
+      // Check if server changed while request was in flight - if so, ignore error
+      if (requestServerId !== currentServerIdRef.current) {
+        return;
+      }
+
       console.error('Failed to load root nodes:', err);
       if (attemptNumber >= MAX_ROOT_LOAD_ATTEMPTS) {
         const baseMessage = err instanceof Error ? err.message : t('submenu:loadError');
@@ -864,7 +882,10 @@ export function RepositorySection({
         );
       }
     } finally {
-      setLoading(false);
+      // Only update loading state if we're still on the same server
+      if (requestServerId === currentServerIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -909,6 +930,9 @@ export function RepositorySection({
   ): Promise<TreeNode[]> => {
     if (!activeServerId) return [];
 
+    // Capture the server ID at the start of this request
+    const requestServerId = activeServerId;
+
     // If already loaded, return empty (tree already has the data)
     if (!options?.forceReload && loadedNodes.has(nodeId)) {
       return [];
@@ -926,9 +950,15 @@ export function RepositorySection({
     setLoadingNodes(prev => new Set(prev).add(nodeId));
 
     try {
-      const result = await backendRpc.repository.getNodeChildren(activeServerId, nodeId, {
+      const result = await backendRpc.repository.getNodeChildren(requestServerId, nodeId, {
         maxItems: NODE_CHILD_PAGE_SIZE,
       });
+
+      // Check if server changed while request was in flight
+      if (requestServerId !== currentServerIdRef.current) {
+        return [];
+      }
+
       const childNodes = convertNodesToTree(result.nodes);
 
       // Update tree data by finding and replacing the node's children
@@ -945,15 +975,21 @@ export function RepositorySection({
 
       return childNodes;
     } catch (err) {
+      // Ignore errors if server changed
+      if (requestServerId !== currentServerIdRef.current) {
+        return [];
+      }
       console.error(`Failed to load children for node ${nodeId}:`, err);
       return [];
     } finally {
-      // Remove from loading
-      setLoadingNodes(prev => {
-        const next = new Set(prev);
-        next.delete(nodeId);
-        return next;
-      });
+      // Only update loading state if we're still on the same server
+      if (requestServerId === currentServerIdRef.current) {
+        setLoadingNodes(prev => {
+          const next = new Set(prev);
+          next.delete(nodeId);
+          return next;
+        });
+      }
     }
   };
 
@@ -962,6 +998,9 @@ export function RepositorySection({
       if (!activeServerId) {
         return;
       }
+
+      // Capture the server ID at the start of this request
+      const requestServerId = activeServerId;
 
       const paginationInfo = paginationState[targetNodeId];
       if (!paginationInfo || !paginationInfo.hasMore) {
@@ -976,13 +1015,19 @@ export function RepositorySection({
 
       try {
         const result = await backendRpc.repository.getNodeChildren(
-          activeServerId,
+          requestServerId,
           targetNodeId === ROOT_NODE_ID ? undefined : targetNodeId,
           {
             skipCount: paginationInfo.nextSkipCount,
             maxItems: NODE_CHILD_PAGE_SIZE,
           }
         );
+
+        // Check if server changed while request was in flight
+        if (requestServerId !== currentServerIdRef.current) {
+          return;
+        }
+
         const childNodes = convertNodesToTree(result.nodes);
 
         const hasMoreChildren = (result.pagination?.hasMoreItems ?? false) && childNodes.length > 0;
@@ -1005,16 +1050,23 @@ export function RepositorySection({
 
         updatePaginationState(targetNodeId, result.pagination, childNodes.length);
       } catch (err) {
+        // Ignore errors if server changed
+        if (requestServerId !== currentServerIdRef.current) {
+          return;
+        }
         console.error(`Failed to load more children for node ${targetNodeId}:`, err);
       } finally {
-        setLoadingMoreNodes(prev => {
-          const next = new Set(prev);
-          next.delete(targetNodeId);
-          return next;
-        });
+        // Only update loading state if we're still on the same server
+        if (requestServerId === currentServerIdRef.current) {
+          setLoadingMoreNodes(prev => {
+            const next = new Set(prev);
+            next.delete(targetNodeId);
+            return next;
+          });
+        }
       }
     },
-    [activeServerId, convertNodesToTree, loadingMoreNodes, paginationState, updatePaginationState]
+    [convertNodesToTree, loadingMoreNodes, paginationState, updatePaginationState]
   );
 
   const renderTreeIcon = (node: TreeNode, expanded: boolean) => {

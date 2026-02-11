@@ -42,7 +42,7 @@ export function buildExecutionPrompt({
     : '';
 
   const dsl = `
-Respond using EXACTLY this format. Do not add markdown fences, prose, or multiple blocks.
+Respond using EXACTLY this format. Wrap your answer in <changes> tags.
 
 <changes>
 {

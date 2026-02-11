@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import { ColumnResizeHandle } from '@/components/common/ColumnResizeHandle';
 import { CreateSiteForm } from '@/components/submenu/CreateSiteForm';
 import { getFileIconByMimeType } from '@/components/submenu/fileIconUtils';
 import { alfrescoRpc } from '@/core/ipc/alfresco';
@@ -32,8 +33,9 @@ import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
 import { useServersStore } from '@/core/store/servers';
 import { useTextEditorStore } from '@/core/store/textEditor';
 import { isTextLikeFile } from '@/features/text-editor/language';
-import { markNodesTemporary as markNodesTemporaryRpc } from '@/utils/markNodesTemporary';
+import { useColumnResize } from '@/hooks/useColumnResize';
 import { formatRelativeTime } from '@/utils/formatTime';
+import { markNodesTemporary as markNodesTemporaryRpc } from '@/utils/markNodesTemporary';
 import {
   ActionIcon,
   Anchor,
@@ -449,6 +451,19 @@ export function FileFolderBrowserView({
   const loadRemoteTextFile = useTextEditorStore(state => state.loadRemoteFile);
   const isCompact = useMediaQuery('(max-width: 1024px)');
   const tableColumnCount = isCompact ? 4 : 5;
+
+  // Resizable Name column - width is persisted per server in localStorage
+  const {
+    width: nameColumnWidth,
+    isDragging: isResizingNameColumn,
+    handleMouseDown: handleNameColumnResizeStart,
+  } = useColumnResize({
+    serverId,
+    columnId: 'name',
+    defaultWidth: 280,
+    minWidth: 80,
+    maxWidth: 800,
+  });
   const setCreateFolderHandler = useFileFolderBrowserActionsStore(
     state => state.setCreateFolderHandler
   );
@@ -1645,7 +1660,7 @@ export function FileFolderBrowserView({
 
     return (
       <ScrollArea style={{ flex: 1 }}>
-        <Table highlightOnHover>
+        <Table highlightOnHover style={{ tableLayout: 'fixed' }}>
           <Table.Thead>
             <Table.Tr>
               <Table.Th style={{ width: 32 }}>
@@ -1657,14 +1672,24 @@ export function FileFolderBrowserView({
                   aria-label={t('fileFolderBrowser:selectAll')}
                 />
               </Table.Th>
-              <Table.Th style={{ width: isCompact ? 'auto' : '30%' }}>
+              <Table.Th
+                style={{
+                  width: isCompact ? 'auto' : nameColumnWidth,
+                  maxWidth: isCompact ? undefined : nameColumnWidth,
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  position: 'relative',
+                }}
+              >
                 {t('fileFolderBrowser:name')}
+                <ColumnResizeHandle
+                  onMouseDown={handleNameColumnResizeStart}
+                  isResizing={isResizingNameColumn}
+                />
               </Table.Th>
-              {!isCompact && (
-                <Table.Th style={{ width: '35%' }}>{t('fileFolderBrowser:description')}</Table.Th>
-              )}
-              <Table.Th style={{ width: '20%' }}>{t('fileFolderBrowser:modified')}</Table.Th>
-              <Table.Th style={{ width: '20%' }}>{t('fileFolderBrowser:modifiedBy')}</Table.Th>
+              {!isCompact && <Table.Th>{t('fileFolderBrowser:description')}</Table.Th>}
+              <Table.Th style={{ width: 150 }}>{t('fileFolderBrowser:modified')}</Table.Th>
+              <Table.Th style={{ width: 150 }}>{t('fileFolderBrowser:modifiedBy')}</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -1690,18 +1715,24 @@ export function FileFolderBrowserView({
                     })}
                   />
                 </Table.Td>
-                <Table.Td>
-                  <Group gap="sm" wrap="nowrap">
-                    {renderNodeIcon(child)}
-                    <div style={{ minWidth: 0 }}>
-                      <Text size="sm" fw={500} lineClamp={1}>
+                <Table.Td style={{ overflow: 'hidden', minWidth: 0 }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 'var(--mantine-spacing-sm)',
+                    }}
+                  >
+                    <div style={{ flexShrink: 0 }}>{renderNodeIcon(child)}</div>
+                    <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                      <Text size="sm" fw={500} truncate>
                         {child.name}
                       </Text>
-                      <Text size="xs" c="dimmed" lineClamp={1}>
+                      <Text size="xs" c="dimmed" truncate>
                         {child.nodeType}
                       </Text>
                     </div>
-                  </Group>
+                  </div>
                 </Table.Td>
                 {!isCompact && (
                   <Table.Td>

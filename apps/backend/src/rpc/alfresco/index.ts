@@ -309,57 +309,103 @@ export function registerAlfrescoRpc(
             }
 
             // Build qname path (for PATH query)
+            // PATH queries in Alfresco require full path from root: /app:company_home/...
             let qnamePath = '';
             if (node.path?.elements && Array.isArray(node.path.elements)) {
-              // Construct qname path from elements using prefixedName or qnamePath
+              // ISO 9075 encoding for qname local names
+              // XML names cannot start with digits or contain certain special characters
+              // These need to be encoded as _xHHHH_ where HHHH is the hex Unicode code point
+              const encodeISO9075 = (name: string): string => {
+                if (!name) return name;
+
+                let result = '';
+                for (let i = 0; i < name.length; i++) {
+                  const char = name[i];
+                  const code = char.charCodeAt(0);
+
+                  // Check if character needs encoding:
+                  // - First char: must be letter or underscore (not digit, hyphen, or special)
+                  // - Other chars: letters, digits, hyphens, underscores, periods are OK
+                  const isFirstChar = i === 0;
+                  const isLetter = /[a-zA-Z]/.test(char);
+                  const isDigit = /[0-9]/.test(char);
+                  const isUnderscore = char === '_';
+                  const isHyphen = char === '-';
+                  const isPeriod = char === '.';
+
+                  let needsEncoding = false;
+                  if (isFirstChar) {
+                    // First char can only be letter or underscore
+                    // But underscore followed by 'x' could conflict with encoding, so encode digits and hyphens
+                    needsEncoding = !isLetter && !isUnderscore;
+                  } else {
+                    // Subsequent chars: encode special chars (but keep letters, digits, underscore, hyphen, period)
+                    needsEncoding =
+                      !isLetter && !isDigit && !isUnderscore && !isHyphen && !isPeriod;
+                  }
+
+                  if (needsEncoding) {
+                    // Encode as _xHHHH_ format
+                    result += `_x${code.toString(16).padStart(4, '0')}_`;
+                  } else {
+                    result += char;
+                  }
+                }
+                return result;
+              };
+
+              // Helper to convert name + nodeType to qname format
+              // Note: Qnames in Alfresco are NOT derived from display names - they're stored separately.
+              // However, the API doesn't return qnames for path elements, so we must construct them.
+              const toQname = (name: string, nodeType: string): string => {
+                const nodeTypeLower = (nodeType || '').toLowerCase();
+
+                // Known system folders with fixed qnames (display name differs from qname)
+                const knownQnames: Record<string, string> = {
+                  'Company Home': 'app:company_home',
+                  'Data Dictionary': 'app:dictionary',
+                  'Guest Home': 'app:guest_home',
+                  'User Homes': 'app:user_homes',
+                  Shared: 'app:shared',
+                  'Imap Attachments': 'app:imap_attachments',
+                  'IMAP Home': 'app:imap_home',
+                };
+                if (knownQnames[name]) {
+                  return knownQnames[name];
+                }
+
+                // Sites container (st:sites) is a singleton with fixed qname
+                if (nodeTypeLower === 'st:sites') {
+                  return 'st:sites';
+                }
+
+                // Replace spaces with underscores, then apply ISO 9075 encoding
+                const normalizedName = encodeISO9075(name.replace(/\s+/g, '_'));
+
+                // Extract prefix from nodeType
+                if (nodeType && nodeType.includes(':')) {
+                  const prefix = nodeType.split(':')[0];
+                  return `${prefix}:${normalizedName}`;
+                }
+
+                // Default to cm: prefix if nodeType not available
+                return `cm:${normalizedName}`;
+              };
+
+              // Construct qname path from elements
               const qnameParts = node.path.elements
-                .filter((el: any) => {
-                  // Skip root elements like Company Home
-                  const name = el.name || el.prefixedName || '';
-                  return name && name !== 'Company Home' && name !== 'app:company_home';
-                })
+                .filter((el: any) => el.name)
                 .map((el: any) => {
-                  // Prefer prefixedName (qname format like "app:company_home")
-                  // Fallback to constructing from name if prefixedName not available
+                  // Prefer prefixedName if available (most accurate source)
                   if (el.prefixedName) {
                     return el.prefixedName;
                   }
-                  if (el.qnamePath) {
-                    return el.qnamePath;
-                  }
-                  // Try to construct from name by converting to lowercase with underscores
-                  // This is a fallback - ideally prefixedName should be available
-                  const name = el.name || '';
-                  if (name) {
-                    // Convert "Company Home" -> "app:company_home", "Data Dictionary" -> "app:dictionary"
-                    const normalized = name.toLowerCase().replace(/\s+/g, '_');
-                    // Common mappings
-                    if (normalized === 'company_home') {
-                      return 'app:company_home';
-                    }
-                    if (normalized === 'data_dictionary' || normalized === 'dictionary') {
-                      return 'app:dictionary';
-                    }
-                    // Default to app: prefix for common paths
-                    return `app:${normalized}`;
-                  }
-                  return null;
-                })
-                .filter((p: any): p is string => p !== null);
+                  // Otherwise construct from name + nodeType
+                  return toQname(el.name, el.nodeType || '');
+                });
 
-              // Get the node's own qname (for the folder itself)
-              // Path elements in Alfresco use the "app" namespace for system folders
-              const normalizedName = (node.name || '').toLowerCase().replace(/\s+/g, '_');
-              let nodeQname = '';
-              // Common mappings for system folders
-              if (normalizedName === 'company_home') {
-                nodeQname = 'app:company_home';
-              } else if (normalizedName === 'data_dictionary' || normalizedName === 'dictionary') {
-                nodeQname = 'app:dictionary';
-              } else {
-                // Default to app: prefix for path elements
-                nodeQname = `app:${normalizedName}`;
-              }
+              // Add the node's own qname
+              const nodeQname = node.prefixedName || toQname(node.name || '', node.nodeType || '');
 
               qnamePath = '/' + qnameParts.join('/') + '/' + nodeQname;
             } else if (node.path?.qnamePath) {

@@ -115,6 +115,9 @@ export function SystemTreeSection({
   const [renameValue, setRenameValue] = useState('');
   const renameInputRef = useRef<HTMLInputElement>(null);
   const loadChildrenPromisesRef = useRef<Map<string, Promise<TreeNode[]>>>(new Map());
+  // Track current server ID in a ref for async operations to check if server changed
+  const currentServerIdRef = useRef<number | null>(activeServerId);
+  currentServerIdRef.current = activeServerId;
   const [headerHovered, setHeaderHovered] = useState(false);
   const { openTab: openNodeTab } = useNodeBrowserTabsStore();
   const setLoadedScript = useJsConsoleStore(state => state.setLoadedScript);
@@ -449,17 +452,32 @@ export function SystemTreeSection({
   const loadRootNodes = async () => {
     if (!activeServerId) return;
 
+    // Capture the server ID at the start of this request
+    // to avoid applying results to a different server after switching
+    const requestServerId = activeServerId;
+
     setLoading(true);
     setError(null);
     const attemptNumber = rootLoadAttempts + 1;
     setRootLoadAttempts(attemptNumber);
 
     try {
-      const result = await backendRpc.repository.getSystemTreeRoot(activeServerId);
+      const result = await backendRpc.repository.getSystemTreeRoot(requestServerId);
+
+      // Check if server changed while request was in flight - if so, discard results
+      if (requestServerId !== currentServerIdRef.current) {
+        return;
+      }
+
       const nodes = convertSlingshotChildrenToTree(result.children);
       setTreeData(nodes);
       setLoadedNodes(new Set([result.systemNodeId]));
     } catch (err) {
+      // Check if server changed while request was in flight - if so, ignore error
+      if (requestServerId !== currentServerIdRef.current) {
+        return;
+      }
+
       console.error('Failed to load system tree:', err);
       if (attemptNumber >= MAX_ROOT_LOAD_ATTEMPTS) {
         const baseMessage = err instanceof Error ? err.message : t('submenu:loadError');
@@ -471,7 +489,10 @@ export function SystemTreeSection({
         );
       }
     } finally {
-      setLoading(false);
+      // Only update loading state if we're still on the same server
+      if (requestServerId === currentServerIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -501,6 +522,9 @@ export function SystemTreeSection({
   const loadNodeChildren = async (nodeId: string): Promise<TreeNode[]> => {
     if (!activeServerId) return [];
 
+    // Capture the server ID at the start of this request
+    const requestServerId = activeServerId;
+
     if (loadedNodes.has(nodeId)) {
       return [];
     }
@@ -514,7 +538,13 @@ export function SystemTreeSection({
       setLoadingNodes(prev => new Set(prev).add(nodeId));
 
       try {
-        const result = await backendRpc.repository.getSlingshotChildren(activeServerId, nodeId);
+        const result = await backendRpc.repository.getSlingshotChildren(requestServerId, nodeId);
+
+        // Check if server changed while request was in flight
+        if (requestServerId !== currentServerIdRef.current) {
+          return [];
+        }
+
         const childNodes = convertSlingshotChildrenToTree(result.children);
 
         setTreeData(prevData => updateTreeNodeChildren(prevData, nodeId, childNodes));
@@ -522,14 +552,21 @@ export function SystemTreeSection({
 
         return childNodes;
       } catch (err) {
+        // Ignore errors if server changed
+        if (requestServerId !== currentServerIdRef.current) {
+          return [];
+        }
         console.error(`Failed to load children for node ${nodeId}:`, err);
         return [];
       } finally {
-        setLoadingNodes(prev => {
-          const next = new Set(prev);
-          next.delete(nodeId);
-          return next;
-        });
+        // Only update loading state if we're still on the same server
+        if (requestServerId === currentServerIdRef.current) {
+          setLoadingNodes(prev => {
+            const next = new Set(prev);
+            next.delete(nodeId);
+            return next;
+          });
+        }
         loadChildrenPromisesRef.current.delete(nodeId);
       }
     })();

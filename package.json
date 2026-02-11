@@ -1,10 +1,11 @@
 {
   "name": "noderef",
-  "version": "0.3.0",
+  "version": "0.4.2",
   "private": true,
   "license": "Apache-2.0",
   "description": "NodeRef - The desktop app every Alfresco admin deserves",
   "scripts": {
+    "test": "pnpm --filter @app/backend test:run",
     "sync:meta": "node ./scripts/sync-meta.mjs",
     "predev:app": "pnpm sync:meta && node ./scripts/bin/preflight.mjs && pnpm --filter @app/contracts build && pnpm --filter @app/backend prisma:migrate",
     "dev:app": "pnpm predev:app && run-p --print-label dev:renderer:open dev:backend dev:neutralino:open",

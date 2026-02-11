@@ -222,7 +222,7 @@ function parseSelectedLibraries(raw: string, manifest: Record<string, unknown>):
   }
 }
 
-function extractJsonArray(raw: string): string {
+function extractJson(raw: string, charPair: [string, string]): string {
   const trimmed = raw.trim();
   if (trimmed.startsWith('```')) {
     const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -230,27 +230,24 @@ function extractJsonArray(raw: string): string {
       return fenceMatch[1].trim();
     }
   }
-  const firstBracket = trimmed.indexOf('[');
-  const lastBracket = trimmed.lastIndexOf(']');
-  if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-    return trimmed.slice(firstBracket, lastBracket + 1);
+  const firstChar = trimmed.indexOf(charPair[0]);
+  const lastChar = trimmed.lastIndexOf(charPair[1]);
+  if (firstChar !== -1 && lastChar !== -1 && lastChar > firstChar) {
+    return trimmed.slice(firstChar, lastChar + 1);
   }
   return trimmed;
+}
+
+function extractJsonArray(raw: string): string {
+  return extractJson(raw, ['[', ']']);
 }
 
 const VALID_DSL_TYPES = new Set(['replace_selection', 'replace_file'] as const);
 
 function parseDslResponse(raw: string) {
-  let payload = '';
-
-  // 1. Try to find <changes>...</changes>
   const match = raw.match(/<changes>([\s\S]*?)<\/changes>/i);
-  if (match) {
-    payload = match[1].trim();
-  } else {
-    // 2. Fallback: Try to find a JSON object directly
-    payload = extractJsonObject(raw);
-  }
+  const inner = match ? match[1].trim() : raw.trim();
+  const payload = extractJsonObject(inner);
 
   if (!payload) {
     throw new AiError({

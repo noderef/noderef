@@ -31,14 +31,11 @@ export interface LatestRelease {
 
 const GITHUB_API_RELEASE = 'https://api.github.com/repos/noderef/noderef/releases/latest';
 
-function isProbablyOnline(): boolean {
-  if (typeof navigator === 'undefined') return true;
-  if (navigator.onLine === false) return false;
-  return true;
-}
-
 export async function fetchLatestRelease(): Promise<LatestRelease | null> {
-  if (!isProbablyOnline() || typeof fetch === 'undefined') {
+  // Note: We don't check navigator.onLine because WebView2 on Windows
+  // incorrectly reports it as false even when online. The fetch will
+  // fail gracefully if actually offline.
+  if (typeof fetch === 'undefined') {
     return null;
   }
 

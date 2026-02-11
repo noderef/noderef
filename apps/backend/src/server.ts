@@ -34,8 +34,8 @@ import {
   tryListen,
 } from './lib/port.js';
 import { disconnectPrisma, getPrismaClient } from './lib/prisma.js';
-import { applySecurityMiddleware } from './middleware/security.js';
 import { corsMiddleware } from './middleware/cors.js';
+import { applySecurityMiddleware } from './middleware/security.js';
 import { registerRoutes, type Routes } from './routes/index.js';
 import { ServerService } from './services/serverService.js';
 
@@ -309,6 +309,12 @@ async function main() {
   // Initialize Prisma
   const prisma = await initializePrisma();
   const serverService = new ServerService(prisma);
+
+  // Bootstrap server from environment variables (Docker only)
+  if (process.env.SERVE_STATIC === '1') {
+    const { bootstrapServerFromEnv } = await import('./services/serverBootstrap.js');
+    await bootstrapServerFromEnv(serverService);
+  }
 
   // Load contracts
   const contracts = await loadContracts();
