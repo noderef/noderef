@@ -25,6 +25,7 @@ import { SaveSearchModal } from './SaveSearchModal';
 import { ServerEditModal } from './ServerEditModal';
 import { ServerInfoModal } from './ServerInfoModal';
 import { SettingsModal } from './SettingsModal';
+import { UsersGroupsModal } from './UsersGroupsModal';
 
 /**
  * ModalHost component that conditionally renders global modals
@@ -55,6 +56,7 @@ export function ModalHost() {
         'logs',
         'reauth',
         'node_permissions',
+        'users_groups',
       ];
       if (!knownModals.includes(activeModal)) {
         console.warn(`Unknown modal key detected: "${activeModal}". No modal will be rendered.`);
@@ -73,6 +75,7 @@ export function ModalHost() {
       <SaveSearchModal />
       <LogsModal />
       <NodePermissionsModal />
+      <UsersGroupsModal />
     </>
   );
 }

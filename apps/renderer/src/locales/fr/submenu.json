@@ -85,5 +85,6 @@
   "thumbnailUpdated": "Miniature mise à jour",
   "thumbnailCleared": "Miniature supprimée",
   "thumbnailUpdateError": "Impossible de mettre à jour la miniature",
-  "thumbnailReadError": "Impossible de lire le fichier image"
+  "thumbnailReadError": "Impossible de lire le fichier image",
+  "usersAndGroups": "Utilisateurs et groupes"
 }

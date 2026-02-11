@@ -14,7 +14,15 @@
  * limitations under the License.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { LogFilesList, type LogFile } from '@/components/logs/LogFilesList';
+import { TextEditorPane } from '@/components/text-editor/TextEditorPane';
+import { downloadLogFile, fetchLogFiles } from '@/core/api/logs';
+import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
+import { MODAL_KEYS } from '@/core/store/keys';
+import { useServersStore } from '@/core/store/servers';
+import { detectLanguageFromMetadata } from '@/features/text-editor/language';
+import { useModal } from '@/hooks/useModal';
+import { useActiveServerId } from '@/hooks/useNavigation';
 import {
   Badge,
   Box,
@@ -29,20 +37,12 @@ import {
   Text,
   Title,
 } from '@mantine/core';
-import { useTranslation } from 'react-i18next';
-import { useActiveServerId } from '@/hooks/useNavigation';
-import { useServersStore } from '@/core/store/servers';
-import { LogFilesList, type LogFile } from '@/components/logs/LogFilesList';
-import { downloadLogFile, fetchLogFiles } from '@/core/api/logs';
-import { notifications } from '@mantine/notifications';
 import type { NotificationsProps } from '@mantine/notifications';
-import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
+import { notifications } from '@mantine/notifications';
 import { filesystem, os } from '@neutralinojs/lib';
-import { useModal } from '@/hooks/useModal';
-import { MODAL_KEYS } from '@/core/store/keys';
-import { TextEditorPane } from '@/components/text-editor/TextEditorPane';
-import { detectLanguageFromMetadata } from '@/features/text-editor/language';
-import { IconTextWrap, IconTextWrapDisabled } from '@tabler/icons-react';
+import { IconFileText, IconTextWrap, IconTextWrapDisabled } from '@tabler/icons-react';
+import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 type LogsModalTab = 'logs' | 'editor';
 
@@ -417,6 +417,7 @@ export function LogsModal() {
       closeOnClickOutside
       title={
         <Group gap="xs">
+          <IconFileText size={22} stroke={1.5} />
           <Title order={4}>{t('title')}</Title>
           {activeServer && (
             <Text size="sm" c="dimmed">

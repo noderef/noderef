@@ -85,5 +85,6 @@
   "thumbnailUpdated": "Thumbnail updated",
   "thumbnailCleared": "Thumbnail removed",
   "thumbnailUpdateError": "Failed to update thumbnail",
-  "thumbnailReadError": "Could not read image file"
+  "thumbnailReadError": "Could not read image file",
+  "usersAndGroups": "Users and groups"
 }

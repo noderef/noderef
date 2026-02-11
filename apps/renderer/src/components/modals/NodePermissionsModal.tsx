@@ -45,33 +45,22 @@ import { IconSearch, IconTrash, IconUsers } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import type { AuthorityResult, AuthorityType } from './authorityUtils';
+import {
+  SYSTEM_AUTHORITIES,
+  mapGroupChildrenResponse,
+  mapGroupsWebscriptResponse,
+  mapPeopleResponse,
+} from './authorityUtils';
+
 const DEFAULT_ROLES = ['Consumer', 'Editor', 'Contributor', 'Collaborator', 'Coordinator'] as const;
 const SITE_ROLES = ['SiteManager', 'SiteCollaborator', 'SiteContributor', 'SiteConsumer'] as const;
 const PAGE_SIZE = 50;
-
-/**
- * Known system/virtual authority IDs that are not real users in Alfresco.
- * The People API returns 500 errors when encountering these, so they must
- * be filtered out from API results and handled with hardcoded display names.
- */
-const SYSTEM_AUTHORITIES: Record<string, string> = {
-  system: 'System',
-};
-
-const isSystemAuthority = (id: string): boolean => id in SYSTEM_AUTHORITIES;
-
-type AuthorityType = 'PERSON' | 'GROUP';
 
 interface PermissionEntry {
   authorityId: string;
   name: string;
   accessStatus?: 'ALLOWED' | 'DENIED' | string;
-}
-
-interface AuthorityResult {
-  id: string;
-  displayName: string;
-  type: AuthorityType;
 }
 
 interface NodePermissionsModalPayload {
@@ -90,50 +79,6 @@ const normalizePermissionEntry = (entry: any): PermissionEntry => ({
 const getEntryFromResponse = (response: any) => response?.entry ?? response;
 
 const buildSiteGroupId = (siteId: string, role: string) => `GROUP_site_${siteId}_${role}`;
-
-/** Map Alfresco webscript `api/people` response entries to AuthorityResult[] */
-const mapPeopleResponse = (response: any): AuthorityResult[] => {
-  const people = Array.isArray(response?.people) ? response.people : [];
-  return people
-    .map((entry: any) => ({
-      id: String(entry.userName || entry.id || ''),
-      displayName: String(
-        [entry.firstName, entry.lastName].filter(Boolean).join(' ') ||
-          entry.userName ||
-          entry.id ||
-          ''
-      ),
-      type: 'PERSON' as AuthorityType,
-    }))
-    .filter((entry: AuthorityResult) => !isSystemAuthority(entry.id));
-};
-
-/** Map Alfresco webscript `api/groups` response entries to AuthorityResult[] */
-const mapGroupsWebscriptResponse = (response: any): AuthorityResult[] => {
-  const data = Array.isArray(response?.data) ? response.data : [];
-  return data.map((entry: any) => ({
-    id: String(entry.fullName || entry.id || entry.shortName || ''),
-    displayName: String(entry.displayName || entry.shortName || entry.fullName || ''),
-    type: 'GROUP' as AuthorityType,
-  }));
-};
-
-/** Map Alfresco webscript `api/groups/{id}/children` response entries to AuthorityResult[] */
-const mapGroupChildrenResponse = (response: any): AuthorityResult[] => {
-  const data = Array.isArray(response?.data) ? response.data : [];
-  return data.map((entry: any) => {
-    const isGroup = entry.authorityType === 'GROUP';
-    return {
-      // For users, shortName is the username (e.g., 'demo'); fullName is the display name
-      // For groups, fullName has the GROUP_ prefix (e.g., 'GROUP_ORG_ALGEMEEN')
-      id: isGroup
-        ? String(entry.fullName || `GROUP_${entry.shortName}` || '')
-        : String(entry.shortName || ''),
-      displayName: String(entry.displayName || entry.shortName || entry.fullName || ''),
-      type: isGroup ? ('GROUP' as AuthorityType) : ('PERSON' as AuthorityType),
-    };
-  });
-};
 
 export function NodePermissionsModal() {
   const { isOpen, close, payload } = useModal(MODAL_KEYS.NODE_PERMISSIONS);

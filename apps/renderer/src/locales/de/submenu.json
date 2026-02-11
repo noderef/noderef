@@ -85,5 +85,6 @@
   "thumbnailUpdated": "Vorschaubild aktualisiert",
   "thumbnailCleared": "Vorschaubild entfernt",
   "thumbnailUpdateError": "Vorschaubild konnte nicht aktualisiert werden",
-  "thumbnailReadError": "Bilddatei konnte nicht gelesen werden"
+  "thumbnailReadError": "Bilddatei konnte nicht gelesen werden",
+  "usersAndGroups": "Benutzer und Gruppen"
 }

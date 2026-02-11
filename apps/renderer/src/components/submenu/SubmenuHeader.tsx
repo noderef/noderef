@@ -33,6 +33,7 @@ import {
   IconSettings,
   IconTrash,
   IconUserCircle,
+  IconUsersGroup,
 } from '@tabler/icons-react';
 import type { KeyboardEvent, MouseEvent } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -69,6 +70,7 @@ export function SubmenuHeader() {
   const activeServerId = useActiveServerId();
   const { open: openServerEdit } = useModal(MODAL_KEYS.SERVER_EDIT);
   const { open: openLogsModal } = useModal(MODAL_KEYS.LOGS);
+  const { open: openUsersGroupsModal } = useModal(MODAL_KEYS.USERS_GROUPS);
   const getServerById = useServersStore(state => state.getServerById);
   const { setActiveServer, navigate } = useNavigation();
   const [spaceTitle, setSpaceTitle] = useState<string>('');
@@ -679,6 +681,15 @@ export function SubmenuHeader() {
             onClick={handleOpenRepoAdmin}
           >
             {t('submenu:repoAdmin')}
+          </Menu.Item>
+        )}
+
+        {server.serverType === 'alfresco' && server.isAdmin && (
+          <Menu.Item
+            leftSection={<IconUsersGroup size={14} />}
+            onClick={() => openUsersGroupsModal({ serverId: server.id })}
+          >
+            {t('submenu:usersAndGroups')}
           </Menu.Item>
         )}
 
