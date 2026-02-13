@@ -24,6 +24,7 @@ import {
   fetchAiStatus,
   type AiStatusResponse,
 } from '@/core/ai/consoleClient';
+import { rpc } from '@/core/ipc/rpc';
 import { dslManager } from '@/core/monaco/dsl-manager';
 import { useJsConsoleStore } from '@/core/store/jsConsole';
 import { useServersStore } from '@/core/store/servers';
@@ -207,7 +208,6 @@ function JsConsolePage() {
           });
           return;
         }
-        const { rpc } = await import('@/core/ipc/rpc');
         const cursor = reset ? undefined : historyNextCursor;
 
         const response = await rpc<{ items: any[]; hasMore: boolean; nextCursor: number | null }>(
@@ -476,8 +476,6 @@ function JsConsolePage() {
     setActiveOutputServerId(selectedServers[0]?.id ?? null);
 
     try {
-      const { rpc } = await import('@/core/ipc/rpc');
-
       streamedPrintSeenRef.current = {};
       liveOutputIdsRef.current = {};
 

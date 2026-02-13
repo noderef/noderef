@@ -15,6 +15,7 @@
  */
 
 import { backendRpc } from '@/core/ipc/backend';
+import { rpc } from '@/core/ipc/rpc';
 import { useFileFolderBrowserActionsStore } from '@/core/store/fileFolderBrowserActions';
 import { useJsConsoleStore } from '@/core/store/jsConsole';
 import { MODAL_KEYS } from '@/core/store/keys';
@@ -100,7 +101,6 @@ export function usePageActions(options: UsePageActionsOptions) {
         }
 
         try {
-          const { rpc } = await import('@/core/ipc/rpc');
           await rpc('backend.jsconsole.saveScriptFile', {
             serverId: activeServerId,
             nodeId: loadedScriptNodeId,
@@ -126,7 +126,6 @@ export function usePageActions(options: UsePageActionsOptions) {
         }
 
         try {
-          const { rpc } = await import('@/core/ipc/rpc');
           const scripts = await rpc<Array<{ id: string; name: string; modifiedAt: string }>>(
             'backend.jsconsole.getScriptFiles',
             {
@@ -180,7 +179,6 @@ export function usePageActions(options: UsePageActionsOptions) {
                       withBorder
                       onClick={async () => {
                         try {
-                          const { rpc } = await import('@/core/ipc/rpc');
                           const result = await rpc<{ content: string }>(
                             'backend.jsconsole.loadScriptFile',
                             {
@@ -282,7 +280,6 @@ export function usePageActions(options: UsePageActionsOptions) {
             return;
           }
 
-          const { rpc } = await import('@/core/ipc/rpc');
           await rpc('backend.jsconsole.saveScriptFile', {
             serverId: textEditorServerId,
             nodeId: textEditorNodeId,
@@ -307,7 +304,6 @@ export function usePageActions(options: UsePageActionsOptions) {
         }
 
         try {
-          const { rpc } = await import('@/core/ipc/rpc');
           const result = await rpc<{ content: string }>('backend.jsconsole.loadScriptFile', {
             serverId: activeNodeBrowserTab.serverId,
             nodeId: activeNodeBrowserTab.nodeId,

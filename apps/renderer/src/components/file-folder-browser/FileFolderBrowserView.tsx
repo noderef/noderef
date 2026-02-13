@@ -25,6 +25,7 @@ import {
   type RepositoryPaginationInfo,
 } from '@/core/ipc/backend';
 import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
+import { rpc } from '@/core/ipc/rpc';
 import { useFileFolderBrowserActionsStore } from '@/core/store/fileFolderBrowserActions';
 import { useFileFolderBrowserTabsStore } from '@/core/store/fileFolderBrowserTabs';
 import { useJsConsoleStore } from '@/core/store/jsConsole';
@@ -1437,9 +1438,6 @@ export function FileFolderBrowserView({
     if (isJsFile) {
       // For JavaScript files: load content into editor
       try {
-        // Dynamically import rpc
-        const { rpc } = await import('@/core/ipc/rpc');
-
         // Fetch the JavaScript file content
         const result = await rpc<{ content: string }>('backend.jsconsole.loadScriptFile', {
           serverId,
@@ -1489,7 +1487,6 @@ export function FileFolderBrowserView({
     if (!selectedItem) return;
     setContextMenuOpened(false);
     try {
-      const { rpc } = await import('@/core/ipc/rpc');
       const result = await rpc<{ content: string }>('backend.jsconsole.loadScriptFile', {
         serverId,
         nodeId: selectedItem.id,

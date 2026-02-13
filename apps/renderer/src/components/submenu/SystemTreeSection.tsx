@@ -16,6 +16,7 @@
 
 import { DeleteConfirmationForm } from '@/components/common/DeleteConfirmationForm';
 import { backendRpc } from '@/core/ipc/backend';
+import { rpc } from '@/core/ipc/rpc';
 import { useJsConsoleStore } from '@/core/store/jsConsole';
 import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
 import { useServersStore } from '@/core/store/servers';
@@ -247,7 +248,6 @@ export function SystemTreeSection({
     if (isJsFile) {
       // For JavaScript files: load content into editor
       try {
-        const { rpc } = await import('@/core/ipc/rpc');
         const result = await rpc<{ content: string }>('backend.jsconsole.loadScriptFile', {
           serverId: activeServerId,
           nodeId: selectedNode.value,
@@ -297,7 +297,6 @@ export function SystemTreeSection({
     if (!selectedNode || !activeServerId) return;
     setContextMenuOpened(false);
     try {
-      const { rpc } = await import('@/core/ipc/rpc');
       const result = await rpc<{ content: string }>('backend.jsconsole.loadScriptFile', {
         serverId: activeServerId,
         nodeId: selectedNode.value,

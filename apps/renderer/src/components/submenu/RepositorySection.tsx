@@ -21,6 +21,7 @@ import {
   type RepositoryPaginationInfo,
   type SiteVisibility,
 } from '@/core/ipc/backend';
+import { rpc } from '@/core/ipc/rpc';
 import { useFileFolderBrowserTabsStore } from '@/core/store/fileFolderBrowserTabs';
 import { useJsConsoleStore } from '@/core/store/jsConsole';
 import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
@@ -460,7 +461,6 @@ export function RepositorySection({
     if (isJsFile) {
       // For JavaScript files: load content into editor
       try {
-        const { rpc } = await import('@/core/ipc/rpc');
         const result = await rpc<{ content: string }>('backend.jsconsole.loadScriptFile', {
           serverId: activeServerId,
           nodeId: selectedNode.value,
@@ -510,7 +510,6 @@ export function RepositorySection({
     if (!selectedNode || !activeServerId) return;
     setContextMenuOpened(false);
     try {
-      const { rpc } = await import('@/core/ipc/rpc');
       const result = await rpc<{ content: string }>('backend.jsconsole.loadScriptFile', {
         serverId: activeServerId,
         nodeId: selectedNode.value,

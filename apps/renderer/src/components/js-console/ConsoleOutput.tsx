@@ -16,6 +16,7 @@
 
 import { useJsConsoleStore } from '@/core/store/jsConsole';
 import { useServersStore } from '@/core/store/servers';
+import { rpc } from '@/core/ipc/rpc';
 import { writeClipboardText } from '@/core/utils/clipboard';
 import { formatRelativeTime } from '@/utils/formatTime';
 import {
@@ -154,7 +155,6 @@ export function ConsoleOutput({ isNodeRefSpace }: { isNodeRefSpace: boolean }) {
 
     loadingMoreRef.current = true;
     try {
-      const { rpc } = await import('@/core/ipc/rpc');
       const historyNextCursor = useJsConsoleStore.getState().historyNextCursor;
       const appendHistory = useJsConsoleStore.getState().appendHistory;
       const setHistoryLoading = useJsConsoleStore.getState().setHistoryLoading;

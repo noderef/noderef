@@ -15,6 +15,7 @@
  */
 
 import type { RepositoryNode } from '@/core/ipc/backend';
+import { rpc } from '@/core/ipc/rpc';
 import { useFileFolderBrowserActionsStore } from '@/core/store/fileFolderBrowserActions';
 import { useFileFolderBrowserTabsStore } from '@/core/store/fileFolderBrowserTabs';
 import { MODAL_KEYS } from '@/core/store/keys';
@@ -68,7 +69,6 @@ export function NodeRefSpotlight() {
       try {
         // We need to fetch content. This is async.
         // We can't await easily inside onClick without proper handling, but it's fine.
-        const { rpc } = await import('@/core/ipc/rpc');
         const result = await rpc<{ content: string }>('backend.jsconsole.loadScriptFile', {
           serverId: browser.serverId,
           nodeId: node.id,

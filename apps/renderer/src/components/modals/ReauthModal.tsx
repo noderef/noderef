@@ -15,7 +15,9 @@
  */
 
 import { backendRpc } from '@/core/ipc/backend';
+import { alfrescoRpc } from '@/core/ipc/alfresco';
 import { isNeutralinoMode } from '@/core/ipc/neutralino';
+import { getRpcBaseUrl } from '@/core/ipc/rpc';
 import { MODAL_KEYS } from '@/core/store/keys';
 import { useServersStore } from '@/core/store/servers';
 import { useModal } from '@/hooks/useModal';
@@ -43,6 +45,7 @@ import {
   Title,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
+import { os } from '@neutralinojs/lib';
 import { IconAlertCircle, IconLock, IconRefresh } from '@tabler/icons-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -200,10 +203,6 @@ export function ReauthModal() {
         throw new Error('Server is missing OIDC configuration');
       }
 
-      // Import required modules
-      const { alfrescoRpc } = await import('@/core/ipc/alfresco');
-      const { getRpcBaseUrl } = await import('@/core/ipc/rpc');
-
       // Normalize OIDC host URL
       const normalizedOidcHost = ensureProtocol(server.oidcHost);
 
@@ -258,7 +257,6 @@ export function ReauthModal() {
 
       // Open auth URL
       if (isDesktop) {
-        const { os } = await import('@neutralinojs/lib');
         await os.open(authUrl.toString());
       } else if (popup && !popup.closed) {
         popup.location.href = authUrl.toString();
