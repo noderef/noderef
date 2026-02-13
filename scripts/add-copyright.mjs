@@ -4,9 +4,13 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
+const START_YEAR = 2025;
+const currentYear = new Date().getFullYear();
+const copyrightYears = currentYear > START_YEAR ? `${START_YEAR}-${currentYear}` : `${START_YEAR}`;
+const EXPECTED_COPYRIGHT_LINE = ` * Copyright ${copyrightYears} NodeRef`;
 
 const COPYRIGHT_HEADER = `/**
- * Copyright 2025 NodeRef
+${EXPECTED_COPYRIGHT_LINE}
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +28,7 @@ const COPYRIGHT_HEADER = `/**
 `;
 
 const MINIMAL_HEADER_FRAGMENT = 'Licensed under the Apache License, Version 2.0';
+const COPYRIGHT_LINE_REGEX = /^ \* Copyright \d{4}(?:-\d{4})? NodeRef$/m;
 
 const EXTENSIONS = ['.ts', '.tsx', '.js', '.mjs', '.cjs'];
 const IGNORE_DIRS = [
@@ -50,8 +55,19 @@ function processFile(filePath) {
   try {
     const content = fs.readFileSync(filePath, 'utf8');
 
-    // Check if header already exists (loose check)
+    // If an Apache header exists, update only the copyright year line when stale.
     if (content.includes(MINIMAL_HEADER_FRAGMENT)) {
+      if (content.includes(EXPECTED_COPYRIGHT_LINE)) {
+        return;
+      }
+
+      if (COPYRIGHT_LINE_REGEX.test(content)) {
+        const updated = content.replace(COPYRIGHT_LINE_REGEX, EXPECTED_COPYRIGHT_LINE);
+        if (updated !== content) {
+          fs.writeFileSync(filePath, updated);
+          console.log(`Updated: ${filePath}`);
+        }
+      }
       return;
     }
 

@@ -20,9 +20,9 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "zod": "^3.22.4"
+    "zod": "3.22.4"
   },
   "devDependencies": {
-    "typescript": "^5.3.3"
+    "typescript": "^5.9.0"
   }
 }
