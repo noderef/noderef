@@ -51,8 +51,9 @@ function findIssues(log) {
   const issues = new Set();
   const content = log;
 
-  // Check commit messages for explicit issue references
-  for (const pattern of ISSUE_REF_PATTERNS) {
+  // Check commit messages for explicit issue references and merged branch names.
+  // Example merge subject: "Merge branch 'feature/foo-#123' into release/x.y.z"
+  for (const pattern of [...ISSUE_REF_PATTERNS, ...ISSUE_BRANCH_PATTERNS]) {
     let match;
     pattern.lastIndex = 0;
     while ((match = pattern.exec(content)) !== null) {
@@ -138,6 +139,8 @@ function getMergedPRsInRange(previousTag, currentTag) {
     const prNumbers = new Set();
     const commitSHAs = compareData.commits.map(c => c.sha);
 
+    let prLookupFailures = 0;
+    let firstLookupFailureMessage = '';
     for (const sha of commitSHAs) {
       try {
         // Use the commits/{sha}/pulls endpoint with stable API headers
@@ -161,12 +164,23 @@ function getMergedPRsInRange(previousTag, currentTag) {
           }
         }
       } catch (e) {
-        // Commit might not be associated with a PR, or API call failed - skip
+        // Commit might not be associated with a PR, or API call failed.
+        // Track failures so permission/config problems are visible in CI logs.
+        prLookupFailures++;
+        if (!firstLookupFailureMessage) {
+          firstLookupFailureMessage = e.message;
+        }
         continue;
       }
     }
 
     if (prNumbers.size === 0) {
+      if (prLookupFailures > 0) {
+        console.warn(
+          `Warning: Failed to look up PR associations for ${prLookupFailures}/${commitSHAs.length} commits. ` +
+            `Ensure workflow permissions include pull-requests: read. First error: ${firstLookupFailureMessage}`
+        );
+      }
       return [];
     }
 
