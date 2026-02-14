@@ -29,6 +29,7 @@ import serverDe from '@/locales/de/server.json';
 import settingsDe from '@/locales/de/settings.json';
 import spotlightDe from '@/locales/de/spotlight.json';
 import submenuDe from '@/locales/de/submenu.json';
+import usersGroupsDe from '@/locales/de/usersGroups.json';
 import addServerEn from '@/locales/en/addServer.json';
 import commonEn from '@/locales/en/common.json';
 import dashboardEn from '@/locales/en/dashboard.json';
@@ -44,6 +45,7 @@ import serverEn from '@/locales/en/server.json';
 import settingsEn from '@/locales/en/settings.json';
 import spotlightEn from '@/locales/en/spotlight.json';
 import submenuEn from '@/locales/en/submenu.json';
+import usersGroupsEn from '@/locales/en/usersGroups.json';
 import addServerFr from '@/locales/fr/addServer.json';
 import commonFr from '@/locales/fr/common.json';
 import dashboardFr from '@/locales/fr/dashboard.json';
@@ -59,6 +61,7 @@ import serverFr from '@/locales/fr/server.json';
 import settingsFr from '@/locales/fr/settings.json';
 import spotlightFr from '@/locales/fr/spotlight.json';
 import submenuFr from '@/locales/fr/submenu.json';
+import usersGroupsFr from '@/locales/fr/usersGroups.json';
 import addServerNl from '@/locales/nl/addServer.json';
 import commonNl from '@/locales/nl/common.json';
 import dashboardNl from '@/locales/nl/dashboard.json';
@@ -74,6 +77,7 @@ import serverNl from '@/locales/nl/server.json';
 import settingsNl from '@/locales/nl/settings.json';
 import spotlightNl from '@/locales/nl/spotlight.json';
 import submenuNl from '@/locales/nl/submenu.json';
+import usersGroupsNl from '@/locales/nl/usersGroups.json';
 import i18n, { Resource } from 'i18next';
 import { ReactNode } from 'react';
 import { I18nextProvider, initReactI18next } from 'react-i18next';
@@ -99,6 +103,7 @@ const resources: Resource = {
     spotlight: spotlightEn,
     notFound: notFoundEn,
     jsConsole: jsConsoleEn,
+    usersGroups: usersGroupsEn,
   },
   nl: {
     common: commonNl,
@@ -116,6 +121,7 @@ const resources: Resource = {
     spotlight: spotlightNl,
     notFound: notFoundNl,
     jsConsole: jsConsoleNl,
+    usersGroups: usersGroupsNl,
   },
   de: {
     common: commonDe,
@@ -133,6 +139,7 @@ const resources: Resource = {
     spotlight: spotlightDe,
     notFound: notFoundDe,
     jsConsole: jsConsoleDe,
+    usersGroups: usersGroupsDe,
   },
   fr: {
     common: commonFr,
@@ -150,6 +157,7 @@ const resources: Resource = {
     spotlight: spotlightFr,
     notFound: notFoundFr,
     jsConsole: jsConsoleFr,
+    usersGroups: usersGroupsFr,
   },
 };
 
@@ -220,6 +228,7 @@ if (!i18n.isInitialized) {
       'dashboard',
       'notFound',
       'jsConsole',
+      'usersGroups',
     ],
     returnNull: false,
   });

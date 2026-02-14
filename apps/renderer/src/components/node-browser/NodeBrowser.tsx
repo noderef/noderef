@@ -28,7 +28,7 @@ import {
   IconSitemap,
   IconTags,
 } from '@tabler/icons-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NodeAspects } from './NodeAspects';
 import { NodeAssociations } from './NodeAssociations';
@@ -50,11 +50,15 @@ export function NodeBrowser({ tabId, serverId, nodeId, nodeName: _nodeName }: No
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [nodeData, setNodeData] = useState<AlfrescoNodeDetails | null>(null);
+  const [refreshToken, setRefreshToken] = useState(0);
   const updateTabMetadata = useNodeBrowserTabsStore(state => state.updateTabMetadata);
   const serverExists = useServersStore(state =>
     state.servers.some(server => server.id === serverId)
   );
   const fetchTimeoutRef = useRef<number | null>(null);
+  const handlePermissionsUpdated = useCallback(() => {
+    setRefreshToken(token => token + 1);
+  }, []);
 
   useEffect(() => {
     if (!serverExists) {
@@ -107,7 +111,7 @@ export function NodeBrowser({ tabId, serverId, nodeId, nodeName: _nodeName }: No
         fetchTimeoutRef.current = null;
       }
     };
-  }, [serverExists, serverId, nodeId, tabId, updateTabMetadata, t]);
+  }, [serverExists, serverId, nodeId, tabId, updateTabMetadata, t, refreshToken]);
 
   if (loading) {
     return (
@@ -273,7 +277,13 @@ export function NodeBrowser({ tabId, serverId, nodeId, nodeName: _nodeName }: No
             {t('nodeBrowser:permissions')}
           </Accordion.Control>
           <Accordion.Panel>
-            <NodePermissions permissions={nodeData.permissions} />
+            <NodePermissions
+              permissions={nodeData.permissions}
+              serverId={serverId}
+              nodeId={nodeId}
+              nodeName={nodeData.name?.name || nodeData.name?.prefixedName || _nodeName}
+              onPermissionsUpdated={handlePermissionsUpdated}
+            />
           </Accordion.Panel>
         </Accordion.Item>
       </Accordion>

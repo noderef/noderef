@@ -74,6 +74,7 @@
   "openInNewTab": "New Tab",
   "nodeBrowser": "Node Browser",
   "fileFolderBrowser": "Browse",
+  "managePermissionsAction": "Permissions",
   "renameAction": "Rename",
   "deleteAction": "Delete",
   "openInJsConsole": "Open in JavaScript Console",
@@ -84,5 +85,6 @@
   "thumbnailUpdated": "Thumbnail updated",
   "thumbnailCleared": "Thumbnail removed",
   "thumbnailUpdateError": "Failed to update thumbnail",
-  "thumbnailReadError": "Could not read image file"
+  "thumbnailReadError": "Could not read image file",
+  "usersAndGroups": "Users and groups"
 }

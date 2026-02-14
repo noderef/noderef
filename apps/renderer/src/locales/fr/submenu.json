@@ -74,6 +74,7 @@
   "openInNewTab": "Nouvel onglet",
   "nodeBrowser": "Navigateur de nœuds",
   "fileFolderBrowser": "Parcourir",
+  "managePermissionsAction": "Permissions",
   "renameAction": "Renommer",
   "deleteAction": "Supprimer",
   "openInJsConsole": "Ouvrir dans la JavaScript Console",
@@ -84,5 +85,6 @@
   "thumbnailUpdated": "Miniature mise à jour",
   "thumbnailCleared": "Miniature supprimée",
   "thumbnailUpdateError": "Impossible de mettre à jour la miniature",
-  "thumbnailReadError": "Impossible de lire le fichier image"
+  "thumbnailReadError": "Impossible de lire le fichier image",
+  "usersAndGroups": "Utilisateurs et groupes"
 }

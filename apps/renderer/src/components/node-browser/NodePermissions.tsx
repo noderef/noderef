@@ -14,24 +14,53 @@
  * limitations under the License.
  */
 
-import { Table, Text, Paper, Stack, Title, Badge, Group } from '@mantine/core';
+import { Button, Table, Text, Paper, Stack, Title, Badge, Group } from '@mantine/core';
 import type { AlfrescoNodeDetails } from '@/core/ipc/backend';
 import { useTranslation } from 'react-i18next';
+import { useModal } from '@/hooks/useModal';
+import { MODAL_KEYS } from '@/core/store/keys';
+import { IconLock } from '@tabler/icons-react';
 
 interface NodePermissionsProps {
   permissions: AlfrescoNodeDetails['permissions'];
+  serverId: number;
+  nodeId: string;
+  nodeName: string;
+  onPermissionsUpdated?: () => void;
 }
 
-export function NodePermissions({ permissions }: NodePermissionsProps) {
+export function NodePermissions({
+  permissions,
+  serverId,
+  nodeId,
+  nodeName,
+  onPermissionsUpdated,
+}: NodePermissionsProps) {
   const { t } = useTranslation(['nodeBrowser']);
+  const { open } = useModal(MODAL_KEYS.NODE_PERMISSIONS);
 
   return (
     <Stack gap="md" p="md">
       {/* Permission Entries */}
       <Paper withBorder p="md">
-        <Title order={5} mb="md">
-          {t('nodeBrowser:rights')}
-        </Title>
+        <Group justify="space-between" align="center" mb="md">
+          <Title order={5}>{t('nodeBrowser:rights')}</Title>
+          <Button
+            size="xs"
+            variant="light"
+            leftSection={<IconLock size={14} />}
+            onClick={() =>
+              open({
+                serverId,
+                nodeId,
+                nodeName,
+                onUpdated: onPermissionsUpdated,
+              })
+            }
+          >
+            {t('nodeBrowser:managePermissions')}
+          </Button>
+        </Group>
         <Group gap="xs" mb="md">
           <Text size="sm">
             <strong>{t('nodeBrowser:inherits')}:</strong> {permissions.inherit ? 'true' : 'false'}

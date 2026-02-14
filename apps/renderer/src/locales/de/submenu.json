@@ -74,6 +74,7 @@
   "openInNewTab": "In neuem Tab öffnen",
   "nodeBrowser": "Node-Browser",
   "fileFolderBrowser": "Durchsuchen",
+  "managePermissionsAction": "Berechtigungen",
   "renameAction": "Umbenennen",
   "deleteAction": "Löschen",
   "openInJsConsole": "In JavaScript Console öffnen",
@@ -84,5 +85,6 @@
   "thumbnailUpdated": "Vorschaubild aktualisiert",
   "thumbnailCleared": "Vorschaubild entfernt",
   "thumbnailUpdateError": "Vorschaubild konnte nicht aktualisiert werden",
-  "thumbnailReadError": "Bilddatei konnte nicht gelesen werden"
+  "thumbnailReadError": "Bilddatei konnte nicht gelesen werden",
+  "usersAndGroups": "Benutzer und Gruppen"
 }
