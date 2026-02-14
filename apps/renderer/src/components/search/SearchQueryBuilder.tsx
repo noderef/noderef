@@ -371,6 +371,9 @@ export function SearchQueryBuilder({
     containerRef: clipboardContainerRef,
     enableCopyCut: true,
     onInsertText: (target, text) => {
+      if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+        return;
+      }
       if (target === pendingInputRef.current) {
         applyInputText(target, text, setPendingPropValue);
         return;

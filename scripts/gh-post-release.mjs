@@ -18,9 +18,7 @@ import { execSync, execFileSync } from 'child_process';
 
 // Patterns to find issue numbers in commit messages, PR titles, and PR bodies
 // These match explicit references like "Closes #123", "Fixes #123", "Resolves #123"
-const ISSUE_REF_PATTERNS = [
-  /(?:close(?:s|d)?|fix(?:es|ed)?|resolve(?:s|d)?)\s+#(\d+)/gi,
-];
+const ISSUE_REF_PATTERNS = [/(?:close(?:s|d)?|fix(?:es|ed)?|resolve(?:s|d)?)\s+#(\d+)/gi];
 
 // Patterns to find issue numbers in branch names
 // Matches branch naming conventions with -#123 (e.g., "fix/issue-#123" or "feature-#456")
@@ -116,7 +114,7 @@ function getMergedPRsInRange(previousTag, currentTag) {
     ) {
       console.warn(
         `Warning: compare API returned ${compareData.commits.length}/${compareData.total_commits} commits. ` +
-        `PR detection may be incomplete for large ranges.`
+          `PR detection may be incomplete for large ranges.`
       );
       // Fallback: use git log to get all commit SHAs in range
       try {
@@ -156,7 +154,7 @@ function getMergedPRsInRange(previousTag, currentTag) {
           { encoding: 'utf-8', stdio: 'pipe' }
         );
         const pulls = JSON.parse(pullsJson);
-        
+
         for (const pr of pulls) {
           if (pr.number) {
             prNumbers.add(pr.number.toString());
@@ -300,11 +298,7 @@ function processIssues() {
 
       if (state === 'OPEN') {
         console.log(`Closing #${id}...`);
-        execFileSync(
-          'gh',
-          ['issue', 'close', id, '--comment', commentBody],
-          { stdio: 'inherit' }
-        );
+        execFileSync('gh', ['issue', 'close', id, '--comment', commentBody], { stdio: 'inherit' });
       } else {
         console.log(`Skipping #${id}: Issue is already closed.`);
       }

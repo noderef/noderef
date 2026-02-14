@@ -1,5 +1,5 @@
 /**
- * Copyright 2025 NodeRef
+ * Copyright 2025-2026 NodeRef
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,18 +49,21 @@ import type { AuthorityResult, AuthorityType } from './authorityUtils';
 import {
   SYSTEM_AUTHORITIES,
   mapGroupChildrenResponse,
+  mapPublicApiGroupsResponse,
   mapGroupsWebscriptResponse,
   mapPeopleResponse,
 } from './authorityUtils';
 
 const DEFAULT_ROLES = ['Consumer', 'Editor', 'Contributor', 'Collaborator', 'Coordinator'] as const;
 const SITE_ROLES = ['SiteManager', 'SiteCollaborator', 'SiteContributor', 'SiteConsumer'] as const;
+type PermissionRole = (typeof DEFAULT_ROLES)[number] | (typeof SITE_ROLES)[number];
+const ALL_PERMISSION_ROLES = [...DEFAULT_ROLES, ...SITE_ROLES] as const;
 const PAGE_SIZE = 50;
 
 interface PermissionEntry {
   authorityId: string;
   name: string;
-  accessStatus?: 'ALLOWED' | 'DENIED' | string;
+  accessStatus?: 'ALLOWED' | 'DENIED';
 }
 
 interface NodePermissionsModalPayload {
@@ -70,11 +73,17 @@ interface NodePermissionsModalPayload {
   onUpdated?: () => void;
 }
 
-const normalizePermissionEntry = (entry: any): PermissionEntry => ({
-  authorityId: entry?.authorityId ?? entry?.authority ?? '',
-  name: entry?.name ?? entry?.permission ?? '',
-  accessStatus: entry?.accessStatus ?? entry?.rel ?? 'ALLOWED',
-});
+const isPermissionRole = (role: string): role is PermissionRole =>
+  (ALL_PERMISSION_ROLES as readonly string[]).includes(role);
+
+const normalizePermissionEntry = (entry: any): PermissionEntry => {
+  const rawAccessStatus = entry?.accessStatus ?? entry?.rel;
+  return {
+    authorityId: entry?.authorityId ?? entry?.authority ?? '',
+    name: entry?.name ?? entry?.permission ?? '',
+    accessStatus: rawAccessStatus === 'DENIED' ? 'DENIED' : 'ALLOWED',
+  };
+};
 
 const getEntryFromResponse = (response: any) => response?.entry ?? response;
 
@@ -114,7 +123,7 @@ export function NodePermissionsModal() {
   const [groupsResults, setGroupsResults] = useState<AuthorityResult[]>([]);
 
   const [authorityLoading, setAuthorityLoading] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<string | null>(null);
+  const [selectedRole, setSelectedRole] = useState<PermissionRole | null>(null);
   const [authorityDirectory, setAuthorityDirectory] = useState<Record<string, AuthorityResult>>({});
   const permissionsRequestRef = useRef(0);
   const groupsSearchRequestRef = useRef(0);
@@ -132,12 +141,17 @@ export function NodePermissionsModal() {
     onDropdownClose: () => combobox.resetSelectedOption(),
   });
 
-  const roleOptions = useMemo(() => {
+  const roleOptions = useMemo<PermissionRole[]>(() => {
     const inSite = Boolean(siteId);
-    const allowedRoles = inSite ? [...DEFAULT_ROLES, ...SITE_ROLES] : [...DEFAULT_ROLES];
-    const settableRoles = Array.isArray(settable) && settable.length > 0 ? settable : allowedRoles;
+    const allowedRoles: PermissionRole[] = inSite
+      ? [...DEFAULT_ROLES, ...SITE_ROLES]
+      : [...DEFAULT_ROLES];
+    const settableRoles: PermissionRole[] =
+      Array.isArray(settable) && settable.length > 0
+        ? settable.filter(isPermissionRole)
+        : allowedRoles;
     const filtered = settableRoles.filter(role => allowedRoles.includes(role));
-    const roles = filtered.length ? filtered : allowedRoles;
+    const roles: PermissionRole[] = filtered.length ? filtered : allowedRoles;
     const ordered = allowedRoles.filter(role => roles.includes(role));
     return Array.from(new Set(ordered));
   }, [siteId, settable]);
@@ -258,19 +272,31 @@ export function NodePermissionsModal() {
 
     const entry = getEntryFromResponse(response);
     const permissions = entry?.permissions ?? {};
-    const localEntries = Array.isArray(permissions.locallySet)
+    const localEntries: PermissionEntry[] = Array.isArray(permissions.locallySet)
       ? permissions.locallySet.map(normalizePermissionEntry)
       : [];
-    const inheritedEntries = Array.isArray(permissions.inherited)
+    const inheritedEntries: PermissionEntry[] = Array.isArray(permissions.inherited)
       ? permissions.inherited.map(normalizePermissionEntry)
       : [];
-    const settablePermissions = Array.isArray(permissions.settable) ? permissions.settable : [];
+    const settablePermissions: string[] = Array.isArray(permissions.settable)
+      ? permissions.settable.filter((permission: unknown): permission is string =>
+          typeof permission === 'string'
+        )
+      : [];
 
     setNodeLabel(String(entry?.name || modalPayload.nodeName || modalPayload.nodeId));
     setSiteId(extractSiteId(entry));
     setIsInheritanceEnabled(Boolean(permissions.isInheritanceEnabled ?? true));
-    setLocallySet(localEntries.filter(entry => entry.authorityId && entry.name));
-    setInherited(inheritedEntries.filter(entry => entry.authorityId && entry.name));
+    setLocallySet(
+      localEntries.filter(
+        (permissionEntry: PermissionEntry) => permissionEntry.authorityId && permissionEntry.name
+      )
+    );
+    setInherited(
+      inheritedEntries.filter(
+        (permissionEntry: PermissionEntry) => permissionEntry.authorityId && permissionEntry.name
+      )
+    );
     setSettable(settablePermissions);
   }, [getServerById, modalPayload, t]);
 
@@ -327,15 +353,7 @@ export function NodePermissionsModal() {
           server.baseUrl,
           modalPayload.serverId
         );
-        const list = response?.list ?? response;
-        const entries = Array.isArray(list?.entries)
-          ? list.entries.map((item: any) => item?.entry ?? item).filter(Boolean)
-          : [];
-        const mapped: AuthorityResult[] = entries.map((entry: any) => ({
-          id: String(entry.id),
-          displayName: String(entry.displayName || entry.id || ''),
-          type: 'GROUP',
-        }));
+        const mapped = mapPublicApiGroupsResponse(response);
         updateAuthorityDirectory(mapped);
         setGroupsResults(prev => (reset ? mapped : [...prev, ...mapped]));
       } catch (err) {
@@ -629,7 +647,7 @@ export function NodePermissionsModal() {
 
   const handleAddAuthority = (authority: AuthorityResult, roleOverride?: string) => {
     const role = roleOverride ?? selectedRole;
-    if (!role) return;
+    if (!role || !isPermissionRole(role)) return;
     setLocallySet(prev => {
       const existingIndex = prev.findIndex(entry => entry.authorityId === authority.id);
       if (existingIndex >= 0) {
@@ -660,7 +678,7 @@ export function NodePermissionsModal() {
   };
 
   const handlePermissionChange = (authorityId: string, role: string | null) => {
-    if (!role) return;
+    if (!role || !isPermissionRole(role)) return;
     setLocallySet(prev =>
       prev.map(entry => (entry.authorityId === authorityId ? { ...entry, name: role } : entry))
     );
@@ -672,11 +690,15 @@ export function NodePermissionsModal() {
     try {
       const sanitizedLocallySet = locallySet
         .filter(entry => entry.authorityId && entry.name)
-        .map(entry => ({
-          authorityId: entry.authorityId,
-          name: entry.name,
-          accessStatus: entry.accessStatus ?? 'ALLOWED',
-        }));
+        .map(entry => {
+          const accessStatus: 'ALLOWED' | 'DENIED' =
+            entry.accessStatus === 'DENIED' ? 'DENIED' : 'ALLOWED';
+          return {
+            authorityId: entry.authorityId,
+            name: entry.name,
+            accessStatus,
+          };
+        });
 
       await backendRpc.repository.updateNodePermissions(
         modalPayload.serverId,
@@ -909,7 +931,9 @@ export function NodePermissionsModal() {
                       <Select
                         data={roleOptions.map(role => ({ value: role, label: roleLabel(role) }))}
                         value={selectedRole}
-                        onChange={value => setSelectedRole(value)}
+                        onChange={value =>
+                          setSelectedRole(value && isPermissionRole(value) ? value : null)
+                        }
                         placeholder={t('nodeBrowser:permissionsRolePlaceholder')}
                         comboboxProps={{ withinPortal: true, position: 'bottom-start', offset: 6 }}
                       />
@@ -1082,7 +1106,7 @@ function MembersModal({
       opened={opened}
       onClose={onClose}
       title={title}
-      size="md"
+      size="lg"
       centered
       styles={{ body: { minHeight: 440 } }}
     >
