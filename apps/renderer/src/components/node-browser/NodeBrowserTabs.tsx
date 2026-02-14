@@ -15,7 +15,6 @@
  */
 
 import { BrandLogo } from '@/components/BrandLogo';
-import { isNeutralinoMode } from '@/core/ipc/neutralino';
 import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
 import { useDesktopClipboardHandlers } from '@/hooks/useDesktopClipboardHandlers';
 import { Tabs, Text } from '@mantine/core';
@@ -30,14 +29,11 @@ export function NodeBrowserTabs() {
   const closeTab = useNodeBrowserTabsStore(state => state.closeTab);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const isDesktopMode = useMemo(
-    () => typeof window !== 'undefined' && isNeutralinoMode() && !!(window as any).Neutralino,
-    []
-  );
+  const isClipboardEnabled = useMemo(() => typeof window !== 'undefined', []);
 
-  // Enable Ctrl+C copy for selected text in NodeBrowser tables
+  // Enable Ctrl+C copy for selected text in NodeBrowser content
   useDesktopClipboardHandlers({
-    isEnabled: isDesktopMode,
+    isEnabled: isClipboardEnabled,
     containerRef,
     enableReadOnlyCopy: true,
   });

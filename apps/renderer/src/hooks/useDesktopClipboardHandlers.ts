@@ -59,8 +59,31 @@ const defaultGetSelectedText = (target: HTMLInputElement | HTMLTextAreaElement):
   return value.slice(selectionStart, selectionEnd);
 };
 
+const isNodeWithinContainer = (node: Node | null | undefined, container: HTMLElement): boolean => {
+  if (!node) return false;
+  const resolvedNode =
+    node.nodeType === Node.TEXT_NODE ? (node.parentElement ?? node.parentNode) : node;
+  if (!resolvedNode) return false;
+  return resolvedNode === container || container.contains(resolvedNode);
+};
+
+const getSelectionTextInContainer = (container: HTMLElement): string => {
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed) return '';
+
+  const anchorInside = isNodeWithinContainer(selection.anchorNode, container);
+  const focusInside = isNodeWithinContainer(selection.focusNode, container);
+  if (!anchorInside && !focusInside) return '';
+
+  const anchorEditable = getEditableTarget(selection.anchorNode);
+  const focusEditable = getEditableTarget(selection.focusNode);
+  if (anchorEditable || focusEditable) return '';
+
+  return selection.toString();
+};
+
 /**
- * Centralized clipboard handler for desktop (Neutralino) mode.
+ * Centralized clipboard handler for desktop (Neutralino) and browser fallback cases.
  *
  * Supports:
  * - Paste into editable targets (requires onInsertText)
@@ -117,9 +140,6 @@ export const useDesktopClipboardHandlers = ({
       const container = containerRef.current;
       if (!container) return;
 
-      const target = event.target as HTMLElement | null;
-      if (!target || !container.contains(target)) return;
-
       // Handle copy from editable targets
       if (enableCopyCut) {
         const editableTarget = getEditableTarget(event.target);
@@ -128,6 +148,7 @@ export const useDesktopClipboardHandlers = ({
           (editableTarget instanceof HTMLInputElement ||
             editableTarget instanceof HTMLTextAreaElement)
         ) {
+          if (!container.contains(editableTarget)) return;
           const selectedText = getSelectedText(editableTarget);
           if (selectedText) {
             await writeClipboardText(selectedText, event);
@@ -138,20 +159,9 @@ export const useDesktopClipboardHandlers = ({
 
       // Handle copy from read-only content (e.g., tables in NodeBrowser)
       if (enableReadOnlyCopy) {
-        const editableTarget = getEditableTarget(event.target);
-        // Only handle if not in an editable element
-        if (!editableTarget) {
-          const selection = window.getSelection();
-          const selectedText = selection?.toString() || '';
-          if (selectedText) {
-            event.preventDefault();
-            event.stopPropagation();
-            if (event.clipboardData) {
-              event.clipboardData.setData('text/plain', selectedText);
-            } else {
-              await writeClipboardText(selectedText);
-            }
-          }
+        const selectedText = getSelectionTextInContainer(container);
+        if (selectedText) {
+          await writeClipboardText(selectedText, event);
         }
       }
     };
@@ -163,9 +173,6 @@ export const useDesktopClipboardHandlers = ({
       const container = containerRef.current;
       if (!container) return;
 
-      const target = event.target as HTMLElement | null;
-      if (!target || !container.contains(target)) return;
-
       // Handle Ctrl+C/X for copy/cut
       if (key === 'c' || key === 'x') {
         const editableTarget = getEditableTarget(event.target);
@@ -176,6 +183,7 @@ export const useDesktopClipboardHandlers = ({
             editableTarget instanceof HTMLInputElement ||
             editableTarget instanceof HTMLTextAreaElement
           ) {
+            if (!container.contains(editableTarget)) return;
             const selectedText = getSelectedText(editableTarget);
             if (!selectedText) return;
 
@@ -190,9 +198,8 @@ export const useDesktopClipboardHandlers = ({
         }
 
         // Handle read-only content (enableReadOnlyCopy) - only for copy, not cut
-        if (enableReadOnlyCopy && key === 'c' && !editableTarget) {
-          const selection = window.getSelection();
-          const selectedText = selection?.toString() || '';
+        if (enableReadOnlyCopy && key === 'c') {
+          const selectedText = getSelectionTextInContainer(container);
           if (selectedText) {
             event.preventDefault();
             event.stopPropagation();

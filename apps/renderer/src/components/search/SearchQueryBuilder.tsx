@@ -15,9 +15,11 @@
  */
 
 import { backendRpc, type SearchHistory } from '@/core/ipc/backend';
+import { isNeutralinoMode } from '@/core/ipc/neutralino';
 import { useSearchStore } from '@/core/store/search';
 import { useSearchHistoryStore } from '@/core/store/searchHistory';
 import { useServersStore } from '@/core/store/servers';
+import { useDesktopClipboardHandlers } from '@/hooks/useDesktopClipboardHandlers';
 import { useSearchDictionary } from '@/hooks/useSearchDictionary';
 import {
   Badge,
@@ -34,7 +36,7 @@ import {
   useComputedColorScheme,
 } from '@mantine/core';
 import { IconSearch } from '@tabler/icons-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 
 type SearchTokenKind = 'type' | 'aspect' | 'site' | 'prop' | 'operator' | 'text' | 'path';
@@ -253,6 +255,10 @@ export function SearchQueryBuilder({
 
   const colorScheme = useComputedColorScheme('light');
   const isDark = colorScheme === 'dark';
+  const isDesktopMode = useMemo(
+    () => typeof window !== 'undefined' && isNeutralinoMode() && !!(window as any).Neutralino,
+    []
+  );
 
   useEffect(() => {
     if (isDisabled) {
@@ -267,6 +273,7 @@ export function SearchQueryBuilder({
   const pendingInputRef = useRef<HTMLInputElement | null>(null);
   const mainInputRef = useRef<HTMLInputElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const clipboardContainerRef = useRef<HTMLDivElement | null>(null);
   const [currentProperties, setCurrentProperties] = useState<string[]>([]);
   const [isLoadingProperties, setIsLoadingProperties] = useState(false);
   const [currentClasses, setCurrentClasses] = useState<{
@@ -336,6 +343,48 @@ export function SearchQueryBuilder({
       }
     });
   };
+
+  const applyInputText = (
+    target: HTMLInputElement | HTMLTextAreaElement,
+    text: string,
+    onChangeValue: Dispatch<SetStateAction<string>>,
+    afterChange?: () => void
+  ) => {
+    const selectionStart = target.selectionStart ?? target.value.length;
+    const selectionEnd = target.selectionEnd ?? target.value.length;
+    const caretPosition = selectionStart + text.length;
+
+    onChangeValue(prev => prev.slice(0, selectionStart) + text + prev.slice(selectionEnd));
+
+    requestAnimationFrame(() => {
+      try {
+        target.setSelectionRange(caretPosition, caretPosition);
+      } catch {
+        // Ignore selection errors
+      }
+      afterChange?.();
+    });
+  };
+
+  useDesktopClipboardHandlers({
+    isEnabled: isDesktopMode,
+    containerRef: clipboardContainerRef,
+    enableCopyCut: true,
+    onInsertText: (target, text) => {
+      if (target === pendingInputRef.current) {
+        applyInputText(target, text, setPendingPropValue);
+        return;
+      }
+      if (target === mainInputRef.current) {
+        applyInputText(target, text, setInputValue, () => {
+          if (!isDisabled) {
+            combobox.openDropdown();
+            scrollToInput();
+          }
+        });
+      }
+    },
+  });
 
   // Auto-scroll when tokens or input changes
   useEffect(() => {
@@ -1443,103 +1492,127 @@ export function SearchQueryBuilder({
   return (
     <Combobox store={combobox} onOptionSubmit={handleSuggestionSelect} withinPortal={false}>
       <Combobox.DropdownTarget>
-        <PillsInput
-          onClick={() => {
-            if (!isDisabled) {
-              combobox.openDropdown();
-            }
-          }}
-          leftSection={<IconSearch size={16} />}
-          rightSection={!isDisabled && loading ? <Loader size={16} /> : undefined}
-          style={{
-            width: '100%',
-            minWidth: 200,
-            maxWidth: 400,
-            cursor: isDisabled ? 'not-allowed' : undefined,
-            opacity: isDisabled ? 0.6 : 1,
-          }}
-          styles={{
-            input: {
-              backgroundColor: isDark
-                ? 'var(--mantine-color-dark-6)'
-                : 'var(--mantine-color-gray-0)',
-            },
-          }}
-          aria-disabled={isDisabled}
-        >
-          <div
-            ref={scrollContainerRef}
-            style={{
-              display: 'flex',
-              flexWrap: 'nowrap',
-              overflowX: 'auto',
-              overflowY: 'hidden',
-              scrollbarWidth: 'none',
-              msOverflowStyle: 'none',
-              gap: 8,
-              width: '100%',
-              alignItems: 'center',
-              WebkitOverflowScrolling: 'touch',
+        <div ref={clipboardContainerRef} style={{ width: '100%' }}>
+          <PillsInput
+            onClick={() => {
+              if (!isDisabled) {
+                combobox.openDropdown();
+              }
             }}
+            leftSection={<IconSearch size={16} />}
+            rightSection={!isDisabled && loading ? <Loader size={16} /> : undefined}
+            style={{
+              width: '100%',
+              minWidth: 200,
+              maxWidth: 400,
+              cursor: isDisabled ? 'not-allowed' : undefined,
+              opacity: isDisabled ? 0.6 : 1,
+            }}
+            styles={{
+              input: {
+                backgroundColor: isDark
+                  ? 'var(--mantine-color-dark-6)'
+                  : 'var(--mantine-color-gray-0)',
+              },
+            }}
+            aria-disabled={isDisabled}
           >
-            <Pill.Group style={{ display: 'flex', flexWrap: 'nowrap', gap: 8 }}>
-              {tokens.map(token => {
-                if (token.kind === 'path') {
-                  return (
-                    <Group
-                      key={token.id}
-                      gap={4}
-                      align="center"
-                      wrap="nowrap"
-                      onClick={e => e.stopPropagation()}
-                      onMouseDown={e => e.stopPropagation()}
-                    >
-                      <Pill
-                        withRemoveButton
-                        onRemove={() => handleTokenRemove(token.id)}
-                        styles={{
-                          root: {
-                            borderRadius: '4px',
-                            backgroundColor: isDark
-                              ? 'var(--mantine-color-dark-5)'
-                              : 'var(--mantine-color-gray-2)',
-                            color: isDark
-                              ? 'var(--mantine-color-gray-0)'
-                              : 'var(--mantine-color-gray-9)',
-                          },
-                        }}
-                      >
-                        <Text size="sm">{token.pathValue}</Text>
-                      </Pill>
-                      <div
+            <div
+              ref={scrollContainerRef}
+              style={{
+                display: 'flex',
+                flexWrap: 'nowrap',
+                overflowX: 'auto',
+                overflowY: 'hidden',
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none',
+                gap: 8,
+                width: '100%',
+                alignItems: 'center',
+                WebkitOverflowScrolling: 'touch',
+              }}
+            >
+              <Pill.Group style={{ display: 'flex', flexWrap: 'nowrap', gap: 8 }}>
+                {tokens.map(token => {
+                  if (token.kind === 'path') {
+                    return (
+                      <Group
+                        key={token.id}
+                        gap={4}
+                        align="center"
+                        wrap="nowrap"
                         onClick={e => e.stopPropagation()}
                         onMouseDown={e => e.stopPropagation()}
                       >
-                        <Tooltip
-                          label={token.pathDepth === 'deep' ? t('depthDeep') : t('depthImmediate')}
+                        <Pill
+                          withRemoveButton
+                          onRemove={() => handleTokenRemove(token.id)}
+                          styles={{
+                            root: {
+                              borderRadius: '4px',
+                              backgroundColor: isDark
+                                ? 'var(--mantine-color-dark-5)'
+                                : 'var(--mantine-color-gray-2)',
+                              color: isDark
+                                ? 'var(--mantine-color-gray-0)'
+                                : 'var(--mantine-color-gray-9)',
+                            },
+                          }}
                         >
-                          <Checkbox
-                            checked={token.pathDepth === 'deep'}
-                            onChange={event => {
-                              handlePathDepthChange(
-                                token.id,
-                                event.currentTarget.checked ? 'deep' : 'immediate'
-                              );
-                            }}
-                            size="xs"
-                            style={{ flexShrink: 0 }}
-                          />
-                        </Tooltip>
-                      </div>
-                    </Group>
-                  );
-                }
+                          <Text size="sm">{token.pathValue}</Text>
+                        </Pill>
+                        <div
+                          onClick={e => e.stopPropagation()}
+                          onMouseDown={e => e.stopPropagation()}
+                        >
+                          <Tooltip
+                            label={
+                              token.pathDepth === 'deep' ? t('depthDeep') : t('depthImmediate')
+                            }
+                          >
+                            <Checkbox
+                              checked={token.pathDepth === 'deep'}
+                              onChange={event => {
+                                handlePathDepthChange(
+                                  token.id,
+                                  event.currentTarget.checked ? 'deep' : 'immediate'
+                                );
+                              }}
+                              size="xs"
+                              style={{ flexShrink: 0 }}
+                            />
+                          </Tooltip>
+                        </div>
+                      </Group>
+                    );
+                  }
 
-                return (
+                  return (
+                    <Pill
+                      key={token.id}
+                      withRemoveButton
+                      onRemove={() => handleTokenRemove(token.id)}
+                      styles={{
+                        root: {
+                          borderRadius: '4px',
+                          backgroundColor: isDark
+                            ? 'var(--mantine-color-dark-5)'
+                            : 'var(--mantine-color-gray-2)',
+                          color: isDark
+                            ? 'var(--mantine-color-gray-0)'
+                            : 'var(--mantine-color-gray-9)',
+                        },
+                      }}
+                    >
+                      {token.label}
+                    </Pill>
+                  );
+                })}
+
+                {pendingPropField && (
                   <Pill
-                    key={token.id}
                     withRemoveButton
-                    onRemove={() => handleTokenRemove(token.id)}
+                    onRemove={cancelPendingProp}
                     styles={{
                       root: {
                         borderRadius: '4px',
@@ -1552,103 +1625,85 @@ export function SearchQueryBuilder({
                       },
                     }}
                   >
-                    {token.label}
+                    <Group gap={6} align="center">
+                      <Text fw={600}>{pendingPropField}</Text>
+                      <Text>=</Text>
+                      <input
+                        ref={pendingInputRef}
+                        value={pendingPropValue}
+                        onChange={event => setPendingPropValue(event.currentTarget.value)}
+                        onKeyDown={handlePendingKeyDown}
+                        placeholder={t('placeholderValue')}
+                        style={{
+                          border: 'none',
+                          outline: 'none',
+                          background: 'transparent',
+                          color: 'inherit',
+                          minWidth: 80,
+                        }}
+                        disabled={isDisabled}
+                        onBlur={() => {
+                          if (isDisabled) {
+                            return;
+                          }
+                          if (pendingPropValue.trim()) {
+                            finalizePendingProp();
+                          } else {
+                            cancelPendingProp();
+                          }
+                        }}
+                      />
+                    </Group>
                   </Pill>
-                );
-              })}
+                )}
 
-              {pendingPropField && (
-                <Pill
-                  withRemoveButton
-                  onRemove={cancelPendingProp}
-                  styles={{
-                    root: {
-                      borderRadius: '4px',
-                      backgroundColor: isDark
-                        ? 'var(--mantine-color-dark-5)'
-                        : 'var(--mantine-color-gray-2)',
-                      color: isDark ? 'var(--mantine-color-gray-0)' : 'var(--mantine-color-gray-9)',
-                    },
-                  }}
-                >
-                  <Group gap={6} align="center">
-                    <Text fw={600}>{pendingPropField}</Text>
-                    <Text>=</Text>
-                    <input
-                      ref={pendingInputRef}
-                      value={pendingPropValue}
-                      onChange={event => setPendingPropValue(event.currentTarget.value)}
-                      onKeyDown={handlePendingKeyDown}
-                      placeholder={t('placeholderValue')}
-                      style={{
-                        border: 'none',
-                        outline: 'none',
-                        background: 'transparent',
-                        color: 'inherit',
-                        minWidth: 80,
-                      }}
-                      disabled={isDisabled}
-                      onBlur={() => {
-                        if (isDisabled) {
-                          return;
-                        }
-                        if (pendingPropValue.trim()) {
-                          finalizePendingProp();
-                        } else {
-                          cancelPendingProp();
-                        }
-                      }}
-                    />
-                  </Group>
-                </Pill>
-              )}
-
-              <Combobox.EventsTarget>
-                <PillsInput.Field
-                  ref={mainInputRef}
-                  value={inputValue}
-                  onChange={event => {
-                    if (isDisabled) {
-                      return;
+                <Combobox.EventsTarget>
+                  <PillsInput.Field
+                    ref={mainInputRef}
+                    value={inputValue}
+                    onChange={event => {
+                      if (isDisabled) {
+                        return;
+                      }
+                      setInputValue(event.currentTarget.value);
+                      combobox.openDropdown();
+                      scrollToInput();
+                    }}
+                    onFocus={() => {
+                      if (isDisabled) {
+                        return;
+                      }
+                      combobox.openDropdown();
+                      scrollToInput();
+                    }}
+                    onBlur={() => {
+                      if (!isDisabled) {
+                        combobox.closeDropdown();
+                      }
+                    }}
+                    onKeyDown={handleKeyDown}
+                    placeholder={
+                      tokens.length === 0 && !pendingPropField
+                        ? isDisabled
+                          ? t('common:noServers')
+                          : (placeholder ?? t('placeholder'))
+                        : undefined
                     }
-                    setInputValue(event.currentTarget.value);
-                    combobox.openDropdown();
-                    scrollToInput();
-                  }}
-                  onFocus={() => {
-                    if (isDisabled) {
-                      return;
-                    }
-                    combobox.openDropdown();
-                    scrollToInput();
-                  }}
-                  onBlur={() => {
-                    if (!isDisabled) {
-                      combobox.closeDropdown();
-                    }
-                  }}
-                  onKeyDown={handleKeyDown}
-                  placeholder={
-                    tokens.length === 0 && !pendingPropField
-                      ? isDisabled
-                        ? t('common:noServers')
-                        : (placeholder ?? t('placeholder'))
-                      : undefined
-                  }
-                  disabled={Boolean(pendingPropField) || isDisabled}
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  style={{
-                    minWidth: 140,
-                    flex: '0 0 auto',
-                  }}
-                />
-              </Combobox.EventsTarget>
-            </Pill.Group>
-          </div>
-        </PillsInput>
+                    disabled={Boolean(pendingPropField) || isDisabled}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    style={{
+                      minWidth: 140,
+                      flex: '0 0 auto',
+                    }}
+                  />
+                </Combobox.EventsTarget>
+              </Pill.Group>
+            </div>
+          </PillsInput>
+        </div>
       </Combobox.DropdownTarget>
 
       <Combobox.Dropdown
