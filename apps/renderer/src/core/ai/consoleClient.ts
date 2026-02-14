@@ -29,6 +29,13 @@ export interface AiExecuteResult {
   code: string;
 }
 
+export type AiImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+
+export interface AiInputImage {
+  data: string;
+  mediaType: AiImageMediaType;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const base = getBackendUrl();
   const response = await fetch(`${base}${path}`, {
@@ -57,10 +64,13 @@ export async function fetchAiStatus(): Promise<AiStatusResponse> {
   }
 }
 
-export async function callAiRouter(question: string): Promise<string[]> {
+export async function callAiRouter(
+  question: string,
+  options?: { images?: AiInputImage[] }
+): Promise<string[]> {
   const result = await request<{ selected: string[] }>('/rpc/ai/router', {
     method: 'POST',
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, images: options?.images }),
   });
   return Array.isArray(result.selected) ? result.selected : [];
 }
@@ -70,6 +80,7 @@ export interface ExecutePayload {
   selected: string[];
   selection?: string;
   context?: string;
+  images?: AiInputImage[];
 }
 
 export async function callAiExecute(payload: ExecutePayload): Promise<AiExecuteResult> {

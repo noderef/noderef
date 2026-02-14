@@ -16,6 +16,8 @@
 
 import { rpc } from './rpc';
 
+export type AiCapability = 'text' | 'vision';
+
 export interface AiSettingsResponse {
   provider: string | null;
   model: string | null;
@@ -38,7 +40,12 @@ export async function saveAiSettings(input: {
 
 export interface AiModelsResponse {
   provider: string;
-  models: Array<{ id: string; displayName: string | null; createdAt: number | string | null }>;
+  models: Array<{
+    id: string;
+    displayName: string | null;
+    createdAt: number | string | null;
+    capabilities: AiCapability[];
+  }>;
 }
 
 export async function listAiModels(params: {
@@ -46,4 +53,26 @@ export async function listAiModels(params: {
   token?: string;
 }): Promise<AiModelsResponse> {
   return rpc<AiModelsResponse>('backend.ai.listModels', params);
+}
+
+export interface AiProvidersResponse {
+  defaultProvider: string;
+  providers: Array<{
+    id: string;
+    label: string;
+    hasToken: boolean;
+    defaultModel: string;
+    modelCatalogMode: 'api' | 'api_with_fallback' | 'static';
+    capabilities: AiCapability[];
+    models: Array<{
+      id: string;
+      displayName: string | null;
+      createdAt: number | string | null;
+      capabilities: AiCapability[];
+    }>;
+  }>;
+}
+
+export async function listAiProviders(): Promise<AiProvidersResponse> {
+  return rpc<AiProvidersResponse>('backend.ai.listProviders', {});
 }

@@ -15,6 +15,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import type { AiInputImage, AiListedModel } from './types.js';
 
 export interface AnthropicRequest {
   apiKey: string;
@@ -22,6 +23,8 @@ export interface AnthropicRequest {
   prompt: string;
   maxTokens?: number;
   temperature?: number;
+  baseURL?: string;
+  images?: AiInputImage[];
 }
 
 export async function callAnthropic({
@@ -30,8 +33,25 @@ export async function callAnthropic({
   prompt,
   maxTokens = 1024,
   temperature = 0,
+  baseURL,
+  images = [],
 }: AnthropicRequest): Promise<string> {
-  const client = new Anthropic({ apiKey });
+  const client = new Anthropic({
+    apiKey,
+    ...(baseURL ? { baseURL } : {}),
+  });
+
+  const content = [
+    { type: 'text' as const, text: prompt },
+    ...images.map(image => ({
+      type: 'image' as const,
+      source: {
+        type: 'base64' as const,
+        media_type: image.mediaType,
+        data: image.data,
+      },
+    })),
+  ];
 
   const response = await client.messages.create({
     model,
@@ -40,7 +60,7 @@ export async function callAnthropic({
     messages: [
       {
         role: 'user',
-        content: [{ type: 'text', text: prompt }],
+        content,
       },
     ],
   });
@@ -57,12 +77,19 @@ export async function callAnthropic({
   return text;
 }
 
-export async function listAnthropicModels(apiKey: string) {
-  const client = new Anthropic({ apiKey });
+export async function listAnthropicModels({
+  apiKey,
+  baseURL,
+}: {
+  apiKey: string;
+  baseURL?: string;
+}): Promise<AiListedModel[]> {
+  const client = new Anthropic({ apiKey, ...(baseURL ? { baseURL } : {}) });
   const response = await client.models.list();
   return response.data.map(model => ({
     id: model.id,
     displayName: (model as any).display_name ?? null,
     createdAt: model.created_at ?? null,
+    capabilities: ['text'],
   }));
 }

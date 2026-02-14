@@ -14,7 +14,12 @@
  * limitations under the License.
  */
 
-import { getAiSettings, listAiModels, saveAiSettings } from '@/core/ipc/aiSettings';
+import {
+  getAiSettings,
+  listAiModels,
+  listAiProviders,
+  saveAiSettings,
+} from '@/core/ipc/aiSettings';
 import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
 import { MODAL_KEYS } from '@/core/store/keys';
 import { useUIStore } from '@/core/store/ui';
@@ -68,6 +73,28 @@ interface AiModelOption {
   label: string;
 }
 
+interface AiProviderOption {
+  value: string;
+  label: string;
+  defaultModel: string;
+  hasToken: boolean;
+}
+
+const FALLBACK_AI_PROVIDER_OPTIONS: AiProviderOption[] = [
+  {
+    value: 'anthropic',
+    label: 'Anthropic',
+    defaultModel: 'claude-3-5-sonnet-20241022',
+    hasToken: false,
+  },
+  {
+    value: 'minimax',
+    label: 'MiniMax',
+    defaultModel: 'M2.1',
+    hasToken: false,
+  },
+];
+
 export function SettingsModal() {
   const { isOpen, close } = useModal(MODAL_KEYS.SETTINGS);
   const { t } = useTranslation(['common', 'spotlight', 'settings']);
@@ -89,6 +116,9 @@ export function SettingsModal() {
   const [aiLoaded, setAiLoaded] = useState(false);
   const [aiSaving, setAiSaving] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [aiProviderOptions, setAiProviderOptions] = useState<AiProviderOption[]>(
+    FALLBACK_AI_PROVIDER_OPTIONS
+  );
   const [aiModelOptions, setAiModelOptions] = useState<AiModelOption[]>([]);
   const [aiModelsLoading, setAiModelsLoading] = useState(false);
   const [aiTokenValid, setAiTokenValid] = useState(false);
@@ -188,7 +218,16 @@ export function SettingsModal() {
     },
   ];
 
-  const aiProviderOptions = [{ value: 'anthropic', label: 'Anthropic' }];
+  const aiProviderDefaultModelMap = useMemo(() => {
+    return new Map(aiProviderOptions.map(option => [option.value, option.defaultModel]));
+  }, [aiProviderOptions]);
+
+  const resolveDefaultModelForProvider = useCallback(
+    (provider: string | null | undefined) => {
+      return aiProviderDefaultModelMap.get(provider ?? '') ?? DEFAULT_AI_MODEL;
+    },
+    [aiProviderDefaultModelMap]
+  );
 
   const latestVersion = latestRelease?.version;
   const hasUpdateAvailable = hasUpdate && Boolean(latestVersion);
@@ -250,6 +289,8 @@ export function SettingsModal() {
             const exists = options.some(opt => opt.value === prev);
             return exists ? prev : options[0].value;
           });
+        } else {
+          setAiModel(resolveDefaultModelForProvider(providerToUse));
         }
         if (!silent) {
           notifications.show({
@@ -267,25 +308,59 @@ export function SettingsModal() {
         setAiModelsLoading(false);
       }
     },
-    [aiProvider, setAiModel, t]
+    [aiProvider, resolveDefaultModelForProvider, setAiModel, t]
   );
 
   const loadAiSection = useCallback(async () => {
     setAiLoading(true);
     setAiError(null);
     try {
+      const providerCatalog = await listAiProviders().catch(error => {
+        console.warn('[SettingsModal] Failed to load AI provider catalog', error);
+        return null;
+      });
+
+      const resolvedProviderOptions =
+        providerCatalog?.providers && providerCatalog.providers.length > 0
+          ? providerCatalog.providers.map(provider => ({
+              value: provider.id,
+              label: provider.label,
+              defaultModel: provider.defaultModel,
+              hasToken: provider.hasToken,
+            }))
+          : FALLBACK_AI_PROVIDER_OPTIONS;
+
+      setAiProviderOptions(resolvedProviderOptions);
+
       const response = await getAiSettings();
-      setAiProvider(response.provider ?? DEFAULT_AI_PROVIDER);
-      setAiModel(response.model ?? DEFAULT_AI_MODEL);
-      setAiHasToken(Boolean(response.hasToken));
+      const providerFromSettings = response.provider ?? providerCatalog?.defaultProvider;
+      const providerExists = resolvedProviderOptions.some(
+        option => option.value === providerFromSettings
+      );
+      const resolvedProvider =
+        providerExists && providerFromSettings
+          ? providerFromSettings
+          : (providerCatalog?.defaultProvider ??
+            resolvedProviderOptions[0]?.value ??
+            DEFAULT_AI_PROVIDER);
+      const providerDefaultModel =
+        resolvedProviderOptions.find(option => option.value === resolvedProvider)?.defaultModel ??
+        DEFAULT_AI_MODEL;
+      const providerHasToken = Boolean(
+        resolvedProviderOptions.find(option => option.value === resolvedProvider)?.hasToken
+      );
+
+      setAiProvider(resolvedProvider);
+      setAiModel(response.model ?? providerDefaultModel);
+      setAiHasToken(providerHasToken);
       setAiEnabled(Boolean(response.enabled));
       setAiTokenInput('');
       setAiTokenValid(false);
       setAiTokenError(null);
       setAiModelOptions([]);
-      if (response.hasToken) {
+      if (providerHasToken) {
         await fetchAiModels({
-          provider: response.provider ?? DEFAULT_AI_PROVIDER,
+          provider: resolvedProvider,
           silent: true,
         });
       }
@@ -332,6 +407,9 @@ export function SettingsModal() {
       });
       if (trimmedToken.length > 0) {
         setAiHasToken(true);
+        setAiProviderOptions(prev =>
+          prev.map(option => (option.value === aiProvider ? { ...option, hasToken: true } : option))
+        );
         await fetchAiModels({
           provider: aiProvider,
           token: trimmedToken,
@@ -735,10 +813,16 @@ export function SettingsModal() {
                             value={aiProvider}
                             onChange={value => {
                               if (!value) return;
+                              const providerOption = aiProviderOptions.find(
+                                option => option.value === value
+                              );
+                              const hasStoredToken = Boolean(providerOption?.hasToken);
                               setAiProvider(value);
+                              setAiModel(resolveDefaultModelForProvider(value));
+                              setAiHasToken(hasStoredToken);
                               setAiTokenValid(false);
                               setAiModelOptions([]);
-                              if (aiHasToken && !aiTokenInput.trim()) {
+                              if (hasStoredToken && !aiTokenInput.trim()) {
                                 void fetchAiModels({ provider: value });
                               }
                             }}

@@ -22,7 +22,9 @@ import { getAiAssistantEnabled } from '../services/userSettings.js';
 import { callAnthropic } from './anthropic.js';
 import { buildExecutionPrompt } from './executePrompt.js';
 import { loadLibs } from './loadLibs.js';
+import { getAiProvider, providerSupportsCapability } from './providers.js';
 import { buildRouterPrompt } from './routerPrompt.js';
+import type { AiInputImage, AiInputImageMediaType } from './types.js';
 
 const router: ExpressRouter = Router();
 
@@ -42,6 +44,13 @@ class AiError extends Error {
     this.status = status;
   }
 }
+
+const VALID_IMAGE_MEDIA_TYPES: ReadonlySet<AiInputImageMediaType> = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+]);
 
 function isAiEnabled(): boolean {
   return process.env.ENABLE_AI_CONSOLE !== '0';
@@ -81,6 +90,7 @@ router.post('/router', async (req, res) => {
     const userId = await getCurrentUserId();
     const aiConfig = await resolveConfigOrThrow(userId);
     await ensureUserEnabled(userId);
+    const images = parseInputImages(req.body?.images);
 
     const { manifest } = loadLibs();
     const prompt = buildRouterPrompt(question, manifest);
@@ -89,6 +99,7 @@ router.post('/router', async (req, res) => {
       model: aiConfig.model,
       prompt,
       maxTokens: 400,
+      images,
     });
 
     const selected = parseSelectedLibraries(raw, manifest);
@@ -123,6 +134,7 @@ router.post('/execute', async (req, res) => {
     const userId = await getCurrentUserId();
     const aiConfig = await resolveConfigOrThrow(userId);
     await ensureUserEnabled(userId);
+    const images = parseInputImages(req.body?.images);
     const libs = loadLibs();
     const selectedLibs = selected.filter((name: string) => name in libs.libs);
 
@@ -139,6 +151,7 @@ router.post('/execute', async (req, res) => {
       model: aiConfig.model,
       prompt,
       maxTokens: 1200,
+      images,
     });
 
     const parsed = parseDslResponse(raw);
@@ -187,21 +200,39 @@ async function ensureUserEnabled(userId: number) {
 
 async function callProvider(
   provider: string,
-  args: { apiKey: string; model: string; prompt: string; maxTokens?: number }
+  args: {
+    apiKey: string;
+    model: string;
+    prompt: string;
+    maxTokens?: number;
+    images?: AiInputImage[];
+  }
 ) {
-  if (provider === 'anthropic') {
-    return callAnthropic({
-      apiKey: args.apiKey,
-      model: args.model,
-      prompt: args.prompt,
-      maxTokens: args.maxTokens,
+  const resolvedProvider = getAiProvider(provider);
+  if (!resolvedProvider) {
+    throw new AiError({
+      code: 'AI_PROVIDER_UNSUPPORTED',
+      message: `Provider "${provider}" is not supported.`,
+      status: 400,
     });
   }
 
-  throw new AiError({
-    code: 'AI_PROVIDER_UNSUPPORTED',
-    message: `Provider "${provider}" is not supported.`,
-    status: 400,
+  if (args.images?.length && !providerSupportsCapability(resolvedProvider.id, 'vision')) {
+    throw new AiError({
+      code: 'AI_INPUT_UNSUPPORTED',
+      message: `Provider "${resolvedProvider.label}" does not support image input.`,
+      status: 400,
+    });
+  }
+
+  return callAnthropic({
+    apiKey: args.apiKey,
+    model: args.model,
+    prompt: args.prompt,
+    maxTokens: args.maxTokens,
+    temperature: resolvedProvider.defaultTemperature,
+    baseURL: resolvedProvider.baseURL,
+    images: args.images,
   });
 }
 
@@ -220,6 +251,79 @@ function parseSelectedLibraries(raw: string, manifest: Record<string, unknown>):
       message: `Failed to parse router response: ${(err as Error).message}`,
     });
   }
+}
+
+function parseInputImages(raw: unknown): AiInputImage[] {
+  if (raw === undefined || raw === null) {
+    return [];
+  }
+  if (!Array.isArray(raw)) {
+    throw new AiError({
+      code: 'INVALID_INPUT',
+      message: 'images must be an array when provided.',
+    });
+  }
+
+  return raw.map((item, index) => parseInputImage(item, index));
+}
+
+function parseInputImage(raw: unknown, index: number): AiInputImage {
+  if (!raw || typeof raw !== 'object') {
+    throw new AiError({
+      code: 'INVALID_INPUT',
+      message: `images[${index}] must be an object.`,
+    });
+  }
+
+  const image = raw as { dataUrl?: unknown; data?: unknown; mediaType?: unknown };
+  if (typeof image.dataUrl === 'string') {
+    return parseDataUrlImage(image.dataUrl, index);
+  }
+
+  if (typeof image.data !== 'string' || typeof image.mediaType !== 'string') {
+    throw new AiError({
+      code: 'INVALID_INPUT',
+      message: `images[${index}] must include either dataUrl or { data, mediaType }.`,
+    });
+  }
+
+  const mediaType = image.mediaType as AiInputImageMediaType;
+  if (!VALID_IMAGE_MEDIA_TYPES.has(mediaType)) {
+    throw new AiError({
+      code: 'INVALID_INPUT',
+      message: `images[${index}] mediaType is not supported.`,
+    });
+  }
+
+  const data = image.data.trim();
+  if (!data) {
+    throw new AiError({
+      code: 'INVALID_INPUT',
+      message: `images[${index}] data must be non-empty.`,
+    });
+  }
+
+  return { mediaType, data };
+}
+
+function parseDataUrlImage(dataUrl: string, index: number): AiInputImage {
+  const match = dataUrl.match(/^data:(image\/(?:jpeg|png|gif|webp));base64,([a-zA-Z0-9+/=\s]+)$/i);
+  if (!match?.[1] || !match[2]) {
+    throw new AiError({
+      code: 'INVALID_INPUT',
+      message: `images[${index}] dataUrl must be a valid base64 image data URL.`,
+    });
+  }
+
+  const mediaType = match[1].toLowerCase() as AiInputImageMediaType;
+  if (!VALID_IMAGE_MEDIA_TYPES.has(mediaType)) {
+    throw new AiError({
+      code: 'INVALID_INPUT',
+      message: `images[${index}] dataUrl media type is not supported.`,
+    });
+  }
+
+  return { mediaType, data: match[2].replace(/\s+/g, '') };
 }
 
 function extractJson(raw: string, charPair: [string, string]): string {
@@ -247,7 +351,6 @@ function extractJsonObject(raw: string): string {
 }
 
 const VALID_DSL_TYPES = new Set(['replace_selection', 'replace_file'] as const);
-type VAlidDslType = 'replace_selection' | 'replace_file';
 
 function parseDslResponse(raw: string) {
   const match = raw.match(/<changes>([\s\S]*?)<\/changes>/i);

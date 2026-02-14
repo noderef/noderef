@@ -21,31 +21,72 @@
 
 import { z } from 'zod';
 import { listAnthropicModels } from '../../ai/anthropic.js';
+import {
+  getAiProvider,
+  getDefaultAiProvider,
+  inferModelCapabilities,
+  listAiProviders,
+  normalizeProviderId,
+  providerSupportsCapability,
+  type AiProviderConfig,
+} from '../../ai/providers.js';
+import type { AiListedModel } from '../../ai/types.js';
 import { AppErrors } from '../../lib/errors.js';
 import {
+  listUserAiSettings,
   resolveUserAiConfig,
+  resolveUserAiConfigForProvider,
   upsertUserAiSettings,
 } from '../../services/ai/userSettingsService.js';
 import { getAiAssistantEnabled, setAiAssistantEnabled } from '../../services/userSettings.js';
 import type { Routes } from './types.js';
 import { getCurrentUserId } from './withAuth.js';
 
-const DEFAULT_AI_PROVIDER = 'anthropic';
-const DEFAULT_AI_MODEL = 'claude-3-5-sonnet-20241022';
+const DEFAULT_PROVIDER = getDefaultAiProvider();
 
 /**
  * Register all AI-related RPC handlers
  */
 export function registerAiHandlers(routes: Routes): void {
+  routes['backend.ai.listProviders'] = {
+    schema: z.object({}),
+    handler: async () => {
+      const userId = await getCurrentUserId();
+      const settings = await listUserAiSettings(userId);
+      const providersWithToken = new Set(settings.map(setting => setting.provider));
+      const providers = listAiProviders().map(provider => ({
+        id: provider.id,
+        label: provider.label,
+        defaultModel: provider.defaultModel,
+        modelCatalogMode: provider.modelCatalogMode,
+        capabilities: getProviderCapabilities(provider),
+        models: provider.fallbackModels,
+        hasToken: providersWithToken.has(provider.id),
+      }));
+
+      return {
+        defaultProvider: DEFAULT_PROVIDER.id,
+        providers,
+      };
+    },
+  };
+
   routes['backend.ai.getSettings'] = {
     schema: z.object({}),
     handler: async () => {
       const userId = await getCurrentUserId();
       const config = await resolveUserAiConfig(userId);
+      const configuredProvider = config?.provider ? getAiProvider(config.provider) : null;
+      const selectedProvider = configuredProvider || getDefaultAiProvider();
+      const hasToken = Boolean(config?.apiKey && configuredProvider);
+      const model = configuredProvider
+        ? (config?.model ?? selectedProvider.defaultModel)
+        : selectedProvider.defaultModel;
+
       return {
-        provider: config?.provider ?? DEFAULT_AI_PROVIDER,
-        model: config?.model ?? DEFAULT_AI_MODEL,
-        hasToken: Boolean(config?.apiKey),
+        provider: selectedProvider.id,
+        model,
+        hasToken,
         enabled: await getAiAssistantEnabled(userId),
       };
     },
@@ -66,11 +107,23 @@ export function registerAiHandlers(routes: Routes): void {
         token?: string;
         enabled?: boolean;
       };
+
+      const normalizedProviderId = normalizeProviderId(provider);
+      if (!normalizedProviderId) {
+        AppErrors.invalidInput(`Provider "${provider}" is not supported.`);
+      }
+      const resolvedProviderId = normalizedProviderId || DEFAULT_PROVIDER.id;
+
+      const normalizedModel = model.trim();
+      if (!normalizedModel) {
+        AppErrors.invalidInput('Model is required.');
+      }
+
       const normalizedToken = token && token.trim().length > 0 ? token.trim() : undefined;
 
       await upsertUserAiSettings(userId, {
-        provider,
-        model,
+        provider: resolvedProviderId,
+        model: normalizedModel,
         token: normalizedToken,
         isDefault: true,
       });
@@ -94,25 +147,91 @@ export function registerAiHandlers(routes: Routes): void {
       const providerOverride = typedParams.provider?.trim();
       const tokenOverride = typedParams.token?.trim();
 
-      let config: Awaited<ReturnType<typeof resolveUserAiConfig>> | null = null;
-      if (!tokenOverride || !providerOverride) {
-        config = await resolveUserAiConfig(userId).catch(() => null);
-      }
+      const defaultConfig = await resolveUserAiConfig(userId).catch(() => null);
 
-      const provider = providerOverride || config?.provider || DEFAULT_AI_PROVIDER;
-      const token = tokenOverride || config?.apiKey;
+      const resolvedProviderId =
+        normalizeProviderId(providerOverride) ||
+        normalizeProviderId(defaultConfig?.provider) ||
+        DEFAULT_PROVIDER.id;
+
+      const provider = getAiProvider(resolvedProviderId);
+      if (!provider) {
+        AppErrors.invalidInput(`Provider "${resolvedProviderId}" is not supported.`);
+      }
+      const resolvedProvider = provider || DEFAULT_PROVIDER;
+
+      const providerConfig = await resolveUserAiConfigForProvider(
+        userId,
+        resolvedProvider.id
+      ).catch(() => null);
+      const token = tokenOverride || providerConfig?.apiKey;
       if (!token) {
         AppErrors.invalidInput('No API token provided or stored.');
       }
-      // TypeScript doesn't recognize never-return, so we assert token is defined
-      const tokenDefined = token!;
+      const resolvedToken = token || '';
 
-      if (provider !== 'anthropic') {
-        AppErrors.invalidInput(`Model listing not supported for provider "${provider}".`);
-      }
-
-      const models = await listAnthropicModels(tokenDefined);
-      return { provider, models };
+      const models = await listModelsForProvider(resolvedProvider, resolvedToken);
+      return { provider: resolvedProvider.id, models };
     },
   };
+}
+
+function getProviderCapabilities(provider: AiProviderConfig): Array<'text' | 'vision'> {
+  const capabilities: Array<'text' | 'vision'> = ['text'];
+  if (providerSupportsCapability(provider.id, 'vision')) {
+    capabilities.push('vision');
+  }
+  return capabilities;
+}
+
+async function listModelsForProvider(
+  provider: AiProviderConfig,
+  apiKey: string
+): Promise<AiListedModel[]> {
+  if (provider.modelCatalogMode === 'static') {
+    return provider.fallbackModels;
+  }
+
+  try {
+    const remoteModels = await listAnthropicModels({ apiKey, baseURL: provider.baseURL });
+    const normalizedRemote = remoteModels.map(model => ({
+      ...model,
+      capabilities: inferModelCapabilities(provider.id, model.id),
+    }));
+    return mergeUniqueModels(normalizedRemote, provider.fallbackModels);
+  } catch (error) {
+    if (provider.modelCatalogMode === 'api_with_fallback' && isUnsupportedModelsEndpoint(error)) {
+      return provider.fallbackModels;
+    }
+    throw error;
+  }
+}
+
+function mergeUniqueModels(primary: AiListedModel[], fallback: AiListedModel[]): AiListedModel[] {
+  const seen = new Set<string>();
+  const merged: AiListedModel[] = [];
+
+  for (const model of [...primary, ...fallback]) {
+    const key = model.id.trim();
+    if (!key || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    merged.push(model);
+  }
+
+  return merged;
+}
+
+function isUnsupportedModelsEndpoint(error: unknown): boolean {
+  const statusRaw = (error as { status?: unknown })?.status;
+  const status = typeof statusRaw === 'number' ? statusRaw : undefined;
+
+  if (status === 404 || status === 405 || status === 501) {
+    return true;
+  }
+
+  const messageRaw = (error as { message?: unknown })?.message;
+  const message = typeof messageRaw === 'string' ? messageRaw.toLowerCase() : '';
+  return message.includes('/v1/models') && message.includes('not') && message.includes('support');
 }

@@ -89,6 +89,31 @@ export async function resolveUserAiConfig(userId: number): Promise<UserAiConfig 
     return null;
   }
 
+  return toUserAiConfig(record);
+}
+
+export async function resolveUserAiConfigForProvider(
+  userId: number,
+  provider: string
+): Promise<UserAiConfig | null> {
+  const prisma = await getDefaultPrisma();
+  const repository = new AiSettingsRepository(prisma);
+  const record = await repository.findByProvider(userId, provider);
+
+  if (!record) {
+    return null;
+  }
+
+  return toUserAiConfig(record);
+}
+
+async function toUserAiConfig(record: {
+  provider: string;
+  model: string;
+  token: string;
+  label: string | null;
+  metadata: string | null;
+}): Promise<UserAiConfig> {
   const decryptedToken = await decryptSecret(record.token);
   const metadata =
     typeof record.metadata === 'string' && record.metadata.trim().length

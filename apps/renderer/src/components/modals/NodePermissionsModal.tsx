@@ -279,8 +279,8 @@ export function NodePermissionsModal() {
       ? permissions.inherited.map(normalizePermissionEntry)
       : [];
     const settablePermissions: string[] = Array.isArray(permissions.settable)
-      ? permissions.settable.filter((permission: unknown): permission is string =>
-          typeof permission === 'string'
+      ? permissions.settable.filter(
+          (permission: unknown): permission is string => typeof permission === 'string'
         )
       : [];
 
