@@ -154,7 +154,13 @@ router.post('/execute', async (req, res) => {
       images,
     });
 
-    const parsed = parseDslResponse(raw);
+    const parsed = await parseDslResponseWithRepair({
+      raw,
+      provider: aiConfig.provider,
+      apiKey: aiConfig.apiKey,
+      model: aiConfig.model,
+      maxTokens: 1200,
+    });
     log.info(
       {
         route: 'execute',
@@ -351,32 +357,147 @@ function extractJsonObject(raw: string): string {
 }
 
 const VALID_DSL_TYPES = new Set(['replace_selection', 'replace_file'] as const);
+type DslChangeType = 'replace_selection' | 'replace_file';
+interface DslResponse {
+  type: DslChangeType;
+  code: string;
+}
 
-function parseDslResponse(raw: string) {
+function parseDslResponse(raw: string): DslResponse {
   const match = raw.match(/<changes>([\s\S]*?)<\/changes>/i);
-  let payload = match ? match[1].trim() : raw.trim();
+  const candidates = [match?.[1], raw].filter(Boolean) as string[];
 
-  // Handle markdown fences and extract object
-  payload = extractJsonObject(payload);
+  for (const candidate of candidates) {
+    const parsedFromJson = tryParseDslJson(extractJsonObject(candidate.trim()));
+    if (parsedFromJson) {
+      return parsedFromJson;
+    }
 
-  try {
-    const json = JSON.parse(payload);
-    if (!VALID_DSL_TYPES.has(json.type) || typeof json.code !== 'string') {
-      throw new Error('Invalid DSL payload.');
+    const recoveredFromDslLikeText = tryRecoverDslLikePayload(candidate);
+    if (recoveredFromDslLikeText) {
+      return recoveredFromDslLikeText;
     }
-    return json;
-  } catch (err) {
-    if (!match) {
-      throw new AiError({
-        code: 'AI_DSL_MISSING',
-        message: 'AI response is missing the <changes> block and no valid JSON was found.',
-      });
+  }
+
+  // Fallback: if model returned plain fenced JS/TS instead of DSL JSON, use it directly.
+  if (!match) {
+    const fencedCode = extractCodeFence(raw);
+    if (fencedCode) {
+      return {
+        type: 'replace_selection',
+        code: fencedCode,
+      };
     }
+  }
+
+  if (!match) {
     throw new AiError({
-      code: 'AI_DSL_INVALID',
-      message: `Failed to parse DSL response: ${(err as Error).message}`,
+      code: 'AI_DSL_MISSING',
+      message: 'AI response is missing the <changes> block and no valid JSON was found.',
     });
   }
+
+  throw new AiError({
+    code: 'AI_DSL_INVALID',
+    message: 'Failed to parse DSL response.',
+  });
+}
+
+async function parseDslResponseWithRepair(args: {
+  raw: string;
+  provider: string;
+  apiKey: string;
+  model: string;
+  maxTokens?: number;
+}): Promise<DslResponse> {
+  try {
+    return parseDslResponse(args.raw);
+  } catch (err) {
+    if (!(err instanceof AiError) || !shouldAttemptDslRepair(err.code)) {
+      throw err;
+    }
+
+    const repairedRaw = await callProvider(args.provider, {
+      apiKey: args.apiKey,
+      model: args.model,
+      prompt: buildDslRepairPrompt(args.raw),
+      maxTokens: Math.min(args.maxTokens ?? 1200, 900),
+    });
+
+    return parseDslResponse(repairedRaw);
+  }
+}
+
+function shouldAttemptDslRepair(code: string): boolean {
+  return code === 'AI_DSL_MISSING' || code === 'AI_DSL_INVALID';
+}
+
+function buildDslRepairPrompt(rawResponse: string): string {
+  return [
+    'Convert the following assistant response into a STRICT DSL payload.',
+    'Return only this format and nothing else:',
+    '',
+    '<changes>',
+    '{"type":"replace_selection","code":"...escaped json string..."}',
+    '</changes>',
+    '',
+    'Rules:',
+    '1. JSON must be valid.',
+    '2. "type" must be either "replace_selection" or "replace_file".',
+    '3. "code" must contain valid JavaScript code as a single JSON string with escaped newlines.',
+    '4. Do not include commentary outside <changes>.',
+    '',
+    'Input to convert:',
+    rawResponse,
+  ].join('\n');
+}
+
+function tryParseDslJson(payload: string): DslResponse | null {
+  try {
+    const json = JSON.parse(payload);
+    if (!VALID_DSL_TYPES.has(json?.type) || typeof json?.code !== 'string') {
+      return null;
+    }
+
+    return {
+      type: json.type as DslChangeType,
+      code: json.code,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function tryRecoverDslLikePayload(raw: string): DslResponse | null {
+  const typeMatch = raw.match(/"type"\s*:\s*"(replace_selection|replace_file)"/i);
+  if (!typeMatch?.[1]) {
+    return null;
+  }
+
+  const codeMatch = raw.match(/"code"\s*:\s*"([\s\S]*?)"\s*(?:,|\})/i);
+  if (!codeMatch?.[1]) {
+    return null;
+  }
+
+  return {
+    type: typeMatch[1] as DslChangeType,
+    code: decodeJsonStringFragment(codeMatch[1]),
+  };
+}
+
+function decodeJsonStringFragment(value: string): string {
+  return value
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '\r')
+    .replace(/\\t/g, '\t')
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, '\\');
+}
+
+function extractCodeFence(raw: string): string | null {
+  const fenceMatch = raw.match(/```(?:javascript|js|typescript|ts)?\s*([\s\S]*?)```/i);
+  const code = fenceMatch?.[1]?.trim();
+  return code && code.length > 0 ? code : null;
 }
 
 function handleError(res: Response, err: Error, durationMs: number, route: string) {
