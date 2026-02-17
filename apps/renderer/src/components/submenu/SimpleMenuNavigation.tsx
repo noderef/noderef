@@ -16,6 +16,7 @@
 
 import { backendRpc } from '@/core/ipc/backend';
 import type { PageKey } from '@/core/store/keys';
+import { useAgentStore } from '@/core/store/agent';
 import { useSavedSearchesStore } from '@/core/store/savedSearches';
 import { useServersStore } from '@/core/store/servers';
 import { useNavigation } from '@/hooks/useNavigation';
@@ -87,10 +88,17 @@ export function SimpleMenuNavigation() {
   const { t } = useTranslation(['submenu', 'addServer']);
   const { activeServerId, activePage, navigate, setActiveServer } = useNavigation();
   const getServerById = useServersStore(state => state.getServerById);
+  const allServers = useServersStore(state => state.servers);
   const savedSearches = useSavedSearchesStore(state => state.savedSearches);
   const setSavedSearches = useSavedSearchesStore(state => state.setSavedSearches);
   const setActiveSavedSearchId = useSavedSearchesStore(state => state.setActiveSavedSearchId);
   const activeSavedSearchId = useSavedSearchesStore(state => state.activeSavedSearchId);
+  const agentChats = useAgentStore(state => state.chats);
+  const setAgentChats = useAgentStore(state => state.setChats);
+  const setActiveChatId = useAgentStore(state => state.setActiveChatId);
+  const activeChatId = useAgentStore(state => state.activeChatId);
+  const upsertAgentChat = useAgentStore(state => state.upsertChat);
+  const removeAgentChat = useAgentStore(state => state.removeChat);
   const serverInitializationRef = useRef<number | null>(null);
   const searchSectionOpenedRef = useRef(true);
 
@@ -122,16 +130,21 @@ export function SimpleMenuNavigation() {
 
           if (serverInitializationRef.current !== activeServerId) {
             serverInitializationRef.current = activeServerId;
-            if (searches.length > 0) {
-              const defaultSearch = searches.find(s => s.isDefault);
-              if (defaultSearch) {
-                setActiveSavedSearchId(defaultSearch.id);
-                navigate('saved-search');
+            const shouldPreservePage =
+              activePage === 'jsconsole' || activePage === 'text-editor' || activePage === 'agentPage';
+
+            if (!shouldPreservePage) {
+              if (searches.length > 0) {
+                const defaultSearch = searches.find(s => s.isDefault);
+                if (defaultSearch) {
+                  setActiveSavedSearchId(defaultSearch.id);
+                  navigate('saved-search');
+                } else {
+                  navigate('saved-search');
+                }
               } else {
-                navigate('saved-search');
+                navigate('jsconsole');
               }
-            } else {
-              navigate('jsconsole');
             }
           }
         } else {
@@ -147,10 +160,60 @@ export function SimpleMenuNavigation() {
     return () => {
       cancelled = true;
     };
-  }, [activeServerId, setSavedSearches, setActiveSavedSearchId, activeSavedSearchId, navigate]);
+  }, [
+    activeServerId,
+    setSavedSearches,
+    setActiveSavedSearchId,
+    activeSavedSearchId,
+    activePage,
+    navigate,
+  ]);
+
+  // Load agent chats for active server or all servers in NodeRef space.
+  useEffect(() => {
+    let cancelled = false;
+    let intervalId: number | null = null;
+
+    const loadAgentChats = async () => {
+      try {
+        const result = await backendRpc.agent.listChats({
+          serverId: activeServerId || undefined,
+          skipCount: 0,
+          maxItems: 100,
+        });
+
+        if (!cancelled) {
+          setAgentChats(result.items);
+        }
+      } catch (error) {
+        console.error('Failed to load agent chats:', error);
+      }
+    };
+
+    if (activePage !== 'agentPage') {
+      return () => {
+        cancelled = true;
+        if (intervalId !== null) {
+          window.clearInterval(intervalId);
+        }
+      };
+    }
+
+    void loadAgentChats();
+    intervalId = window.setInterval(() => {
+      void loadAgentChats();
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      if (intervalId !== null) {
+        window.clearInterval(intervalId);
+      }
+    };
+  }, [activePage, activeServerId, setAgentChats]);
 
   // Convert PageKey navigation to MenuItem format for MenuSection
-  const handleItemSelect = (item: MenuItemType) => {
+  const handleItemSelect = async (item: MenuItemType) => {
     const isSavedSearch = item.id.startsWith('saved-search-');
     if (isSavedSearch) {
       const searchId = parseInt(item.id.replace('saved-search-', ''), 10);
@@ -161,6 +224,20 @@ export function SimpleMenuNavigation() {
           setActiveServer(search.serverId);
         }
         navigate('saved-search');
+      }
+      return;
+    }
+
+    const isAgentChat = item.id.startsWith('agent-chat-');
+    if (isAgentChat) {
+      const chatId = parseInt(item.id.replace('agent-chat-', ''), 10);
+      if (!isNaN(chatId)) {
+        setActiveChatId(chatId);
+        const chat = agentChats.find(entry => entry.id === chatId);
+        if (chat) {
+          setActiveServer(chat.serverId);
+        }
+        navigate('agentPage');
       }
       return;
     }
@@ -269,6 +346,68 @@ export function SimpleMenuNavigation() {
     }
   };
 
+  const handleDeleteAgentChat = async (item: MenuItemType) => {
+    const chatId = parseInt(item.id.replace('agent-chat-', ''), 10);
+    if (isNaN(chatId)) {
+      return;
+    }
+
+    modals.openConfirmModal({
+      title: t('agent:deleteChatTitle'),
+      children: <Text size="sm">{t('agent:deleteChatConfirm', { name: item.label })}</Text>,
+      labels: {
+        confirm: t('common:delete'),
+        cancel: t('common:cancel'),
+      },
+      confirmProps: { color: 'red' },
+      onConfirm: async () => {
+        try {
+          const result = await backendRpc.agent.deleteChat(chatId);
+          if (result.success) {
+            removeAgentChat(chatId);
+            notifications.show({
+              title: t('common:success'),
+              message: t('agent:chatDeletedMessage'),
+              color: 'green',
+            });
+          }
+        } catch (error) {
+          notifications.show({
+            title: t('common:error'),
+            message: error instanceof Error ? error.message : t('agent:errors.generic'),
+            color: 'red',
+          });
+        }
+      },
+    });
+  };
+
+  const handleCreateAgentChat = async () => {
+    const serverId = activeServerId || allServers[0]?.id;
+    if (!serverId) {
+      notifications.show({
+        title: t('common:error'),
+        message: t('agent:errors.serverRequiredMessage'),
+        color: 'red',
+      });
+      return;
+    }
+
+    try {
+      const chat = await backendRpc.agent.createChat({ serverId });
+      upsertAgentChat(chat);
+      setActiveChatId(chat.id);
+      setActiveServer(serverId);
+      navigate('agentPage');
+    } catch (error) {
+      notifications.show({
+        title: t('common:error'),
+        message: error instanceof Error ? error.message : t('agent:errors.generic'),
+        color: 'red',
+      });
+    }
+  };
+
   // Alfresco server sections - dynamically build search items from saved searches
   const alfrescoSections: MenuSectionType[] = useMemo(() => {
     const sortedSearches = [...savedSearches].sort((a, b) => a.name.localeCompare(b.name));
@@ -293,6 +432,42 @@ export function SimpleMenuNavigation() {
       },
     ];
   }, [activeServerId, savedSearches, t]);
+
+  const agentSections: MenuSectionType[] = useMemo(() => {
+    const sortedChats = [...agentChats].sort((a, b) => {
+      const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : new Date(a.updatedAt).getTime();
+      const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : new Date(b.updatedAt).getTime();
+      return bTime - aTime;
+    });
+
+    const chatItems: MenuItemType[] = sortedChats.map(chat => ({
+      id: `agent-chat-${chat.id}`,
+      label: chat.title,
+      icon: chat.hasActiveRun ? 'loading' : 'hash',
+      viewMode: 'monaco' as const,
+    }));
+
+    const persistedOpened = getPersistedSectionOpened(activeServerId, 'agent-main');
+    const shouldOpen = persistedOpened ?? true;
+
+    return [
+      {
+        id: 'agent-main',
+        label: t('submenu:agentPage'),
+        icon: 'agent',
+        collapsible: true,
+        initiallyOpened: shouldOpen,
+        showWhenEmpty: true,
+        emptyLabel: t('agent:noChatSelected'),
+        action: {
+          id: 'create-chat',
+          icon: 'edit',
+          label: t('agent:newChat'),
+        },
+        items: chatItems,
+      },
+    ];
+  }, [activeServerId, agentChats, t]);
 
   // Web section (separate for ordering - appears after JavaScript Console)
   // Repository Admin is now in the submenu header dropdown as an external link
@@ -330,12 +505,11 @@ export function SimpleMenuNavigation() {
   let topLevelItems: MenuItemType[] = [];
 
   if (isNodeRefSpace) {
-    // In NodeRef space, we show the search section (aggregated)
-    sections = alfrescoSections;
+    sections = [...agentSections, ...alfrescoSections];
   } else if (server.serverType === 'alfresco') {
     // Show all Alfresco menu items for any Alfresco server
     // Feature availability should be handled at runtime, not by hiding menu items
-    sections = alfrescoSections;
+    sections = [...agentSections, ...alfrescoSections];
     topLevelItems = alfrescoTopLevelItems;
   }
 
@@ -354,9 +528,13 @@ export function SimpleMenuNavigation() {
   }
 
   const activeMenuItemId =
-    activePage === 'saved-search' && activeSavedSearchId
-      ? `saved-search-${activeSavedSearchId}`
-      : activePage;
+    activePage === 'agentPage' && activeChatId
+      ? `agent-chat-${activeChatId}`
+      : activePage === 'agentPage'
+        ? null
+        : activePage === 'saved-search' && activeSavedSearchId
+          ? `saved-search-${activeSavedSearchId}`
+          : activePage;
 
   const persistOpenedState = (sectionId: string, opened: boolean) => {
     setPersistedSectionOpened(activeServerId, sectionId, opened);
@@ -382,6 +560,51 @@ export function SimpleMenuNavigation() {
   const repositoryIcon = getIconComponent('folder');
   const systemTreeIcon = getIconComponent('settings');
 
+  const searchSection = sections.find(section => section.id === 'search-main');
+  const nonSearchSections = sections.filter(section => section.id !== 'search-main');
+  const showSearchFirst = savedSearches.length > 0 && Boolean(searchSection);
+
+  const sectionsBeforeTopLevel = showSearchFirst && searchSection ? [searchSection] : [];
+  const sectionsAfterTopLevel = showSearchFirst ? nonSearchSections : sections;
+
+  const renderSections = (items: MenuSectionType[]) =>
+    items.map(section => {
+      const isSearchSection = section.id === 'search-main';
+      const isAgentSection = section.id === 'agent-main';
+
+      return (
+        <MenuSection
+          key={
+            isSearchSection
+              ? `${section.id}-${server?.id ?? 'all'}-${savedSearches.length > 0 ? 'has' : 'none'}`
+              : isAgentSection
+                ? `${section.id}-${server?.id ?? 'all'}-${agentChats.length}`
+                : `${section.id}-${server?.id ?? 'none'}`
+          }
+          section={{
+            ...section,
+            initiallyOpened: isSearchSection
+              ? searchSectionOpenedRef.current
+              : isAgentSection
+                ? (getPersistedSectionOpened(activeServerId, 'agent-main') ?? true)
+                : section.initiallyOpened,
+          }}
+          activeItemId={activeMenuItemId}
+          onItemSelect={handleItemSelect}
+          onItemDelete={
+            isSearchSection ? handleDeleteSavedSearch : isAgentSection ? handleDeleteAgentChat : undefined
+          }
+          onItemRename={isSearchSection ? handleRenameSavedSearch : undefined}
+          onSectionAction={(sectionData, actionId) => {
+            if (sectionData.id === 'agent-main' && actionId === 'create-chat') {
+              void handleCreateAgentChat();
+            }
+          }}
+          onOpenedChange={opened => persistOpenedState(section.id, opened)}
+        />
+      );
+    });
+
   return (
     <ScrollArea style={{ flex: 1, height: '100%' }}>
       <div style={{ padding: 'var(--mantine-spacing-md)' }}>
@@ -389,37 +612,13 @@ export function SimpleMenuNavigation() {
           {/* NodeRef Space primary navigation */}
           {isNodeRefSpace && renderMenuItems(nodeRefMenuItems)}
 
-          {/* Search section (aggregated for NodeRef space, specific for Alfresco) */}
-          {(isNodeRefSpace || server?.serverType === 'alfresco') &&
-            sections.map(section => {
-              const isSearchSection = section.id === 'search-main';
-              // Only render search section if it's the search section
-              if (!isSearchSection) return null;
+          {/* Saved searches should stay on top when available */}
+          {(isNodeRefSpace || server?.serverType === 'alfresco') && renderSections(sectionsBeforeTopLevel)}
 
-              return (
-                <MenuSection
-                  key={
-                    isSearchSection
-                      ? `${section.id}-${server?.id ?? 'all'}-${savedSearches.length > 0 ? 'has' : 'none'}`
-                      : `${section.id}-${server?.id ?? 'none'}`
-                  }
-                  section={{
-                    ...section,
-                    initiallyOpened: isSearchSection
-                      ? searchSectionOpenedRef.current
-                      : section.initiallyOpened,
-                  }}
-                  activeItemId={activeMenuItemId}
-                  onItemSelect={handleItemSelect}
-                  onItemDelete={isSearchSection ? handleDeleteSavedSearch : undefined}
-                  onItemRename={isSearchSection ? handleRenameSavedSearch : undefined}
-                  onOpenedChange={opened => persistOpenedState(section.id, opened)}
-                />
-              );
-            })}
-
-          {/* JavaScript Console next */}
+          {/* JavaScript Console next (server context) */}
           {!isNodeRefSpace && renderMenuItems(topLevelItems)}
+
+          {(isNodeRefSpace || server?.serverType === 'alfresco') && renderSections(sectionsAfterTopLevel)}
 
           {/* Repository Tree Section for Alfresco servers */}
           {!isNodeRefSpace && server?.serverType === 'alfresco' && (

@@ -42,7 +42,7 @@ import { useTranslation } from 'react-i18next';
 export function PageView() {
   const { activePage, navigate } = useNavigation();
   const activeServerId = useActiveServerId();
-  const { t } = useTranslation(['submenu', 'menu', 'common', 'search', 'fileFolderBrowser']);
+  const { t } = useTranslation(['submenu', 'menu', 'common', 'search', 'fileFolderBrowser', 'agent']);
 
   // Resolve route configuration
   const route = getRoute(activePage);

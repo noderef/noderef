@@ -13,6 +13,7 @@
   "repository": "Repository",
   "system": "System",
   "search": "Search",
+  "agentPage": "Agent",
   "jsConsole": "JavaScript Console",
   "textEditor": "Text Editor",
   "repoAdmin": "Repository Admin",

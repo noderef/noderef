@@ -26,6 +26,10 @@ model User {
   nodeHistory         NodeHistory[]
   jsconsoleHistory    JsConsoleHistory[]
   aiSettings          UserAiSettings[]
+  agentChats          AgentChat[]
+  agentMessages       AgentMessage[]
+  agentRuns           AgentRun[]
+  agentOperationAudits AgentOperationAudit[]
 
   @@map("user")
 }
@@ -57,6 +61,9 @@ model Server {
   nodeHistory       NodeHistory[]
   jsconsoleHistory  JsConsoleHistory[]
   savedSearches     SavedSearch[]
+  agentChats        AgentChat[]
+  agentRuns         AgentRun[]
+  agentOperationAudits AgentOperationAudit[]
 
   @@index([userId, displayOrder])
   @@map("server")
@@ -165,4 +172,141 @@ model UserAiSettings {
   @@unique([userId, provider])
   @@index([userId, provider])
   @@map("user_ai_settings")
+}
+
+model AgentChat {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  serverId      Int
+  title         String
+  lastMessageAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User            @relation(fields: [userId], references: [id])
+  server        Server          @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  messages      AgentMessage[]
+  runs          AgentRun[]
+
+  @@index([userId, serverId, updatedAt])
+  @@index([userId, updatedAt])
+  @@map("agent_chat")
+}
+
+model AgentMessage {
+  id          Int      @id @default(autoincrement())
+  chatId      Int
+  userId      Int
+  role        String
+  content     String
+  mentionsJson String?
+  createdAt   DateTime @default(now())
+
+  chat        AgentChat            @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user        User                 @relation(fields: [userId], references: [id])
+  triggeredRuns AgentRun[]         @relation("TriggeredMessageRuns")
+  auditRequests AgentOperationAudit[] @relation("AuditRequestMessage")
+  auditConfirmations AgentOperationAudit[] @relation("AuditConfirmationMessage")
+
+  @@index([chatId, id])
+  @@index([chatId, createdAt])
+  @@map("agent_message")
+}
+
+model AgentRun {
+  id              Int      @id @default(autoincrement())
+  chatId          Int
+  userId          Int
+  serverId        Int
+  triggerMessageId Int?
+  status          String
+  manifestVersion String
+  planJson        String?
+  error           String?
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  chat            AgentChat             @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user            User                  @relation(fields: [userId], references: [id])
+  server          Server                @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  triggerMessage  AgentMessage?         @relation("TriggeredMessageRuns", fields: [triggerMessageId], references: [id], onDelete: SetNull)
+  steps           AgentRunStep[]
+  events          AgentRunEvent[]
+  audits          AgentOperationAudit[]
+
+  @@index([chatId, createdAt])
+  @@index([userId, status, createdAt])
+  @@index([serverId, status])
+  @@map("agent_run")
+}
+
+model AgentRunStep {
+  id                  Int      @id @default(autoincrement())
+  runId               Int
+  ordinal             Int
+  operation           String
+  status              String
+  summary             String?
+  inputJson           String?
+  outputJson          String?
+  requiresConfirmation Boolean @default(false)
+  confirmationToken   String?
+  confirmedAt         DateTime?
+  startedAt           DateTime?
+  completedAt         DateTime?
+  createdAt           DateTime @default(now())
+
+  run                 AgentRun              @relation(fields: [runId], references: [id], onDelete: Cascade)
+  events              AgentRunEvent[]
+  audits              AgentOperationAudit[]
+
+  @@unique([runId, ordinal])
+  @@index([runId, createdAt])
+  @@map("agent_run_step")
+}
+
+model AgentRunEvent {
+  id          Int      @id @default(autoincrement())
+  runId       Int
+  stepId      Int?
+  type        String
+  level       String
+  payloadJson String?
+  createdAt   DateTime @default(now())
+
+  run         AgentRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
+  step        AgentRunStep? @relation(fields: [stepId], references: [id], onDelete: SetNull)
+
+  @@index([runId, id])
+  @@index([runId, createdAt])
+  @@map("agent_run_event")
+}
+
+model AgentOperationAudit {
+  id                   Int      @id @default(autoincrement())
+  runId                Int
+  stepId               Int?
+  userId               Int
+  serverId             Int
+  operation            String
+  action               String
+  targetSummary        String?
+  requestMessageId     Int?
+  confirmationMessageId Int?
+  metadataJson         String?
+  createdAt            DateTime @default(now())
+
+  run                  AgentRun       @relation(fields: [runId], references: [id], onDelete: Cascade)
+  step                 AgentRunStep?  @relation(fields: [stepId], references: [id], onDelete: SetNull)
+  user                 User           @relation(fields: [userId], references: [id])
+  server               Server         @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  requestMessage       AgentMessage?  @relation("AuditRequestMessage", fields: [requestMessageId], references: [id], onDelete: SetNull)
+  confirmationMessage  AgentMessage?  @relation("AuditConfirmationMessage", fields: [confirmationMessageId], references: [id], onDelete: SetNull)
+
+  @@index([runId, stepId, createdAt])
+  @@index([userId, createdAt])
+  @@index([operation, createdAt])
+  @@map("agent_operation_audit")
 }

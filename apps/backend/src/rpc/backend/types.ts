@@ -23,6 +23,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { z } from 'zod';
 import type { JsConsoleHistoryService } from '../../services/jsConsoleHistoryService.js';
 import type { LocalFileService } from '../../services/localFileService.js';
+import type { AgentService } from '../../services/agentService.js';
 import type { NodeHistoryService } from '../../services/nodeHistoryService.js';
 import type { SavedSearchService } from '../../services/savedSearchService.js';
 import type { SearchHistoryService } from '../../services/searchHistoryService.js';
@@ -50,6 +51,7 @@ export interface RpcContext {
   nodeHistoryService: NodeHistoryService;
   localFileService: LocalFileService;
   jsConsoleHistoryService: JsConsoleHistoryService;
+  agentService: AgentService;
 }
 
 /**

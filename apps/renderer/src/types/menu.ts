@@ -34,6 +34,13 @@ export interface MenuSection {
   collapsible?: boolean;
   icon?: string;
   initiallyOpened?: boolean;
+  showWhenEmpty?: boolean;
+  emptyLabel?: string;
+  action?: {
+    id: string;
+    icon?: string;
+    label: string;
+  };
 }
 
 export interface TreeNode extends TreeNodeData {

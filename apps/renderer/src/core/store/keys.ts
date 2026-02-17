@@ -24,6 +24,7 @@ export type PageKey =
   | 'files'
   | 'repo'
   | 'search'
+  | 'agentPage'
   | 'jsconsole'
   | 'node-browser'
   | 'file-folder-browser'
@@ -51,6 +52,7 @@ export const PAGE_KEYS: Record<string, PageKey> = {
   FILES: 'files',
   REPO: 'repo',
   SEARCH: 'search',
+  AGENT_PAGE: 'agentPage',
   JSCONSOLE: 'jsconsole',
   NODE_BROWSER: 'node-browser',
   FILE_FOLDER_BROWSER: 'file-folder-browser',

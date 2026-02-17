@@ -38,8 +38,11 @@ import {
   IconListCheck,
   IconFileSearch,
   IconHash,
+  IconPlus,
+  IconCpu,
 } from '@tabler/icons-react';
 import { BrandLogo } from '@/components/BrandLogo';
+import { Loader } from '@mantine/core';
 
 const iconMap: Record<string, React.ComponentType<any>> = {
   gauge: IconGauge,
@@ -71,10 +74,17 @@ const iconMap: Record<string, React.ComponentType<any>> = {
   'file-search': IconFileSearch,
   fileSearch: IconFileSearch,
   hash: IconHash,
+  agent: IconCpu,
+  plus: IconPlus,
 };
 
 export function getIconComponent(iconName: string): React.ReactNode {
-  const IconComponent = iconMap[iconName.toLowerCase()];
+  const normalizedIconName = iconName.toLowerCase();
+  if (normalizedIconName === 'loading') {
+    return <Loader size={14} />;
+  }
+
+  const IconComponent = iconMap[normalizedIconName];
   if (!IconComponent) {
     return null;
   }

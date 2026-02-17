@@ -280,6 +280,121 @@ export const backendRpc = {
   },
 
   /**
+   * Agent chat + run operations
+   */
+  agent: {
+    async getManifest(): Promise<{
+      version: string;
+      operations: Array<{
+        name: string;
+        aliases: string[];
+        description: string;
+        alwaysFirst?: boolean;
+        destructive?: boolean;
+        requiresConfirmation?: boolean;
+      }>;
+    }> {
+      return rpc('backend.agent.getManifest', {});
+    },
+
+    async listChats(params?: {
+      serverId?: number;
+      skipCount?: number;
+      maxItems?: number;
+    }): Promise<{
+      items: AgentChatSummary[];
+      pagination: {
+        totalItems: number;
+        skipCount: number;
+        maxItems: number;
+        hasMoreItems: boolean;
+      };
+    }> {
+      return rpc('backend.agent.listChats', params ?? {});
+    },
+
+    async createChat(data: { serverId: number; title?: string }): Promise<AgentChatSummary> {
+      return rpc('backend.agent.createChat', data);
+    },
+
+    async deleteChat(id: number): Promise<{ success: boolean }> {
+      return rpc('backend.agent.deleteChat', { id });
+    },
+
+    async listMessages(params: {
+      chatId: number;
+      beforeId?: number;
+      maxItems?: number;
+    }): Promise<AgentMessage[]> {
+      return rpc('backend.agent.listMessages', params);
+    },
+
+    async listRuns(params: {
+      chatId: number;
+      skipCount?: number;
+      maxItems?: number;
+    }): Promise<{
+      items: AgentRunSummary[];
+      pagination: {
+        totalItems: number;
+        skipCount: number;
+        maxItems: number;
+        hasMoreItems: boolean;
+      };
+    }> {
+      return rpc('backend.agent.listRuns', params);
+    },
+
+    async listRunEvents(params: {
+      runId: number;
+      afterId?: number;
+      maxItems?: number;
+    }): Promise<AgentRunEvent[]> {
+      return rpc('backend.agent.listRunEvents', params);
+    },
+
+    async sendMessage(data: {
+      chatId: number;
+      content: string;
+      mentions?: AgentMention[];
+    }): Promise<{ message: AgentMessage; run: AgentRunSummary }> {
+      return rpc('backend.agent.sendMessage', data);
+    },
+
+    async cancelRun(runId: number): Promise<{ success: boolean; reason?: string }> {
+      return rpc('backend.agent.cancelRun', { runId });
+    },
+
+    async confirmStep(data: {
+      runId: number;
+      stepId: number;
+      confirmationToken: string;
+      approved: boolean;
+      confirmationText?: string;
+    }): Promise<{ success: boolean; runStatus: string }> {
+      return rpc('backend.agent.confirmStep', data);
+    },
+
+    async searchMentions(params: {
+      serverId: number;
+      query: string;
+      types?: Array<'node' | 'person' | 'group'>;
+      skipCount?: number;
+      maxItems?: number;
+    }): Promise<{
+      items: AgentMentionSuggestion[];
+      pagination: {
+        totalItems: number;
+        skipCount: number;
+        maxItems: number;
+        hasMoreItems: boolean;
+      };
+    }> {
+      return rpc('backend.agent.searchMentions', params);
+    },
+  },
+
+  /**
    * Node history activity (dashboard)
    */
   nodeHistory: {
@@ -697,6 +812,84 @@ export interface SavedSearch {
   lastAccessed: Date | null;
   lastDiffCount: number;
   isDefault: boolean;
+  createdAt: Date;
+}
+
+export interface AgentMention {
+  id: string;
+  type: 'node' | 'person' | 'group' | 'server';
+  label: string;
+  path?: string | null;
+}
+
+export interface AgentMentionSuggestion {
+  id: string;
+  type: 'node' | 'person' | 'group';
+  label: string;
+  path?: string | null;
+  subtitle?: string | null;
+}
+
+export interface AgentChatSummary {
+  id: number;
+  userId: number;
+  serverId: number;
+  title: string;
+  hasActiveRun: boolean;
+  lastMessageAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface AgentMessage {
+  id: number;
+  chatId: number;
+  userId: number;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  mentions: AgentMention[];
+  createdAt: Date;
+}
+
+export interface AgentRunStepSummary {
+  id: number;
+  runId: number;
+  ordinal: number;
+  operation: string;
+  status: 'pending' | 'running' | 'waiting_confirmation' | 'completed' | 'failed' | 'cancelled';
+  summary: string | null;
+  requiresConfirmation: boolean;
+  confirmationToken: string | null;
+  confirmedAt: Date | null;
+  startedAt: Date | null;
+  completedAt: Date | null;
+  createdAt: Date;
+}
+
+export interface AgentRunSummary {
+  id: number;
+  chatId: number;
+  userId: number;
+  serverId: number;
+  triggerMessageId: number | null;
+  status: 'queued' | 'running' | 'waiting_confirmation' | 'completed' | 'failed' | 'cancelled';
+  manifestVersion: string;
+  plan: Record<string, unknown> | null;
+  error: string | null;
+  startedAt: Date | null;
+  finishedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  pendingStep: AgentRunStepSummary | null;
+}
+
+export interface AgentRunEvent {
+  id: number;
+  runId: number;
+  stepId: number | null;
+  type: string;
+  level: 'debug' | 'info' | 'warn' | 'error';
+  payload: Record<string, unknown> | null;
   createdAt: Date;
 }
 

@@ -27,7 +27,7 @@ import { ServerIconButton } from './ServerIconButton';
 import classes from './ServerIconColumn.module.css';
 
 // Pages that work across all servers and should be preserved when switching
-const GLOBAL_PAGES = ['jsconsole', 'text-editor'] as const;
+const GLOBAL_PAGES = ['jsconsole', 'text-editor', 'agentPage'] as const;
 
 interface ServerIconColumnProps {
   servers: PublicServer[];

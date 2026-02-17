@@ -27,6 +27,7 @@
  * - localFiles.ts  → backend.localFiles.*
  * - repository.ts  → backend.repository.*
  * - jsconsole.ts   → backend.jsconsole.*
+ * - agent.ts       → backend.agent.*
  * - ai.ts          → backend.ai.*
  * - user.ts        → backend.user.*
  * - workspace.ts   → backend.workspace.* + backend.nodeHistory.*
@@ -38,9 +39,11 @@ import { NodeHistoryService } from '../../services/nodeHistoryService.js';
 import { SavedSearchService } from '../../services/savedSearchService.js';
 import { SearchHistoryService } from '../../services/searchHistoryService.js';
 import { ServerService } from '../../services/serverService.js';
+import { AgentService } from '../../services/agentService.js';
 
 // Domain handlers
 import { registerAiHandlers } from './ai.js';
+import { registerAgentHandlers } from './agent.js';
 import { registerJsConsoleHandlers } from './jsconsole.js';
 import { registerLocalFilesHandlers } from './localFiles.js';
 import { registerRepositoryHandlers } from './repository.js';
@@ -63,16 +66,18 @@ export async function registerBackendRpc(
   // Initialize Prisma and services
   const { getPrismaClient } = await import('../../lib/prisma.js');
   const prisma = await getPrismaClient();
+  const serverService = new ServerService(prisma);
 
   // Create shared context for all domain handlers
   const ctx: RpcContext = {
     prisma,
-    serverService: new ServerService(prisma),
+    serverService,
     savedSearchService: new SavedSearchService(prisma),
     searchHistoryService: new SearchHistoryService(prisma),
     nodeHistoryService: new NodeHistoryService(prisma),
     localFileService: new LocalFileService(prisma),
     jsConsoleHistoryService: new JsConsoleHistoryService(prisma),
+    agentService: new AgentService(prisma, serverService),
   };
 
   // Register all domain handlers
@@ -82,6 +87,7 @@ export async function registerBackendRpc(
   registerLocalFilesHandlers(routes, ctx);
   registerRepositoryHandlers(routes, ctx);
   registerJsConsoleHandlers(routes, ctx);
+  registerAgentHandlers(routes, ctx);
   registerAiHandlers(routes);
   registerUserHandlers(routes);
   registerWorkspaceHandlers(routes, ctx);

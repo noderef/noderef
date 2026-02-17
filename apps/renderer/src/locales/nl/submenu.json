@@ -13,6 +13,7 @@
   "repository": "Repository",
   "system": "Systeem",
   "search": "Zoeken",
+  "agentPage": "Agent",
   "jsConsole": "JavaScript Console",
   "textEditor": "Text Editor",
   "repoAdmin": "Repository Admin",

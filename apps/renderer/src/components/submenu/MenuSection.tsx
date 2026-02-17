@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-import { Box, Collapse, Group, Text, UnstyledButton } from '@mantine/core';
+import { ActionIcon, Box, Collapse, Group, Text, Tooltip, UnstyledButton } from '@mantine/core';
 import { IconChevronRight } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { MenuItem as MenuItemType, MenuSection as MenuSectionType } from '@/types/menu';
 import { MenuItem } from './MenuItem';
 import { getIconComponent } from './iconUtils';
@@ -28,6 +28,7 @@ interface MenuSectionProps {
   onItemSelect?: (item: MenuItemType) => void;
   onItemDelete?: (item: MenuItemType) => void;
   onItemRename?: (item: MenuItemType) => void;
+  onSectionAction?: (section: MenuSectionType, actionId: string) => void;
   onOpenedChange?: (opened: boolean) => void;
 }
 
@@ -37,6 +38,7 @@ export function MenuSection({
   onItemSelect,
   onItemDelete,
   onItemRename,
+  onSectionAction,
   onOpenedChange,
 }: MenuSectionProps) {
   // Use initiallyOpened if provided, otherwise default to opened if section has items
@@ -51,18 +53,39 @@ export function MenuSection({
     onOpenedChange?.(opened);
   }, [opened, onOpenedChange]);
 
-  // If section has no items, don't render it
-  if (section.items.length === 0) {
+  // Hide truly empty sections unless explicitly configured to stay visible.
+  if (section.items.length === 0 && !section.showWhenEmpty && !section.action) {
     return null;
   }
 
   const sectionIcon = section.icon ? getIconComponent(section.icon) : null;
+  const actionIcon = section.action?.icon ? getIconComponent(section.action.icon) : null;
+
+  const handleSectionActionClick = (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!section.action) {
+      return;
+    }
+    onSectionAction?.(section, section.action.id);
+  };
+
+  const handleSectionHeaderKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      toggle();
+    }
+  };
 
   return (
     <Box>
       {section.collapsible !== false ? (
         <UnstyledButton
+          component="div"
+          role="button"
+          tabIndex={0}
           onClick={toggle}
+          onKeyDown={handleSectionHeaderKeyDown}
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
           style={{
@@ -100,39 +123,69 @@ export function MenuSection({
                 >
                   {section.label}
                 </Text>
-                <IconChevronRight
-                  size={16}
-                  style={{
-                    transform: opened ? 'rotate(90deg)' : undefined,
-                    transition: 'transform 200ms ease',
-                    color: 'var(--submenu-section-chevron-color)',
-                    flexShrink: 0,
-                  }}
-                />
+                <Group gap={4} wrap="nowrap">
+                  {section.action && (
+                    <Tooltip label={section.action.label}>
+                      <ActionIcon
+                        aria-label={section.action.label}
+                        variant="subtle"
+                        color="gray"
+                        size="sm"
+                        onClick={handleSectionActionClick}
+                      >
+                        {actionIcon}
+                      </ActionIcon>
+                    </Tooltip>
+                  )}
+                  <IconChevronRight
+                    size={16}
+                    style={{
+                      transform: opened ? 'rotate(90deg)' : undefined,
+                      transition: 'transform 200ms ease',
+                      color: 'var(--submenu-section-chevron-color)',
+                      flexShrink: 0,
+                    }}
+                  />
+                </Group>
               </Group>
             </Group>
           </Group>
         </UnstyledButton>
       ) : (
-        <Group gap="xs" wrap="nowrap" px="sm" py="xs">
-          {sectionIcon && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 20,
-                height: 20,
-                flexShrink: 0,
-                color: 'var(--submenu-section-icon-color)',
-              }}
-            >
-              {sectionIcon}
-            </div>
+        <Group justify="space-between" gap="xs" wrap="nowrap" px="sm" py="xs">
+          <Group gap="xs" wrap="nowrap" style={{ flex: 1 }}>
+            {sectionIcon && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 20,
+                  height: 20,
+                  flexShrink: 0,
+                  color: 'var(--submenu-section-icon-color)',
+                }}
+              >
+                {sectionIcon}
+              </div>
+            )}
+            <Text fw={500} size="sm" style={{ color: 'var(--submenu-section-text-color)' }}>
+              {section.label}
+            </Text>
+          </Group>
+          {section.action && (
+            <Tooltip label={section.action.label}>
+              <ActionIcon
+                aria-label={section.action.label}
+                variant="subtle"
+                color="gray"
+                size="sm"
+                onClick={handleSectionActionClick}
+              >
+                {actionIcon}
+              </ActionIcon>
+            </Tooltip>
           )}
-          <Text fw={500} size="sm" style={{ color: 'var(--submenu-section-text-color)' }}>
-            {section.label}
-          </Text>
         </Group>
       )}
       <Collapse in={opened}>
@@ -155,23 +208,31 @@ export function MenuSection({
             }}
           />
           <Box pl="md">
-            {section.items.map(item => {
-              const itemIcon = item.icon ? getIconComponent(item.icon) : null;
-              // Check if this is a saved search item (starts with 'saved-search-')
-              const isSavedSearch = item.id.startsWith('saved-search-');
-              return (
-                <MenuItem
-                  key={item.id}
-                  item={item}
-                  active={activeItemId === item.id}
-                  onSelect={onItemSelect}
-                  isNested={true}
-                  icon={itemIcon}
-                  onDelete={isSavedSearch ? onItemDelete : undefined}
-                  onRename={isSavedSearch ? onItemRename : undefined}
-                />
-              );
-            })}
+            {section.items.length === 0 ? (
+              section.emptyLabel ? (
+                <Text size="xs" c="dimmed" py={4}>
+                  {section.emptyLabel}
+                </Text>
+              ) : null
+            ) : (
+              section.items.map(item => {
+                const itemIcon = item.icon ? getIconComponent(item.icon) : null;
+                const supportsContextActions =
+                  item.id.startsWith('saved-search-') || item.id.startsWith('agent-chat-');
+                return (
+                  <MenuItem
+                    key={item.id}
+                    item={item}
+                    active={activeItemId === item.id}
+                    onSelect={onItemSelect}
+                    isNested={true}
+                    icon={itemIcon}
+                    onDelete={supportsContextActions ? onItemDelete : undefined}
+                    onRename={item.id.startsWith('saved-search-') ? onItemRename : undefined}
+                  />
+                );
+              })
+            )}
           </Box>
         </Box>
       </Collapse>

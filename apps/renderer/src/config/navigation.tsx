@@ -18,6 +18,7 @@ import { PageKey } from '@/core/store/keys';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { FileFolderBrowserPage } from '@/pages/FileFolderBrowserPage';
 import { LocalFilesPage } from '@/pages/LocalFilesPage';
+import { AgentPage } from '@/pages/AgentPage';
 import { NodeBrowserPage } from '@/pages/NodeBrowserPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { SavedSearchPage } from '@/pages/SavedSearchPage';
@@ -62,6 +63,15 @@ export const routes: Record<PageKey, RouteConfig> = {
     defaultTitle: 'Search',
     icon: 'search',
     component: SearchPage,
+  },
+  agentPage: {
+    title: 'agent:pageTitle',
+    defaultTitle: 'Agent',
+    icon: 'agent',
+    component: AgentPage,
+    options: {
+      noScroll: true,
+    },
   },
   'saved-search': {
     title: 'search:savedSearchPage',

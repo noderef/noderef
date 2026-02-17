@@ -15,6 +15,7 @@
  */
 
 import addServerDe from '@/locales/de/addServer.json';
+import agentDe from '@/locales/de/agent.json';
 import commonDe from '@/locales/de/common.json';
 import dashboardDe from '@/locales/de/dashboard.json';
 import fileFolderBrowserDe from '@/locales/de/fileFolderBrowser.json';
@@ -31,6 +32,7 @@ import spotlightDe from '@/locales/de/spotlight.json';
 import submenuDe from '@/locales/de/submenu.json';
 import usersGroupsDe from '@/locales/de/usersGroups.json';
 import addServerEn from '@/locales/en/addServer.json';
+import agentEn from '@/locales/en/agent.json';
 import commonEn from '@/locales/en/common.json';
 import dashboardEn from '@/locales/en/dashboard.json';
 import fileFolderBrowserEn from '@/locales/en/fileFolderBrowser.json';
@@ -47,6 +49,7 @@ import spotlightEn from '@/locales/en/spotlight.json';
 import submenuEn from '@/locales/en/submenu.json';
 import usersGroupsEn from '@/locales/en/usersGroups.json';
 import addServerFr from '@/locales/fr/addServer.json';
+import agentFr from '@/locales/fr/agent.json';
 import commonFr from '@/locales/fr/common.json';
 import dashboardFr from '@/locales/fr/dashboard.json';
 import fileFolderBrowserFr from '@/locales/fr/fileFolderBrowser.json';
@@ -63,6 +66,7 @@ import spotlightFr from '@/locales/fr/spotlight.json';
 import submenuFr from '@/locales/fr/submenu.json';
 import usersGroupsFr from '@/locales/fr/usersGroups.json';
 import addServerNl from '@/locales/nl/addServer.json';
+import agentNl from '@/locales/nl/agent.json';
 import commonNl from '@/locales/nl/common.json';
 import dashboardNl from '@/locales/nl/dashboard.json';
 import fileFolderBrowserNl from '@/locales/nl/fileFolderBrowser.json';
@@ -89,6 +93,7 @@ const SUPPORTED_LANGUAGES = ['en', 'nl', 'de', 'fr'];
 const resources: Resource = {
   en: {
     common: commonEn,
+    agent: agentEn,
     dashboard: dashboardEn,
     addServer: addServerEn,
     submenu: submenuEn,
@@ -107,6 +112,7 @@ const resources: Resource = {
   },
   nl: {
     common: commonNl,
+    agent: agentNl,
     dashboard: dashboardNl,
     addServer: addServerNl,
     submenu: submenuNl,
@@ -125,6 +131,7 @@ const resources: Resource = {
   },
   de: {
     common: commonDe,
+    agent: agentDe,
     dashboard: dashboardDe,
     addServer: addServerDe,
     submenu: submenuDe,
@@ -143,6 +150,7 @@ const resources: Resource = {
   },
   fr: {
     common: commonFr,
+    agent: agentFr,
     dashboard: dashboardFr,
     addServer: addServerFr,
     submenu: submenuFr,
@@ -214,6 +222,7 @@ if (!i18n.isInitialized) {
     defaultNS: 'common',
     ns: [
       'common',
+      'agent',
       'addServer',
       'submenu',
       'menu',
