@@ -357,6 +357,8 @@ export const backendRpc = {
       chatId: number;
       content: string;
       mentions?: AgentMention[];
+      aiProvider?: string;
+      aiModel?: string;
     }): Promise<{ message: AgentMessage; run: AgentRunSummary }> {
       return rpc('backend.agent.sendMessage', data);
     },

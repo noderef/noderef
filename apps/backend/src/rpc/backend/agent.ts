@@ -121,6 +121,8 @@ export function registerAgentHandlers(routes: Routes, ctx: RpcContext): void {
       chatId: z.number().int().positive(),
       content: z.string().min(1),
       mentions: z.array(mentionSchema).max(30).optional(),
+      aiProvider: z.string().min(1).optional(),
+      aiModel: z.string().min(1).optional(),
     }),
     handler: async params => {
       const userId = await getCurrentUserId();

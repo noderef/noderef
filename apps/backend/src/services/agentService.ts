@@ -20,20 +20,27 @@ import type { AgentMention } from '@app/contracts';
 import { randomUUID } from 'crypto';
 import { getAuthenticatedClientWithRefresh } from './alfresco/authenticationHelper.js';
 import { callAnthropic } from '../ai/anthropic.js';
+import { loadLibs } from '../ai/loadLibs.js';
 import { getAiProvider } from '../ai/providers.js';
 import { createLogger } from '../lib/logger.js';
 import { AppErrors } from '../lib/errors.js';
 import { AgentRepository, type AgentMessage, type AgentRun, type AgentRunStep } from '../repositories/agentRepository.js';
 import type { ServerService } from './serverService.js';
 import { AGENT_MANIFEST_VERSION, agentManifest } from './agentManifest.js';
-import { buildExecutionPlan, executeOperation, type AgentExecutionContext, type AgentPlannedStep } from './agentOperationRegistry.js';
-import { resolveUserAiConfig } from './ai/userSettingsService.js';
+import { executeOperation, type AgentExecutionContext, type AgentPlannedStep } from './agentOperationRegistry.js';
+import { resolveUserAiConfig, resolveUserAiConfigForProvider } from './ai/userSettingsService.js';
 import { getAiAssistantEnabled } from './userSettings.js';
 
 const log = createLogger('agent.service');
 
 const ACTIVE_RUN_STATUSES = new Set(['queued', 'running', 'waiting_confirmation']);
-const MAX_PLANNER_STEPS = 6;
+const PLANNER_TIMEOUT_MS = 12000;
+const TITLE_TIMEOUT_MS = 6000;
+const SCRIPT_TIMEOUT_MS = 18000;
+const SUMMARY_TIMEOUT_MS = 10000;
+const MAX_LOOP_TRIES = 5;
+const MAX_HISTORY_ITEMS = 20;
+const MAX_LIB_CHARS = 3500;
 const AGENT_OPERATION_NAMES: AgentPlannedStep['operation'][] = [
   'search',
   'move',
@@ -88,10 +95,68 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isAgentOperation = (value: string): value is AgentPlannedStep['operation'] =>
   AGENT_OPERATION_NAMES.includes(value as AgentPlannedStep['operation']);
 
+const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_resolve, reject) => {
+        timeoutHandle = setTimeout(() => {
+          reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+  }
+};
+
 interface SendMessageInput {
   chatId: number;
   content: string;
   mentions?: AgentMention[];
+  aiProvider?: string;
+  aiModel?: string;
+}
+
+interface AgentRuntimeSelection {
+  provider?: string;
+  model?: string;
+}
+
+interface ResolvedAiRuntime {
+  provider: string;
+  model: string;
+  apiKey: string;
+  baseURL?: string;
+  temperature: number;
+}
+
+interface AgentPlannerDecision {
+  done: boolean;
+  operation?: AgentPlannedStep['operation'];
+  activity?: string;
+  input?: Record<string, unknown>;
+  requiresConfirmation?: boolean;
+  reason?: string;
+}
+
+interface AgentScriptInstruction {
+  activity: string;
+  script: string;
+  expected?: string | null;
+}
+
+interface AgentLoopHistoryItem {
+  attempt: number;
+  operation: AgentPlannedStep['operation'];
+  activity: string;
+  input: Record<string, unknown>;
+  scriptPreview: string;
+  output?: Record<string, unknown> | null;
+  error?: string;
 }
 
 interface ConfirmStepInput {
@@ -237,12 +302,18 @@ export class AgentService {
       payload: {
         messageId: message.id,
         queuedAt: nowIso(),
+        progressMessage: 'Queued',
       },
     });
 
+    const aiSelection = {
+      provider: typeof payload.aiProvider === 'string' ? payload.aiProvider.trim().toLowerCase() : undefined,
+      model: typeof payload.aiModel === 'string' ? payload.aiModel.trim() : undefined,
+    };
+
     // Fire-and-forget execution for independent concurrent runs.
     setImmediate(() => {
-      void this.executeRun(userId, run.id).catch(error => {
+      void this.executeRun(userId, run.id, aiSelection).catch(error => {
         log.error({ err: error, runId: run.id }, 'Background run execution crashed');
       });
     });
@@ -396,7 +467,38 @@ export class AgentService {
     });
 
     try {
-      const output = await executeOperation(step.operation as AgentPlannedStep['operation'], execCtx, step.input || {});
+      const stepInput = (step.input && isRecord(step.input) ? step.input : {}) as Record<string, unknown>;
+      const generatedScript =
+        typeof stepInput.generatedScript === 'string'
+          ? this.normalizeScript(stepInput.generatedScript)
+          : typeof stepInput.script === 'string'
+            ? this.normalizeScript(stepInput.script)
+            : '';
+
+      const executionOutput = generatedScript
+        ? await executeOperation('executeScript', execCtx, { script: generatedScript })
+        : await executeOperation(step.operation as AgentPlannedStep['operation'], execCtx, stepInput);
+
+      const statusCode = typeof executionOutput.status === 'number' ? executionOutput.status : 0;
+      const outputError =
+        typeof executionOutput.error === 'string' && executionOutput.error.trim()
+          ? executionOutput.error.trim()
+          : null;
+      if (outputError || statusCode >= 400) {
+        throw new Error(outputError || `Script execution failed with status ${statusCode}`);
+      }
+
+      const output = generatedScript
+        ? {
+            operation:
+              typeof stepInput.plannedOperation === 'string' && isAgentOperation(stepInput.plannedOperation)
+                ? stepInput.plannedOperation
+                : step.operation,
+            activity: step.summary || 'Confirmed operation',
+            expected: typeof stepInput.expected === 'string' ? stepInput.expected : null,
+            output: executionOutput,
+          }
+        : executionOutput;
 
       await this.repository.updateRunStep(userId, run.id, step.id, {
         status: 'completed',
@@ -418,6 +520,7 @@ export class AgentService {
         payload: {
           stepId: step.id,
           output,
+          progressMessage: `${step.summary || step.operation} completed`,
         },
       });
 
@@ -427,6 +530,7 @@ export class AgentService {
         level: 'info',
         payload: {
           finishedAt: nowIso(),
+          progressMessage: 'Run completed',
         },
       });
 
@@ -446,7 +550,7 @@ export class AgentService {
         chatId: run.chatId,
         userId,
         role: 'assistant',
-        content: `Confirmed. Operation \"${step.operation}\" completed successfully.`,
+        content: `Confirmed. Operation "${step.operation}" completed successfully.`,
         mentions: [],
       });
 
@@ -669,26 +773,40 @@ export class AgentService {
     };
   }
 
-  private formatAssistantSummary(plan: AgentPlannedStep[], completedSteps: AgentRunStep[]): string {
-    if (!completedSteps.length) {
-      return 'No executable operations were completed.';
+  private formatAssistantSummary(history: AgentLoopHistoryItem[], doneReason?: string): string {
+    if (!history.length) {
+      return doneReason ? `Run completed.\n\n${doneReason}` : 'Run completed.';
     }
 
-    const byOrdinal = new Map<number, AgentRunStep>();
-    for (const step of completedSteps) {
-      byOrdinal.set(step.ordinal, step);
+    const lines = ['Run completed.'];
+    if (doneReason?.trim()) {
+      lines.push('', cleanText(doneReason));
     }
 
-    const lines = ['Run completed.', ''];
-    for (const planned of plan) {
-      const step = Array.from(byOrdinal.values()).find(item => item.operation === planned.operation);
-      if (!step) {
-        continue;
+    for (const item of history.slice(-MAX_HISTORY_ITEMS)) {
+      const status = item.error ? `failed: ${item.error}` : 'completed';
+      lines.push('', `- ${item.activity} (${item.operation}): ${status}`);
+    }
+
+    const lastWithOutput = [...history].reverse().find(item => item.output);
+    if (lastWithOutput?.output) {
+      try {
+        const rendered = JSON.stringify(lastWithOutput.output, null, 2);
+        lines.push('', rendered.length > 1200 ? `${rendered.slice(0, 1200)}\n...` : rendered);
+      } catch {
+        // ignore serialization errors
       }
-      lines.push(`- ${planned.operation}: ${step.summary || 'completed'}`);
     }
 
     return lines.join('\n');
+  }
+
+  private truncate(value: string, max = 300): string {
+    const normalized = value.trim();
+    if (normalized.length <= max) {
+      return normalized;
+    }
+    return `${normalized.slice(0, max)}...`;
   }
 
   private extractJsonObject(raw: string): string {
@@ -709,107 +827,101 @@ export class AgentService {
     return trimmed;
   }
 
-  private parsePlannerPayload(raw: string): unknown {
-    const payload = this.extractJsonObject(raw);
-    return JSON.parse(payload);
+  private parseJsonObject(raw: string): unknown {
+    return JSON.parse(this.extractJsonObject(raw));
   }
 
-  private normalizePlannerSteps(
-    candidate: unknown,
-    fallbackPlan: AgentPlannedStep[]
-  ): AgentPlannedStep[] {
-    const parsedSteps = Array.isArray(candidate)
-      ? candidate
-      : isRecord(candidate) && Array.isArray(candidate.steps)
-        ? candidate.steps
-        : [];
-
-    if (!parsedSteps.length) {
-      return [];
-    }
-
-    const manifestByOperation = new Map(agentManifest.operations.map(operation => [operation.name, operation]));
-
-    const normalized: AgentPlannedStep[] = [];
-    for (const item of parsedSteps.slice(0, MAX_PLANNER_STEPS)) {
-      if (!isRecord(item)) {
-        continue;
+  private normalizeScript(raw: string): string {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith('```')) {
+      const fenceMatch = trimmed.match(/```(?:javascript|js)?\s*([\s\S]*?)```/i);
+      if (fenceMatch?.[1]) {
+        return fenceMatch[1].trim();
       }
-
-      const operationName = typeof item.operation === 'string' ? item.operation.trim() : '';
-      if (!operationName || !isAgentOperation(operationName)) {
-        continue;
-      }
-
-      const manifestOperation = manifestByOperation.get(operationName);
-      if (!manifestOperation) {
-        continue;
-      }
-
-      const summary =
-        typeof item.summary === 'string' && item.summary.trim()
-          ? cleanText(item.summary)
-          : `${operationName} planned`;
-
-      const rawInput = isRecord(item.input) ? item.input : {};
-      const fallbackStep = fallbackPlan.find(step => step.operation === operationName);
-      const fallbackInput = fallbackStep?.input ?? {};
-
-      const input =
-        operationName === 'search'
-          ? {
-              query:
-                typeof rawInput.query === 'string'
-                  ? rawInput.query
-                  : (fallbackInput.query ?? ''),
-              nodeId:
-                typeof rawInput.nodeId === 'string' || rawInput.nodeId === null
-                  ? rawInput.nodeId
-                  : (fallbackInput.nodeId ?? null),
-              maxItems:
-                typeof rawInput.maxItems === 'number' && Number.isFinite(rawInput.maxItems)
-                  ? Math.max(1, Math.min(Math.round(rawInput.maxItems), 500))
-                  : (fallbackInput.maxItems ?? 100),
-            }
-          : {
-              ...fallbackInput,
-              ...rawInput,
-            };
-
-      normalized.push({
-        operation: operationName,
-        summary,
-        input,
-        requiresConfirmation: Boolean(manifestOperation.requiresConfirmation),
-      });
     }
-
-    if (!normalized.length) {
-      return [];
-    }
-
-    const fallbackSearch = fallbackPlan.find(step => step.operation === 'search');
-    const plannedSearch = normalized.find(step => step.operation === 'search');
-    const rest = normalized.filter(step => step.operation !== 'search');
-
-    const firstSearch = plannedSearch ?? fallbackSearch;
-    if (!firstSearch) {
-      return rest.slice(0, MAX_PLANNER_STEPS);
-    }
-
-    return [firstSearch, ...rest].slice(0, MAX_PLANNER_STEPS);
+    return trimmed;
   }
 
-  private buildPlannerPrompt(content: string, mentions: AgentMention[]): string {
-    const manifestSummary = agentManifest.operations.map(operation => ({
-      name: operation.name,
-      aliases: operation.aliases,
-      destructive: Boolean(operation.destructive),
-      requiresConfirmation: Boolean(operation.requiresConfirmation),
-      alwaysFirst: Boolean(operation.alwaysFirst),
-      description: operation.description,
-    }));
+  private async resolveAiRuntime(
+    userId: number,
+    preferredModel?: AgentRuntimeSelection
+  ): Promise<ResolvedAiRuntime | null> {
+    const requestedProvider = preferredModel?.provider?.trim().toLowerCase() || undefined;
+    const requestedModel = preferredModel?.model?.trim() || undefined;
 
+    const [assistantEnabled, aiConfig] = await Promise.all([
+      getAiAssistantEnabled(userId),
+      requestedProvider ? resolveUserAiConfigForProvider(userId, requestedProvider) : resolveUserAiConfig(userId),
+    ]);
+
+    if (!assistantEnabled || !aiConfig) {
+      return null;
+    }
+
+    const provider = getAiProvider(aiConfig.provider);
+    if (!provider) {
+      return null;
+    }
+
+    return {
+      provider: provider.id,
+      model: requestedModel || aiConfig.model || provider.defaultModel,
+      apiKey: aiConfig.apiKey,
+      baseURL: provider.baseURL,
+      temperature: provider.defaultTemperature ?? 0,
+    };
+  }
+
+  private async callModel(
+    runtime: ResolvedAiRuntime,
+    prompt: string,
+    options: { maxTokens: number; timeoutMs: number; label: string }
+  ): Promise<string> {
+    return withTimeout(
+      callAnthropic({
+        apiKey: runtime.apiKey,
+        model: runtime.model,
+        prompt,
+        maxTokens: options.maxTokens,
+        temperature: runtime.temperature,
+        baseURL: runtime.baseURL,
+      }),
+      options.timeoutMs,
+      options.label
+    );
+  }
+
+  private buildFallbackPlannerDecision(
+    content: string,
+    mentions: AgentMention[],
+    attempt: number
+  ): AgentPlannerDecision {
+    if (attempt > 1) {
+      return {
+        done: true,
+        reason: 'No additional steps were planned.',
+      };
+    }
+
+    const primaryNode = mentions.find(item => item.type === 'node');
+    return {
+      done: false,
+      operation: 'search',
+      activity: 'Collecting repository context',
+      requiresConfirmation: false,
+      input: {
+        query: content,
+        nodeId: primaryNode?.id ?? null,
+      },
+    };
+  }
+
+  private buildPlannerPrompt(
+    content: string,
+    mentions: AgentMention[],
+    history: AgentLoopHistoryItem[],
+    attempt: number
+  ): string {
     const compactMentions = mentions.map(item => ({
       id: item.id,
       type: item.type,
@@ -817,116 +929,380 @@ export class AgentService {
       path: item.path ?? null,
     }));
 
+    const compactHistory = history.slice(-MAX_HISTORY_ITEMS).map(item => ({
+      attempt: item.attempt,
+      operation: item.operation,
+      activity: item.activity,
+      output: item.output ?? null,
+      error: item.error ?? null,
+    }));
+
+    const manifestSummary = agentManifest.operations.map(operation => ({
+      name: operation.name,
+      aliases: operation.aliases,
+      description: operation.description,
+      alwaysFirst: Boolean(operation.alwaysFirst),
+      requiresConfirmation: Boolean(operation.requiresConfirmation),
+      destructive: Boolean(operation.destructive),
+    }));
+
     return [
-      'You are an agent planner for NodeRef.',
-      'Generate an execution plan as strict JSON for repository operations.',
-      'Output only valid JSON. No markdown, no commentary.',
+      'You are NodeRef planner.',
+      'Decide the next operation for ONE iteration.',
+      'Output ONLY valid JSON.',
+      '',
+      'Return JSON:',
+      '{"done":false,"operation":"search","activity":"...","input":{},"requiresConfirmation":false}',
+      'OR',
+      '{"done":true,"reason":"..."}',
       '',
       `Allowed operations: ${AGENT_OPERATION_NAMES.join(', ')}`,
       'Rules:',
-      '1. Always include "search" as the first step.',
-      `2. Use only the allowed operations and at most ${MAX_PLANNER_STEPS} steps.`,
-      '3. For delete steps, include target node identifiers where possible.',
-      '4. Keep each summary short and factual.',
-      '5. For search, prefer mention nodeId as scope when available.',
+      '- On attempt 1, operation must be search.',
+      '- Keep activity short and user-facing.',
+      '- Destructive operations require explicit user intent and requiresConfirmation=true.',
+      '- Prefer minimal input.',
       '',
-      'Return JSON with this schema:',
-      '{"steps":[{"operation":"search","summary":"...","input":{"query":"...","nodeId":"...","maxItems":100}}]}',
-      '',
+      `Attempt: ${attempt}/${MAX_LOOP_TRIES}`,
       `Manifest: ${JSON.stringify(manifestSummary)}`,
       `Mentions: ${JSON.stringify(compactMentions)}`,
+      `History: ${JSON.stringify(compactHistory)}`,
       `User message: ${JSON.stringify(content)}`,
     ].join('\n');
   }
 
-  private async buildExecutionPlanWithModel(
-    userId: number,
-    content: string,
-    mentions: AgentMention[]
-  ): Promise<{
-    plan: AgentPlannedStep[];
-    planner: 'model' | 'heuristic';
-    provider: string | null;
-    model: string | null;
-  }> {
-    const fallbackPlan = buildExecutionPlan(content, mentions);
+  private parsePlannerDecision(
+    raw: string,
+    fallback: AgentPlannerDecision,
+    attempt: number
+  ): AgentPlannerDecision {
+    let parsed: unknown;
+    try {
+      parsed = this.parseJsonObject(raw);
+    } catch {
+      return fallback;
+    }
 
-    const [assistantEnabled, aiConfig] = await Promise.all([
-      getAiAssistantEnabled(userId),
-      resolveUserAiConfig(userId),
-    ]);
+    if (!isRecord(parsed)) {
+      return fallback;
+    }
 
-    if (!assistantEnabled || !aiConfig) {
+    const done = Boolean(parsed.done);
+    if (done) {
       return {
-        plan: fallbackPlan,
-        planner: 'heuristic',
-        provider: null,
-        model: null,
+        done: true,
+        reason: typeof parsed.reason === 'string' ? this.truncate(parsed.reason, 240) : 'Planner marked run as done.',
       };
     }
 
-    const provider = getAiProvider(aiConfig.provider);
-    if (!provider) {
-      return {
-        plan: fallbackPlan,
-        planner: 'heuristic',
-        provider: aiConfig.provider,
-        model: aiConfig.model,
-      };
+    const operationRaw = typeof parsed.operation === 'string' ? parsed.operation.trim() : '';
+    if (!operationRaw || !isAgentOperation(operationRaw)) {
+      return fallback;
+    }
+
+    const input = isRecord(parsed.input) ? parsed.input : {};
+    const activity =
+      typeof parsed.activity === 'string' && parsed.activity.trim()
+        ? cleanText(parsed.activity)
+        : `${operationRaw} step`;
+
+    const normalizedOperation =
+      attempt === 1 && operationRaw !== 'search' ? ('search' as AgentPlannedStep['operation']) : operationRaw;
+    const requiresConfirmation =
+      normalizedOperation === 'delete' || (normalizedOperation === operationRaw && Boolean(parsed.requiresConfirmation));
+
+    return {
+      done: false,
+      operation: normalizedOperation,
+      activity: normalizedOperation === 'search' && attempt === 1 ? 'Collecting repository context' : activity,
+      input,
+      requiresConfirmation,
+    };
+  }
+
+  private buildLibContext(operation: AgentPlannedStep['operation']): string {
+    const loaded = loadLibs();
+    const preferredByOperation: Record<AgentPlannedStep['operation'], string[]> = {
+      search: ['search', 'logger', 'utils'],
+      move: ['node', 'actions', 'logger', 'utils'],
+      copy: ['node', 'actions', 'logger', 'utils'],
+      delete: ['node', 'actions', 'logger', 'utils'],
+      executeScript: ['search', 'node', 'actions', 'logger', 'utils'],
+    };
+
+    const availableNames = new Set(Object.keys(loaded.manifest));
+    const selectedNames = preferredByOperation[operation].filter(name => availableNames.has(name));
+
+    let usedChars = 0;
+    const sections: string[] = [];
+    for (const name of selectedNames) {
+      if (usedChars >= MAX_LIB_CHARS) {
+        break;
+      }
+
+      const manifestEntry = loaded.manifest[name];
+      const source = loaded.libs[name]?.text || '';
+      const budget = Math.max(0, Math.min(MAX_LIB_CHARS - usedChars, 1100));
+      const snippet = source.slice(0, budget);
+      usedChars += snippet.length;
+
+      sections.push(
+        [
+          `LIB ${name}:`,
+          `description=${manifestEntry?.description ?? ''}`,
+          `tags=${JSON.stringify(manifestEntry?.tags ?? [])}`,
+          snippet,
+        ].join('\n')
+      );
+    }
+
+    return sections.join('\n\n');
+  }
+
+  private buildScriptPrompt(params: {
+    content: string;
+    mentions: AgentMention[];
+    history: AgentLoopHistoryItem[];
+    decision: AgentPlannerDecision;
+    attempt: number;
+  }): string {
+    const { content, mentions, history, decision, attempt } = params;
+    const operation = decision.operation || 'executeScript';
+    const compactMentions = mentions.map(item => ({
+      id: item.id,
+      type: item.type,
+      label: item.label,
+      path: item.path ?? null,
+    }));
+    const compactHistory = history.slice(-8).map(item => ({
+      attempt: item.attempt,
+      operation: item.operation,
+      activity: item.activity,
+      output: item.output ?? null,
+      error: item.error ?? null,
+    }));
+
+    return [
+      `You are NodeRef script generator for operation "${operation}".`,
+      'Write ONE executable Alfresco JS Console script.',
+      'Output ONLY valid JSON: {"activity":"...","script":"...","expected":"..."}',
+      'Rules:',
+      '- Script must be complete and executable in JS Console.',
+      '- Add logger.log progress lines (start, important checkpoints, final result).',
+      '- No markdown fences in JSON values.',
+      '- Use read-only behavior unless operation is explicitly destructive (move/copy/delete).',
+      '- If operation is delete, script must only run when target IDs are explicit.',
+      '',
+      `Attempt: ${attempt}/${MAX_LOOP_TRIES}`,
+      `User message: ${JSON.stringify(content)}`,
+      `Planner decision: ${JSON.stringify(decision)}`,
+      `Mentions: ${JSON.stringify(compactMentions)}`,
+      `History: ${JSON.stringify(compactHistory)}`,
+      '',
+      'Available libs/context:',
+      this.buildLibContext(operation),
+    ].join('\n');
+  }
+
+  private parseScriptInstruction(raw: string, fallbackActivity: string): AgentScriptInstruction {
+    const parsed = this.parseJsonObject(raw);
+    if (!isRecord(parsed)) {
+      throw new Error('Script generator did not return a JSON object.');
+    }
+
+    const scriptRaw = typeof parsed.script === 'string' ? this.normalizeScript(parsed.script) : '';
+    if (!scriptRaw.trim()) {
+      throw new Error('Script generator returned empty script.');
+    }
+
+    return {
+      activity:
+        typeof parsed.activity === 'string' && parsed.activity.trim()
+          ? cleanText(parsed.activity)
+          : fallbackActivity,
+      script: scriptRaw,
+      expected:
+        typeof parsed.expected === 'string' && parsed.expected.trim() ? this.truncate(parsed.expected, 280) : null,
+    };
+  }
+
+  private buildSummaryPrompt(
+    question: string,
+    history: AgentLoopHistoryItem[],
+    doneReason: string | null
+  ): string {
+    const steps = history.slice(-MAX_HISTORY_ITEMS).map(item => ({
+      attempt: item.attempt,
+      operation: item.operation,
+      activity: item.activity,
+      output: item.output ?? null,
+      error: item.error ?? null,
+    }));
+
+    return [
+      'You are NodeRef assistant.',
+      'Provide the final answer for the user.',
+      'Use the same language as the user message.',
+      'Keep it concise and factual.',
+      '',
+      `User message: ${JSON.stringify(question)}`,
+      `Done reason: ${JSON.stringify(doneReason)}`,
+      `Executed steps: ${JSON.stringify(steps)}`,
+    ].join('\n');
+  }
+
+  private buildTitlePrompt(firstMessage: string): string {
+    return [
+      'You generate concise chat titles for NodeRef.',
+      'Return ONLY JSON: {"title":"..."}',
+      'Rules:',
+      '- Max 7 words',
+      '- Same language as user',
+      '- No punctuation at the end',
+      '- Focus on intent, not implementation details',
+      '',
+      `User message: ${JSON.stringify(firstMessage)}`,
+    ].join('\n');
+  }
+
+  private async maybeGenerateChatTitle(
+    userId: number,
+    runId: number,
+    chatId: number,
+    currentTitle: string,
+    firstMessage: string,
+    runtime: ResolvedAiRuntime
+  ): Promise<void> {
+    if (currentTitle.trim().toLowerCase() !== 'new chat') {
+      return;
     }
 
     try {
-      const prompt = this.buildPlannerPrompt(content, mentions);
-      const raw = await callAnthropic({
-        apiKey: aiConfig.apiKey,
-        model: aiConfig.model,
-        prompt,
-        maxTokens: 800,
-        temperature: provider.defaultTemperature ?? 0,
-        baseURL: provider.baseURL,
+      const raw = await this.callModel(runtime, this.buildTitlePrompt(firstMessage), {
+        maxTokens: 120,
+        timeoutMs: TITLE_TIMEOUT_MS,
+        label: 'Agent title generation',
       });
-
-      const parsed = this.parsePlannerPayload(raw);
-      const plan = this.normalizePlannerSteps(parsed, fallbackPlan);
-      if (!plan.length) {
-        return {
-          plan: fallbackPlan,
-          planner: 'heuristic',
-          provider: provider.id,
-          model: aiConfig.model,
-        };
+      const parsed = this.parseJsonObject(raw);
+      if (!isRecord(parsed)) {
+        return;
       }
 
-      return {
-        plan,
-        planner: 'model',
-        provider: provider.id,
-        model: aiConfig.model,
-      };
+      const titleRaw = typeof parsed.title === 'string' ? cleanText(parsed.title) : '';
+      const title = this.truncate(titleRaw.replace(/[.!?]+$/g, ''), 80);
+      if (!title || title.toLowerCase() === 'new chat') {
+        return;
+      }
+
+      await this.repository.updateChatTitle(userId, chatId, title);
+      await this.repository.createRunEvent({
+        runId,
+        type: 'chat.title.updated',
+        level: 'debug',
+        payload: {
+          title,
+        },
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      log.warn(
-        { userId, provider: provider.id, model: aiConfig.model, error: message },
-        'Model planning failed, falling back to heuristic planner'
-      );
-      return {
-        plan: fallbackPlan,
-        planner: 'heuristic',
-        provider: provider.id,
-        model: aiConfig.model,
-      };
+      log.debug({ runId, error: message }, 'Chat title generation skipped');
     }
   }
 
-  private async executeRun(userId: number, runId: number): Promise<void> {
+  private async decideNextStep(
+    runtime: ResolvedAiRuntime,
+    content: string,
+    mentions: AgentMention[],
+    history: AgentLoopHistoryItem[],
+    attempt: number
+  ): Promise<AgentPlannerDecision> {
+    const fallback = this.buildFallbackPlannerDecision(content, mentions, attempt);
+
+    try {
+      const raw = await this.callModel(runtime, this.buildPlannerPrompt(content, mentions, history, attempt), {
+        maxTokens: 500,
+        timeoutMs: PLANNER_TIMEOUT_MS,
+        label: 'Agent planner',
+      });
+      return this.parsePlannerDecision(raw, fallback, attempt);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      log.warn({ attempt, error: message }, 'Planner decision failed, using fallback');
+      return fallback;
+    }
+  }
+
+  private async generateScriptInstruction(
+    runtime: ResolvedAiRuntime,
+    content: string,
+    mentions: AgentMention[],
+    history: AgentLoopHistoryItem[],
+    decision: AgentPlannerDecision,
+    attempt: number
+  ): Promise<AgentScriptInstruction> {
+    const fallbackActivity = decision.activity || `${decision.operation || 'executeScript'} step`;
+    const raw = await this.callModel(
+      runtime,
+      this.buildScriptPrompt({
+        content,
+        mentions,
+        history,
+        decision,
+        attempt,
+      }),
+      {
+        maxTokens: 1800,
+        timeoutMs: SCRIPT_TIMEOUT_MS,
+        label: 'Agent script generation',
+      }
+    );
+
+    return this.parseScriptInstruction(raw, fallbackActivity);
+  }
+
+  private async generateFinalSummary(
+    runtime: ResolvedAiRuntime,
+    question: string,
+    history: AgentLoopHistoryItem[],
+    doneReason: string | null
+  ): Promise<string> {
+    try {
+      const raw = await this.callModel(runtime, this.buildSummaryPrompt(question, history, doneReason), {
+        maxTokens: 600,
+        timeoutMs: SUMMARY_TIMEOUT_MS,
+        label: 'Agent final summary',
+      });
+      const summary = raw.trim();
+      if (summary) {
+        return summary;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      log.warn({ error: message }, 'Final summary generation failed, using fallback');
+    }
+
+    return this.formatAssistantSummary(history, doneReason || undefined);
+  }
+
+  private async executeRun(
+    userId: number,
+    runId: number,
+    preferredModel?: { provider?: string; model?: string }
+  ): Promise<void> {
     const runRow = await this.prisma.agentRun.findFirst({
       where: { id: runId, userId },
       include: {
         triggerMessage: true,
+        chat: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
       },
     });
 
-    if (!runRow || !runRow.triggerMessage) {
+    if (!runRow || !runRow.triggerMessage || !runRow.chat) {
       return;
     }
 
@@ -936,10 +1312,22 @@ export class AgentService {
     let currentStep: AgentRunStep | null = null;
 
     try {
+      const runtime = await this.resolveAiRuntime(userId, preferredModel);
+      if (!runtime) {
+        throw new Error('No AI provider/model is configured for the current user.');
+      }
+
       await this.repository.updateRun(userId, runId, {
         status: 'running',
         startedAt: new Date(),
         error: null,
+        plan: {
+          version: AGENT_MANIFEST_VERSION,
+          mode: 'llm_loop_v1',
+          provider: runtime.provider,
+          model: runtime.model,
+          maxTries: MAX_LOOP_TRIES,
+        },
       });
 
       await this.repository.createRunEvent({
@@ -948,48 +1336,23 @@ export class AgentService {
         level: 'info',
         payload: {
           startedAt: nowIso(),
+          progressMessage: 'Thinking...',
+          provider: runtime.provider,
+          model: runtime.model,
         },
       });
 
+      const content = runRow.triggerMessage.content;
       const mentions = parseMentions(runRow.triggerMessage.mentionsJson);
-      await this.repository.createRunEvent({
-        runId,
-        type: 'run.planning.started',
-        level: 'info',
-        payload: {
-          startedAt: nowIso(),
-        },
-      });
 
-      const planning = await this.buildExecutionPlanWithModel(
+      await this.maybeGenerateChatTitle(
         userId,
-        runRow.triggerMessage.content,
-        mentions
-      );
-      const plan = planning.plan;
-
-      await this.repository.createRunEvent({
         runId,
-        type: 'run.planning.completed',
-        level: 'info',
-        payload: {
-          completedAt: nowIso(),
-          planner: planning.planner,
-          provider: planning.provider,
-          model: planning.model,
-          stepCount: plan.length,
-        },
-      });
-
-      await this.repository.updateRun(userId, runId, {
-        plan: {
-          version: AGENT_MANIFEST_VERSION,
-          planner: planning.planner,
-          provider: planning.provider,
-          model: planning.model,
-          steps: plan,
-        },
-      });
+        runRow.chatId,
+        runRow.chat.title,
+        content,
+        runtime
+      );
 
       const baseCtx = await this.createExecutionContext(userId, runRow.serverId);
       const execCtx: AgentExecutionContext = {
@@ -997,29 +1360,53 @@ export class AgentService {
         signal: controller.signal,
       };
 
-      const completedSteps: AgentRunStep[] = [];
+      const history: AgentLoopHistoryItem[] = [];
+      let doneReason: string | null = null;
+      let ordinal = 1;
 
-      for (let index = 0; index < plan.length; index++) {
+      for (let attempt = 1; attempt <= MAX_LOOP_TRIES; attempt++) {
         if (controller.signal.aborted) {
           throw new Error('Run cancelled');
         }
 
-        const planned = plan[index];
+        await this.repository.createRunEvent({
+          runId,
+          type: 'run.progress',
+          level: 'info',
+          payload: {
+            attempt,
+            maxTries: MAX_LOOP_TRIES,
+            progressMessage: `Thinking... (${attempt}/${MAX_LOOP_TRIES})`,
+          },
+        });
+
+        const decision = await this.decideNextStep(runtime, content, mentions, history, attempt);
+        if (decision.done) {
+          doneReason = decision.reason || 'Planner completed.';
+          break;
+        }
+
+        const operation = decision.operation || 'executeScript';
+        const activity = decision.activity || `${operation} step`;
+        const stepInput = isRecord(decision.input) ? decision.input : {};
+        const requiresConfirmation = Boolean(decision.requiresConfirmation || operation === 'delete');
 
         currentStep = await this.repository.createRunStep({
           runId,
-          ordinal: index + 1,
-          operation: planned.operation,
+          ordinal,
+          operation,
           status: 'pending',
-          summary: planned.summary,
-          input: planned.input,
-          requiresConfirmation: planned.requiresConfirmation,
+          summary: activity,
+          input: stepInput,
+          requiresConfirmation,
         });
+        ordinal += 1;
 
-        await this.repository.updateRunStep(userId, runId, currentStep.id, {
-          status: 'running',
-          startedAt: new Date(),
-        });
+        currentStep =
+          (await this.repository.updateRunStep(userId, runId, currentStep.id, {
+            status: 'running',
+            startedAt: new Date(),
+          })) || currentStep;
 
         await this.repository.createRunEvent({
           runId,
@@ -1027,12 +1414,63 @@ export class AgentService {
           type: 'step.started',
           level: 'info',
           payload: {
-            operation: planned.operation,
+            operation,
             ordinal: currentStep.ordinal,
+            summary: activity,
+            input: stepInput,
+            progressMessage: activity,
           },
         });
 
-        if (planned.requiresConfirmation) {
+        await this.repository.createRunEvent({
+          runId,
+          stepId: currentStep.id,
+          type: 'step.script.generating',
+          level: 'info',
+          payload: {
+            operation,
+            progressMessage: `Preparing script for ${operation}`,
+          },
+        });
+
+        const instruction = await this.generateScriptInstruction(
+          runtime,
+          content,
+          mentions,
+          history,
+          decision,
+          attempt
+        );
+        const persistedStepInput = {
+          ...stepInput,
+          generatedScript: instruction.script,
+          expected: instruction.expected ?? null,
+          plannedOperation: operation,
+        };
+
+        currentStep =
+          (await this.repository.updateRunStep(userId, runId, currentStep.id, {
+            input: persistedStepInput,
+            summary: instruction.activity,
+          })) || currentStep;
+
+        const scriptPreview = this.truncate(instruction.script, 1800);
+        await this.repository.createRunEvent({
+          runId,
+          stepId: currentStep.id,
+          type: 'step.script.generated',
+          level: 'info',
+          payload: {
+            operation,
+            expected: instruction.expected ?? null,
+            progressMessage: instruction.activity,
+            output: {
+              scriptPreview,
+            },
+          },
+        });
+
+        if (requiresConfirmation) {
           const confirmationToken = randomUUID();
 
           currentStep =
@@ -1053,8 +1491,12 @@ export class AgentService {
             payload: {
               stepId: currentStep.id,
               confirmationToken,
-              operation: planned.operation,
-              summary: planned.summary,
+              operation,
+              summary: instruction.activity,
+              progressMessage: `Confirmation required for ${operation}`,
+              output: {
+                scriptPreview,
+              },
             },
           });
 
@@ -1063,7 +1505,7 @@ export class AgentService {
             userId,
             role: 'assistant',
             content:
-              `Confirmation required before executing \"${planned.operation}\".` +
+              `Confirmation required before executing "${operation}".` +
               `\nStep: ${currentStep.id}` +
               `\nType DELETE in confirmation dialog to proceed.`,
             mentions: [],
@@ -1074,34 +1516,57 @@ export class AgentService {
             stepId: currentStep.id,
             userId,
             serverId: runRow.serverId,
-            operation: planned.operation,
+            operation,
             action: 'requested',
-            targetSummary: planned.summary,
+            targetSummary: instruction.activity,
             requestMessageId: runRow.triggerMessage.id,
             confirmationMessageId: assistantMessage.id,
             metadata: {
               requiresConfirmation: true,
-              stepInput: planned.input,
+              stepInput: persistedStepInput,
             },
           });
 
           return;
         }
 
-        const output = await executeOperation(planned.operation, execCtx, planned.input);
+        await this.repository.createRunEvent({
+          runId,
+          stepId: currentStep.id,
+          type: 'step.execution.started',
+          level: 'info',
+          payload: {
+            operation,
+            progressMessage: `Executing ${operation} script`,
+          },
+        });
+
+        const executionOutput = await executeOperation('executeScript', execCtx, {
+          script: instruction.script,
+        });
+        const statusCode = typeof executionOutput.status === 'number' ? executionOutput.status : 0;
+        const outputError =
+          typeof executionOutput.error === 'string' && executionOutput.error.trim()
+            ? executionOutput.error.trim()
+            : null;
+        if (outputError || statusCode >= 400) {
+          throw new Error(outputError || `Script execution failed with status ${statusCode}`);
+        }
+
+        const stepOutput = {
+          operation,
+          activity: instruction.activity,
+          expected: instruction.expected ?? null,
+          output: executionOutput,
+        };
 
         currentStep =
           (await this.repository.updateRunStep(userId, runId, currentStep.id, {
             status: 'completed',
             completedAt: new Date(),
-            output,
-            summary:
-              planned.operation === 'search'
-                ? 'Repository context collected'
-                : `${planned.operation} completed`,
+            output: stepOutput,
+            summary: `${instruction.activity} completed`,
           })) || currentStep;
-
-        completedSteps.push(currentStep);
 
         await this.repository.createRunEvent({
           runId,
@@ -1109,11 +1574,30 @@ export class AgentService {
           type: 'step.completed',
           level: 'info',
           payload: {
-            operation: planned.operation,
-            output,
+            operation,
+            output: stepOutput,
+            progressMessage: `${instruction.activity} completed`,
           },
         });
+
+        history.push({
+          attempt,
+          operation,
+          activity: instruction.activity,
+          input: stepInput,
+          scriptPreview,
+          output: stepOutput,
+        });
+        if (history.length > MAX_HISTORY_ITEMS) {
+          history.shift();
+        }
       }
+
+      if (!doneReason && history.length >= MAX_LOOP_TRIES) {
+        doneReason = `Stopped after ${MAX_LOOP_TRIES} attempts`;
+      }
+
+      const finalSummary = await this.generateFinalSummary(runtime, content, history, doneReason);
 
       await this.repository.updateRun(userId, runId, {
         status: 'completed',
@@ -1127,6 +1611,9 @@ export class AgentService {
         level: 'info',
         payload: {
           finishedAt: nowIso(),
+          attempts: history.length,
+          doneReason,
+          progressMessage: 'Run completed',
         },
       });
 
@@ -1134,7 +1621,7 @@ export class AgentService {
         chatId: runRow.chatId,
         userId,
         role: 'assistant',
-        content: this.formatAssistantSummary(plan, completedSteps),
+        content: finalSummary,
         mentions: [],
       });
     } catch (error) {
@@ -1162,7 +1649,10 @@ export class AgentService {
         stepId: currentStep?.id ?? null,
         type: cancelled ? 'run.cancelled' : 'run.failed',
         level: cancelled ? 'warn' : 'error',
-        payload: { error: message },
+        payload: {
+          error: message,
+          progressMessage: cancelled ? 'Run cancelled' : `Run failed: ${message}`,
+        },
       });
 
       await this.repository.createMessage({

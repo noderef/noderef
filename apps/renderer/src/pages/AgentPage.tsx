@@ -14,17 +14,30 @@
  * limitations under the License.
  */
 
-import { backendRpc, type AgentMentionSuggestion, type AgentMessage } from '@/core/ipc/backend';
+import {
+  backendRpc,
+  type AgentMentionSuggestion,
+  type AgentMessage,
+  type AgentRunEvent,
+  type AgentRunSummary,
+} from '@/core/ipc/backend';
+import {
+  getAiSettings,
+  listAiModels,
+  listAiProviders,
+} from '@/core/ipc/aiSettings';
 import { useAgentStore } from '@/core/store/agent';
 import { useServersStore } from '@/core/store/servers';
 import { useNavigation } from '@/hooks/useNavigation';
 import {
+  Accordion,
   Badge,
   Box,
   Button,
   Group,
   Loader,
   Paper,
+  Select,
   Stack,
   Text,
   TextInput,
@@ -32,7 +45,7 @@ import {
 } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
-import { IconPlayerStop, IconSend } from '@tabler/icons-react';
+import { IconChevronDown, IconPlayerStop, IconSend } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -65,13 +78,149 @@ type ConversationTimelineItem =
       message: AgentMessage;
     }
   | {
-      kind: 'activity';
+      kind: 'run';
       id: number;
       createdAt: string | Date;
-      runId: number;
-      type: string;
-      level: 'debug' | 'info' | 'warn' | 'error';
+      run: AgentRunSummary;
     };
+
+interface AiProviderOption {
+  value: string;
+  label: string;
+  defaultModel: string;
+}
+
+interface AiModelChoice {
+  value: string;
+  label: string;
+  provider: string;
+  model: string;
+}
+
+const AGENT_MODEL_SELECTION_STORAGE_KEY = 'agent.selected.model.v1';
+
+const MODEL_SELECTION_GLOBAL_SCOPE = 'global';
+
+const readModelSelectionStore = (): Record<string, { provider: string; model: string }> => {
+  try {
+    const raw = window.localStorage.getItem(AGENT_MODEL_SELECTION_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object') {
+      return {};
+    }
+
+    const legacyProvider = (parsed as { provider?: unknown }).provider;
+    const legacyModel = (parsed as { model?: unknown }).model;
+    if (typeof legacyProvider === 'string' && typeof legacyModel === 'string') {
+      return {
+        [MODEL_SELECTION_GLOBAL_SCOPE]: {
+          provider: legacyProvider,
+          model: legacyModel,
+        },
+      };
+    }
+
+    const result: Record<string, { provider: string; model: string }> = {};
+    for (const [scope, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!value || typeof value !== 'object') {
+        continue;
+      }
+      const provider = (value as { provider?: unknown }).provider;
+      const model = (value as { model?: unknown }).model;
+      if (typeof provider === 'string' && typeof model === 'string') {
+        result[scope] = { provider, model };
+      }
+    }
+
+    return result;
+  } catch {
+    return {};
+  }
+};
+
+const buildModelSelectionScopes = (serverId: number | null, chatId: number | null): string[] => {
+  const scopes: string[] = [];
+  if (serverId !== null && chatId !== null) {
+    scopes.push(`server:${serverId}:chat:${chatId}`);
+  }
+  if (serverId !== null) {
+    scopes.push(`server:${serverId}`);
+  }
+  scopes.push(MODEL_SELECTION_GLOBAL_SCOPE);
+  return scopes;
+};
+
+const readStoredModelSelection = (
+  serverId: number | null,
+  chatId: number | null
+): { provider: string; model: string } | null => {
+  const store = readModelSelectionStore();
+  for (const scope of buildModelSelectionScopes(serverId, chatId)) {
+    const match = store[scope];
+    if (match) {
+      return match;
+    }
+  }
+  return null;
+};
+
+const writeStoredModelSelection = (
+  serverId: number | null,
+  chatId: number | null,
+  provider: string,
+  model: string
+) => {
+  try {
+    const nextStore = readModelSelectionStore();
+
+    if (serverId !== null && chatId !== null) {
+      nextStore[`server:${serverId}:chat:${chatId}`] = { provider, model };
+    }
+    if (serverId !== null) {
+      nextStore[`server:${serverId}`] = { provider, model };
+    }
+    if (serverId === null && chatId === null) {
+      nextStore[MODEL_SELECTION_GLOBAL_SCOPE] = { provider, model };
+    }
+
+    window.localStorage.setItem(
+      AGENT_MODEL_SELECTION_STORAGE_KEY,
+      JSON.stringify(nextStore)
+    );
+  } catch {
+    // ignore storage failures
+  }
+};
+
+const toPayloadSnippet = (value: Record<string, unknown> | null): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const raw = JSON.stringify(value, null, 2);
+    if (raw.length <= 1400) {
+      return raw;
+    }
+    return `${raw.slice(0, 1400)}\n...`;
+  } catch {
+    return null;
+  }
+};
+
+const eventProgressText = (event: AgentRunEvent): string =>
+  (event.payload?.progressMessage as string | undefined) || formatActivityType(event.type);
+
+const deriveStepStatus = (eventType: string): string => {
+  if (eventType.startsWith('step.')) {
+    return formatActivityType(eventType.replace(/^step\./, ''));
+  }
+  return formatActivityType(eventType);
+};
 
 export function AgentPage() {
   const { t } = useTranslation('agent');
@@ -104,6 +253,18 @@ export function AgentPage() {
   const [mentionHasMore, setMentionHasMore] = useState(false);
   const [mentionLoading, setMentionLoading] = useState(false);
   const [confirmationText, setConfirmationText] = useState('');
+  const [aiModelOptions, setAiModelOptions] = useState<AiModelChoice[]>([]);
+  const [selectedAiModelOption, setSelectedAiModelOption] = useState<string | null>(null);
+  const [aiProvider, setAiProvider] = useState<string | null>(null);
+  const [aiModel, setAiModel] = useState<string | null>(null);
+  const [defaultAiSelection, setDefaultAiSelection] = useState<{
+    provider: string | null;
+    model: string | null;
+  }>({
+    provider: null,
+    model: null,
+  });
+  const [aiModelsLoading, setAiModelsLoading] = useState(false);
 
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
   const caretRef = useRef<number>(0);
@@ -113,6 +274,7 @@ export function AgentPage() {
     () => chats.find(chat => chat.id === activeChatId) || null,
     [chats, activeChatId]
   );
+  const modelSelectionServerId = activeChat?.serverId || activeServerId || null;
 
   const activeMessages = useMemo(
     () => (activeChatId ? messagesByChat[activeChatId] || [] : []),
@@ -138,37 +300,86 @@ export function AgentPage() {
   );
 
   const conversationTimeline = useMemo<ConversationTimelineItem[]>(() => {
-    const messageItems: ConversationTimelineItem[] = activeMessages.map(message => ({
-      kind: 'message',
-      id: message.id,
-      createdAt: message.createdAt,
-      message,
-    }));
-
-    const activityItems: ConversationTimelineItem[] = activeRuns.flatMap(run =>
-      (eventsByRun[run.id] || []).map(event => ({
-        kind: 'activity',
-        id: event.id,
-        createdAt: event.createdAt,
-        runId: run.id,
-        type: event.type,
-        level: event.level,
+    const sortedMessages = activeMessages
+      .map(message => ({
+        kind: 'message' as const,
+        id: message.id,
+        createdAt: message.createdAt,
+        message,
       }))
-    );
-
-    return [...messageItems, ...activityItems]
       .sort((left, right) => {
         const timeDiff = new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
         if (timeDiff !== 0) {
           return timeDiff;
         }
-        if (left.kind !== right.kind) {
-          return left.kind === 'activity' ? -1 : 1;
-        }
         return left.id - right.id;
-      })
-      .slice(-400);
-  }, [activeMessages, activeRuns, eventsByRun]);
+      });
+
+    const messageIds = new Set(sortedMessages.map(item => item.message.id));
+    const runsByTriggerMessage = new Map<number, AgentRunSummary[]>();
+    const orphanRuns: AgentRunSummary[] = [];
+
+    for (const run of activeRuns) {
+      if (run.triggerMessageId && messageIds.has(run.triggerMessageId)) {
+        const current = runsByTriggerMessage.get(run.triggerMessageId) || [];
+        current.push(run);
+        runsByTriggerMessage.set(run.triggerMessageId, current);
+      } else {
+        orphanRuns.push(run);
+      }
+    }
+
+    for (const [triggerMessageId, runs] of runsByTriggerMessage) {
+      runsByTriggerMessage.set(
+        triggerMessageId,
+        [...runs].sort((left, right) => {
+          const timeDiff = new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
+          if (timeDiff !== 0) {
+            return timeDiff;
+          }
+          return left.id - right.id;
+        })
+      );
+    }
+
+    const timeline: ConversationTimelineItem[] = [];
+    for (const messageItem of sortedMessages) {
+      timeline.push(messageItem);
+      const runsForMessage = runsByTriggerMessage.get(messageItem.message.id) || [];
+      for (const run of runsForMessage) {
+        timeline.push({
+          kind: 'run',
+          id: run.id,
+          createdAt: run.createdAt,
+          run,
+        });
+      }
+    }
+
+    const sortedOrphans = [...orphanRuns].sort((left, right) => {
+      const timeDiff = new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
+      if (timeDiff !== 0) {
+        return timeDiff;
+      }
+      return left.id - right.id;
+    });
+
+    for (const run of sortedOrphans) {
+      timeline.push({
+        kind: 'run',
+        id: run.id,
+        createdAt: run.createdAt,
+        run,
+      });
+    }
+
+    return timeline.slice(-500);
+  }, [activeMessages, activeRuns]);
+
+  const totalRunEventCount = useMemo(
+    () => activeRuns.reduce((sum, run) => sum + (eventsByRun[run.id]?.length || 0), 0),
+    [activeRuns, eventsByRun]
+  );
 
   const loadChats = useCallback(async () => {
     try {
@@ -279,6 +490,116 @@ export function AgentPage() {
   }, [loadChats]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const loadAiOptions = async () => {
+      setAiModelsLoading(true);
+      try {
+        const [providerCatalog, currentSettings] = await Promise.all([
+          listAiProviders(),
+          getAiSettings(),
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        const configuredProviders: AiProviderOption[] = (providerCatalog.providers || [])
+          .filter(provider => provider.hasToken)
+          .map(provider => ({
+            value: provider.id,
+            label: provider.label,
+            defaultModel: provider.defaultModel,
+          }));
+
+        if (!configuredProviders.length) {
+          setAiModelOptions([]);
+          setSelectedAiModelOption(null);
+          setAiProvider(null);
+          setAiModel(null);
+          return;
+        }
+
+        const optionGroups = await Promise.all(
+          configuredProviders.map(async provider => {
+            const remote = await listAiModels({ provider: provider.value }).catch(() => null);
+            const models =
+              remote?.models?.length
+                ? remote.models
+                : [{ id: provider.defaultModel, displayName: provider.defaultModel }];
+            return models.map(model => ({
+              value: `${provider.value}::${model.id}`,
+              label: `${provider.label} · ${model.displayName || model.id}`,
+              provider: provider.value,
+              model: model.id,
+            }));
+          })
+        );
+
+        if (cancelled) {
+          return;
+        }
+
+        const options = optionGroups.flat();
+        setAiModelOptions(options);
+        setDefaultAiSelection({
+          provider: currentSettings.provider ?? null,
+          model: currentSettings.model ?? null,
+        });
+
+        if (!options.length) {
+          setSelectedAiModelOption(null);
+          setAiProvider(null);
+          setAiModel(null);
+          return;
+        }
+
+      } catch {
+        // keep composer functional without model selector data
+      } finally {
+        if (!cancelled) {
+          setAiModelsLoading(false);
+        }
+      }
+    };
+
+    void loadAiOptions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!aiModelOptions.length) {
+      return;
+    }
+
+    const stored = readStoredModelSelection(modelSelectionServerId, activeChatId);
+    const storedValue = stored ? `${stored.provider}::${stored.model}` : null;
+    const configuredValue =
+      defaultAiSelection.provider && defaultAiSelection.model
+        ? `${defaultAiSelection.provider}::${defaultAiSelection.model}`
+        : null;
+
+    const selectedValue =
+      [storedValue, configuredValue, aiModelOptions[0].value].find(value =>
+        Boolean(value && aiModelOptions.some(option => option.value === value))
+      ) || aiModelOptions[0].value;
+    const selected = aiModelOptions.find(option => option.value === selectedValue) || aiModelOptions[0];
+
+    setSelectedAiModelOption(selected.value);
+    setAiProvider(selected.provider);
+    setAiModel(selected.model);
+  }, [
+    aiModelOptions,
+    activeChatId,
+    modelSelectionServerId,
+    defaultAiSelection.provider,
+    defaultAiSelection.model,
+  ]);
+
+  useEffect(() => {
     if (!activeChatId) {
       return;
     }
@@ -322,7 +643,7 @@ export function AgentPage() {
     }
 
     viewport.scrollTop = viewport.scrollHeight;
-  }, [activeChatId, conversationTimeline.length]);
+  }, [activeChatId, conversationTimeline.length, totalRunEventCount, thinkingRunIds.length]);
 
   const handleDraftChange = (value: string) => {
     setDraft(value);
@@ -384,6 +705,8 @@ export function AgentPage() {
         chatId: activeChatId,
         content: draft.trim(),
         mentions: selectedMentions,
+        aiProvider: aiProvider || undefined,
+        aiModel: aiModel || undefined,
       });
 
       addMessage(activeChatId, response.message);
@@ -493,23 +816,220 @@ export function AgentPage() {
               ) : (
                 <>
                   {conversationTimeline.map(item => {
-                    if (item.kind === 'activity') {
+                    if (item.kind === 'run') {
+                      const run = item.run;
+                      const runEvents = (eventsByRun[run.id] || []).slice().sort((left, right) => left.id - right.id);
+
+                      const stepEventsMap = new Map<number, AgentRunEvent[]>();
+                      for (const event of runEvents) {
+                        if (!event.stepId) {
+                          continue;
+                        }
+                        const current = stepEventsMap.get(event.stepId) || [];
+                        current.push(event);
+                        stepEventsMap.set(event.stepId, current);
+                      }
+
+                      const stepGroups = Array.from(stepEventsMap.entries())
+                        .map(([stepId, events]) => {
+                          const firstEvent = events[0];
+                          const lastStepEvent = events[events.length - 1];
+                          const firstWithOrdinal = events.find(candidate =>
+                            Number.isFinite(candidate.payload?.ordinal)
+                          );
+                          const firstWithOperation = events.find(
+                            candidate =>
+                              typeof candidate.payload?.operation === 'string' &&
+                              String(candidate.payload.operation).trim().length > 0
+                          );
+
+                          const ordinal = Number(firstWithOrdinal?.payload?.ordinal);
+                          const operation =
+                            typeof firstWithOperation?.payload?.operation === 'string'
+                              ? String(firstWithOperation.payload.operation)
+                              : null;
+
+                          return {
+                            stepId,
+                            events,
+                            firstEventId: firstEvent?.id || Number.MAX_SAFE_INTEGER,
+                            ordinal: Number.isFinite(ordinal) ? ordinal : Number.MAX_SAFE_INTEGER,
+                            operation,
+                            status: deriveStepStatus(lastStepEvent?.type || 'step.pending'),
+                            statusLevel: lastStepEvent?.level || 'info',
+                            latestProgress: lastStepEvent ? eventProgressText(lastStepEvent) : t('noActivity'),
+                          };
+                        })
+                        .sort((left, right) => {
+                          if (left.firstEventId !== right.firstEventId) {
+                            return left.firstEventId - right.firstEventId;
+                          }
+                          return left.ordinal - right.ordinal;
+                        });
+
+                      const stepGroupById = new Map(stepGroups.map(step => [step.stepId, step]));
+                      const renderedSteps = new Set<number>();
+                      const runStreamItems: Array<
+                        | { kind: 'run_event'; event: AgentRunEvent }
+                        | { kind: 'step'; step: (typeof stepGroups)[number] }
+                      > = [];
+
+                      for (const event of runEvents) {
+                        if (!event.stepId) {
+                          runStreamItems.push({
+                            kind: 'run_event',
+                            event,
+                          });
+                          continue;
+                        }
+
+                        if (renderedSteps.has(event.stepId)) {
+                          continue;
+                        }
+
+                        const step = stepGroupById.get(event.stepId);
+                        if (!step) {
+                          continue;
+                        }
+
+                        renderedSteps.add(event.stepId);
+                        runStreamItems.push({
+                          kind: 'step',
+                          step,
+                        });
+                      }
+
                       return (
-                        <Group key={`activity-${item.id}`} wrap="nowrap" px={4}>
-                          <Group gap={6} wrap="nowrap">
-                            <Badge
-                              size="xs"
-                              variant="dot"
-                              color={getActivityLevelColor(item.level)}
-                              style={{ textTransform: 'none' }}
-                            >
-                              #{item.runId}
-                            </Badge>
-                            <Text size="xs" c="dimmed">
-                              {formatActivityType(item.type)}
-                            </Text>
-                          </Group>
-                        </Group>
+                        <Box key={`timeline-run-${run.id}`} py={2}>
+                          <Stack gap={4}>
+                            {runStreamItems.map(streamItem => {
+                              if (streamItem.kind === 'run_event') {
+                                const event = streamItem.event;
+                                const payloadSnippet = toPayloadSnippet(event.payload);
+                                const shouldRenderPayloadSnippet =
+                                  Boolean(payloadSnippet) &&
+                                  (event.level === 'warn' ||
+                                    event.level === 'error' ||
+                                    event.type.includes('error') ||
+                                    event.type.includes('failed'));
+
+                                return (
+                                  <Box key={`run-${run.id}-event-inline-${event.id}`} pl="xs">
+                                    <Stack gap={2}>
+                                      <Text size="sm">{eventProgressText(event)}</Text>
+                                      {shouldRenderPayloadSnippet && (
+                                        <Box
+                                          component="pre"
+                                          style={{
+                                            margin: 0,
+                                            fontSize: 11,
+                                            whiteSpace: 'pre-wrap',
+                                            overflowX: 'auto',
+                                            color: 'var(--mantine-color-dimmed)',
+                                          }}
+                                        >
+                                          {payloadSnippet}
+                                        </Box>
+                                      )}
+                                    </Stack>
+                                  </Box>
+                                );
+                              }
+
+                              const step = streamItem.step;
+                              const stepOrdinalLabel =
+                                Number.isFinite(step.ordinal) && step.ordinal !== Number.MAX_SAFE_INTEGER
+                                  ? `#${step.ordinal}`
+                                  : `#${step.stepId}`;
+                              const stepOperationLabel = step.operation ? `${step.operation}` : 'operation';
+
+                              return (
+                                <Accordion
+                                  key={`run-${run.id}-step-inline-${step.stepId}`}
+                                  multiple={false}
+                                  variant="default"
+                                  radius={0}
+                                  chevronPosition="right"
+                                  styles={{
+                                    root: { border: 'none' },
+                                    item: { border: 'none' },
+                                    control: { padding: '2px 4px' },
+                                    label: { padding: 0 },
+                                    panel: { padding: '4px 4px 8px 4px' },
+                                  }}
+                                >
+                                  <Accordion.Item value={`step-${step.stepId}`}>
+                                    <Accordion.Control>
+                                      <Group justify="space-between" wrap="nowrap">
+                                        <Group gap={8} wrap="nowrap">
+                                          <Badge size="xs" variant="dot" color={getActivityLevelColor(step.statusLevel)}>
+                                            {stepOrdinalLabel}
+                                          </Badge>
+                                          <Text size="sm">{step.latestProgress}</Text>
+                                        </Group>
+                                        <Text size="xs" c="dimmed">
+                                          {stepOperationLabel}
+                                        </Text>
+                                      </Group>
+                                    </Accordion.Control>
+                                    <Accordion.Panel>
+                                      <Stack gap={6} pl="xs">
+                                        {step.events.map(event => {
+                                          const payloadSnippet = toPayloadSnippet(event.payload);
+                                          const scriptPreview =
+                                            (event.payload?.output as Record<string, unknown> | undefined)
+                                              ?.scriptPreview;
+                                          return (
+                                            <Stack key={`run-${run.id}-step-${step.stepId}-event-${event.id}`} gap={4}>
+                                              <Group gap={8} wrap="nowrap">
+                                                <Badge
+                                                  size="xs"
+                                                  variant="dot"
+                                                  color={getActivityLevelColor(event.level)}
+                                                  style={{ textTransform: 'none' }}
+                                                >
+                                                  {formatActivityType(event.type)}
+                                                </Badge>
+                                                <Text size="xs">{eventProgressText(event)}</Text>
+                                              </Group>
+                                              {typeof scriptPreview === 'string' && scriptPreview.trim().length > 0 && (
+                                                <Box
+                                                  component="pre"
+                                                  style={{
+                                                    margin: 0,
+                                                    fontSize: 11,
+                                                    whiteSpace: 'pre-wrap',
+                                                    overflowX: 'auto',
+                                                  }}
+                                                >
+                                                  {scriptPreview}
+                                                </Box>
+                                              )}
+                                              {payloadSnippet && (
+                                                <Box
+                                                  component="pre"
+                                                  style={{
+                                                    margin: 0,
+                                                    fontSize: 11,
+                                                    whiteSpace: 'pre-wrap',
+                                                    overflowX: 'auto',
+                                                    color: 'var(--mantine-color-dimmed)',
+                                                  }}
+                                                >
+                                                  {payloadSnippet}
+                                                </Box>
+                                              )}
+                                            </Stack>
+                                          );
+                                        })}
+                                      </Stack>
+                                    </Accordion.Panel>
+                                  </Accordion.Item>
+                                </Accordion>
+                              );
+                            })}
+                          </Stack>
+                        </Box>
                       );
                     }
 
@@ -543,14 +1063,6 @@ export function AgentPage() {
                     );
                   })}
 
-                  {(sending || thinkingRunIds.length > 0) && (
-                    <Group gap="xs" wrap="nowrap" px={4} py={2}>
-                      <Loader size="xs" />
-                      <Text size="sm" c="dimmed">
-                        {t('thinking')}
-                      </Text>
-                    </Group>
-                  )}
                 </>
               )}
             </Stack>
@@ -605,35 +1117,89 @@ export function AgentPage() {
             )}
 
             <Box style={{ position: 'relative' }}>
-              <Textarea
-                ref={textAreaRef}
-                minRows={3}
-                maxRows={8}
-                value={draft}
-                onChange={event => handleDraftChange(event.currentTarget.value)}
-                onSelect={event => {
-                  caretRef.current = event.currentTarget.selectionStart || 0;
-                }}
-                placeholder={t('composerPlaceholder')}
-                autosize
-                styles={{
-                  input: {
-                    paddingRight: '84px',
-                    paddingBottom: '12px',
-                  },
-                }}
-              />
+              <Paper withBorder p="sm" radius="md">
+                <Textarea
+                  ref={textAreaRef}
+                  minRows={3}
+                  maxRows={8}
+                  value={draft}
+                  onChange={event => handleDraftChange(event.currentTarget.value)}
+                  onSelect={event => {
+                    caretRef.current = event.currentTarget.selectionStart || 0;
+                  }}
+                  placeholder={t('composerPlaceholder')}
+                  autosize
+                  variant="unstyled"
+                  styles={{
+                    input: {
+                      padding: 0,
+                    },
+                  }}
+                />
 
-              <Button
-                size="xs"
-                style={{ position: 'absolute', right: 8, bottom: 8 }}
-                rightSection={<IconSend size={14} />}
-                onClick={() => void handleSend()}
-                loading={sending}
-                disabled={!draft.trim()}
-              >
-                {t('send')}
-              </Button>
+                <Group justify="space-between" align="center" mt="xs" wrap="nowrap">
+                  <Select
+                    size="xs"
+                    placeholder={t('modelPlaceholder')}
+                    data={aiModelOptions}
+                    value={selectedAiModelOption}
+                    disabled={aiModelOptions.length === 0 || aiModelsLoading}
+                    variant="unstyled"
+                    onChange={value => {
+                      if (!value) {
+                        setSelectedAiModelOption(null);
+                        setAiProvider(null);
+                        setAiModel(null);
+                        return;
+                      }
+
+                      const selected = aiModelOptions.find(option => option.value === value);
+                      if (!selected) {
+                        return;
+                      }
+
+                      setSelectedAiModelOption(selected.value);
+                      setAiProvider(selected.provider);
+                      setAiModel(selected.model);
+                      writeStoredModelSelection(
+                        modelSelectionServerId,
+                        activeChatId,
+                        selected.provider,
+                        selected.model
+                      );
+                    }}
+                    rightSection={aiModelsLoading ? <Loader size={12} /> : <IconChevronDown size={14} />}
+                    rightSectionWidth={18}
+                    styles={{
+                      input: {
+                        border: 'none',
+                        background: 'transparent',
+                        paddingLeft: 0,
+                        paddingRight: 18,
+                        color: 'var(--mantine-color-dimmed)',
+                        fontSize: 13,
+                        fontWeight: 500,
+                        minHeight: 24,
+                        height: 24,
+                      },
+                      section: {
+                        pointerEvents: 'none',
+                      },
+                    }}
+                    w={220}
+                  />
+
+                  <Button
+                    size="xs"
+                    rightSection={<IconSend size={14} />}
+                    onClick={() => void handleSend()}
+                    loading={sending}
+                    disabled={!draft.trim()}
+                  >
+                    {t('send')}
+                  </Button>
+                </Group>
+              </Paper>
 
               {mentionQuery && (mentionItems.length > 0 || mentionLoading) && (
                 <Paper
