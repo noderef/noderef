@@ -3,13 +3,14 @@
  */
 
 import { NodesApi } from '@alfresco/js-api';
+import { ALFRESCO_NODE_PATH_TEMPLATE, getAlfrescoNodePath } from '../../../../lib/alfresco-endpoints.js';
 import type { AgentExecutionContext } from '../../types.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
 
 export const nodeDeleteTool: ToolDefinition = {
   name: 'node_delete',
   description:
-    'Delete one or more nodes. Destructive — moves to trash by default. Requires typing DELETE to confirm.',
+    'Delete one or more nodes. Destructive — moves to trash by default. Requires explicit user confirmation.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -26,7 +27,7 @@ export const nodeDeleteTool: ToolDefinition = {
     required: ['nodeIds'],
   },
   requiresConfirmation: true,
-  confirmation: { phrase: 'DELETE' },
+  confirmation: { phrase: 'CONFIRM' },
 
   async execute(ctx: AgentExecutionContext, args: Record<string, unknown>): Promise<ToolResult> {
     try {
@@ -50,7 +51,7 @@ export const nodeDeleteTool: ToolDefinition = {
         deleted.push(nodeId);
         callTrace.push({
           method: 'DELETE',
-          path: `/alfresco/api/-default-/public/alfresco/versions/1/nodes/${nodeId}`,
+          path: getAlfrescoNodePath(nodeId),
           request: { query: { permanent } },
           responseBody: null,
         });
@@ -61,7 +62,7 @@ export const nodeDeleteTool: ToolDefinition = {
         data: {
           apiTrace: {
             method: 'DELETE',
-            path: '/alfresco/api/-default-/public/alfresco/versions/1/nodes/{nodeId}',
+            path: ALFRESCO_NODE_PATH_TEMPLATE,
             request: { query: { permanent }, nodeIds },
             responseBody: callTrace,
           },

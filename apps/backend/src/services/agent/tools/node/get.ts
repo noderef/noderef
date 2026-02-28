@@ -3,11 +3,14 @@
  */
 
 import { NodesApi } from '@alfresco/js-api';
+import { getAlfrescoNodePath } from '../../../../lib/alfresco-endpoints.js';
 import type { AgentExecutionContext } from '../../types.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
 
 const normalizeNodePath = (p: string | undefined): string | null =>
   p?.trim().length ? p.trim() : null;
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 export const nodeGetTool: ToolDefinition = {
   name: 'node_get',
@@ -37,6 +40,7 @@ export const nodeGetTool: ToolDefinition = {
           'isFile',
           'path',
           'content',
+          'aspectNames',
           'properties',
           'createdAt',
           'modifiedAt',
@@ -56,6 +60,7 @@ export const nodeGetTool: ToolDefinition = {
           'isFile',
           'path',
           'content',
+          'aspectNames',
           'properties',
           'createdAt',
           'modifiedAt',
@@ -70,13 +75,13 @@ export const nodeGetTool: ToolDefinition = {
         data: {
           apiTrace: {
             method: 'GET',
-            path: `/alfresco/api/-default-/public/alfresco/versions/1/nodes/${nodeId}`,
+            path: getAlfrescoNodePath(nodeId),
             request: { query: requestQuery },
             responseBody: result,
           },
           alfrescoNodesApi: {
             method: 'GET',
-            path: `/alfresco/api/-default-/public/alfresco/versions/1/nodes/${nodeId}`,
+            path: getAlfrescoNodePath(nodeId),
             query: requestQuery,
             responseBody: result,
           },
@@ -87,10 +92,13 @@ export const nodeGetTool: ToolDefinition = {
           isFile: e?.isFile,
           path: normalizeNodePath(e?.path?.name),
           mimeType: e?.content?.mimeType ?? null,
+          aspectNames: Array.isArray(e?.aspectNames) ? e.aspectNames : null,
           createdAt: e?.createdAt,
           modifiedAt: e?.modifiedAt,
           createdBy: e?.createdByUser?.displayName ?? e?.createdByUser?.id,
           modifiedBy: e?.modifiedByUser?.displayName ?? e?.modifiedByUser?.id,
+          properties: isRecord(e?.properties) ? e.properties : null,
+          allowableOperations: isRecord(e?.allowableOperations) ? e.allowableOperations : null,
         },
       };
     } catch (err) {

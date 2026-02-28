@@ -840,6 +840,7 @@ export interface AgentChatSummary {
   serverId: number;
   title: string;
   hasActiveRun: boolean;
+  hasWaitingConfirmation: boolean;
   lastMessageAt: Date | null;
   createdAt: Date;
   updatedAt: Date;

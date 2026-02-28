@@ -44,7 +44,6 @@
   "reject": "Afwijzen",
   "confirmForChat": "Bevestig en vertrouw deze chat",
   "autoConfirmActive": "Deze chat is vertrouwd voor bevestigingen.",
-  "autoConfirmOnNext": "Tip: kies \"Bevestig en vertrouw deze chat\" als je niet elke stap wilt bevestigen.",
   "autoConfirmDisableTooltip": "Vertrouwde modus staat aan. Klik om weer elke keer te bevestigen.",
   "autoConfirmEnableTooltip": "Vertrouw deze chat. Volgende bevestigingen worden automatisch goedgekeurd.",
   "toggleAutoConfirm": "Vertrouwde modus voor deze chat schakelen",

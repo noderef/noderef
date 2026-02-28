@@ -3,6 +3,7 @@
  */
 
 import { NodesApi } from '@alfresco/js-api';
+import { getAlfrescoNodeContentPath } from '../../../../lib/alfresco-endpoints.js';
 import type { AgentExecutionContext } from '../../types.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
 
@@ -227,7 +228,7 @@ export const nodeGetContentTool: ToolDefinition = {
           data: {
             apiTrace: {
               method: 'GET',
-              path: `/alfresco/api/-default-/public/alfresco/versions/1/nodes/${nodeId}/content`,
+              path: getAlfrescoNodeContentPath(nodeId),
               request: { query: { attachment: false } },
               responseBody: {
                 skippedTextExtraction: true,
@@ -269,7 +270,7 @@ export const nodeGetContentTool: ToolDefinition = {
         data: {
           apiTrace: {
             method: 'GET',
-            path: `/alfresco/api/-default-/public/alfresco/versions/1/nodes/${nodeId}/content`,
+            path: getAlfrescoNodeContentPath(nodeId),
             request: { query: { attachment: false } },
             responseBody: {
               extractedText: true,

@@ -15,7 +15,7 @@
  */
 
 import { MenuItem as MenuItemType } from '@/types/menu';
-import { Group, Menu, Text, TextInput, UnstyledButton } from '@mantine/core';
+import { Badge, Group, Menu, Text, TextInput, UnstyledButton } from '@mantine/core';
 import { IconEdit, IconTrash } from '@tabler/icons-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -165,25 +165,47 @@ export function MenuItem({
         transition: 'all 150ms ease',
       }}
     >
-      <Group gap="xs" wrap="nowrap">
-        {icon && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 20,
-              height: 20,
-              flexShrink: 0,
-              color: active ? 'var(--submenu-item-active-color)' : 'var(--submenu-item-icon-color)',
-            }}
-          >
-            {icon}
-          </div>
+      <Group gap="xs" wrap="nowrap" justify="space-between">
+        <Group gap="xs" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
+          {icon && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 20,
+                height: 20,
+                flexShrink: 0,
+                color: active ? 'var(--submenu-item-active-color)' : 'var(--submenu-item-icon-color)',
+              }}
+            >
+              {icon}
+            </div>
+          )}
+          <Text size="sm" truncate title={item.label} style={{ flex: 1, minWidth: 0 }}>
+            {item.label}
+          </Text>
+        </Group>
+        {(item.badgeLabel || item.metaLabel) && (
+          <Group gap={6} wrap="nowrap" style={{ flexShrink: 0 }}>
+            {item.badgeLabel && (
+              <Badge
+                size="sm"
+                radius="xl"
+                variant="light"
+                color={item.badgeColor || 'green'}
+                style={{ textTransform: 'none' }}
+              >
+                {item.badgeLabel}
+              </Badge>
+            )}
+            {item.metaLabel && (
+              <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+                {item.metaLabel}
+              </Text>
+            )}
+          </Group>
         )}
-        <Text size="sm" truncate title={item.label} style={{ flex: 1 }}>
-          {item.label}
-        </Text>
       </Group>
     </UnstyledButton>
   );

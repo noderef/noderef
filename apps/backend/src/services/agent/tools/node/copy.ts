@@ -3,6 +3,7 @@
  */
 
 import { NodesApi } from '@alfresco/js-api';
+import { getAlfrescoNodeCopyPath } from '../../../../lib/alfresco-endpoints.js';
 import type { AgentExecutionContext } from '../../types.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
 
@@ -45,7 +46,7 @@ export const nodeCopyTool: ToolDefinition = {
         data: {
           apiTrace: {
             method: 'POST',
-            path: `/alfresco/api/-default-/public/alfresco/versions/1/nodes/${sourceNodeId}/copy`,
+            path: getAlfrescoNodeCopyPath(sourceNodeId),
             request: {
               body: requestBody,
               query: requestQuery,

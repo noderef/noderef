@@ -44,7 +44,6 @@
   "reject": "Rejeter",
   "confirmForChat": "Confirmer et faire confiance a ce chat",
   "autoConfirmActive": "Ce chat est fiable pour les confirmations.",
-  "autoConfirmOnNext": "Astuce : choisis \"Confirmer et faire confiance a ce chat\" si tu ne veux pas confirmer chaque etape.",
   "autoConfirmDisableTooltip": "Le mode de confiance est actif. Clique pour redemander une confirmation a chaque fois.",
   "autoConfirmEnableTooltip": "Fais confiance a ce chat. Les prochaines confirmations seront acceptees automatiquement.",
   "toggleAutoConfirm": "Activer ou desactiver le mode confiance pour ce chat",

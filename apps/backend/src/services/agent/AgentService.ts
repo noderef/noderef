@@ -41,6 +41,7 @@ const log = createLogger('agent.service');
 
 const ACTIVE_RUN_STATUSES = new Set(['queued', 'running', 'waiting_confirmation']);
 const LANGUAGE_CODE_PATTERN = /^[a-z]{2,3}(?:[-_][a-z0-9]{2,8})?$/i;
+const MAX_PROPERTIES_JSON_CHARS = 20_000;
 
 interface SendMessageInput {
   chatId: number;
@@ -77,6 +78,207 @@ function truncateText(value: string, maxChars: number): string {
 
 function inlineCode(value: string): string {
   return `\`${value.replace(/`/g, '\\`')}\``;
+}
+
+function escapeMarkdownLinkLabel(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/\[/g, '\\[').replace(/\]/g, '\\]');
+}
+
+function buildNodeBrowserMarkdownLink(nodeId: string, nodeName?: string): string {
+  const normalizedId = nodeId.trim();
+  const normalizedName = typeof nodeName === 'string' ? nodeName.trim() : '';
+  const label = normalizedName || normalizedId;
+  if (!normalizedId) {
+    return inlineCode(label || 'unknown');
+  }
+
+  const params = new URLSearchParams();
+  if (normalizedName) {
+    params.set('name', normalizedName);
+  }
+  const href = `nodebrowser://node/${encodeURIComponent(normalizedId)}${
+    params.toString() ? `?${params.toString()}` : ''
+  }`;
+
+  return `[${escapeMarkdownLinkLabel(label)}](<${href}>)`;
+}
+
+function humanizeOperation(operation: string): string {
+  return operation.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function getConfirmationActionLabel(step: { summary: string | null; operation: string }): string {
+  const summary = step.summary ? cleanText(step.summary) : '';
+  if (summary) {
+    return truncateText(summary, 180);
+  }
+  return `the ${humanizeOperation(resolveToolName(step.operation))} action`;
+}
+
+function formatValueForInline(value: unknown): string {
+  if (value === null) return 'null';
+  if (value === undefined) return 'undefined';
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length ? truncateText(trimmed, 120) : '""';
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  try {
+    return truncateText(JSON.stringify(value), 120);
+  } catch {
+    return truncateText(String(value), 120);
+  }
+}
+
+function stringifyJsonTruncated(value: unknown, maxChars = MAX_PROPERTIES_JSON_CHARS): string {
+  try {
+    const serialized = JSON.stringify(value, null, 2);
+    if (serialized.length <= maxChars) {
+      return serialized;
+    }
+    return `${serialized.slice(0, maxChars)}\n... [truncated ${serialized.length - maxChars} chars]`;
+  } catch {
+    return String(value);
+  }
+}
+
+function appendPropertiesSection(
+  lines: string[],
+  properties: Record<string, unknown> | null
+): void {
+  if (!properties) {
+    return;
+  }
+
+  const keys = Object.keys(properties);
+  if (!keys.length) {
+    return;
+  }
+
+  const ordered: Record<string, unknown> = {};
+  for (const key of keys.sort((a, b) => a.localeCompare(b))) {
+    ordered[key] = properties[key];
+  }
+
+  lines.push(`- **Properties returned:** ${keys.length}`);
+  lines.push('');
+  lines.push('#### All properties');
+  lines.push('```json');
+  lines.push(stringifyJsonTruncated(ordered));
+  lines.push('```');
+}
+
+function parseJsonRecord(raw: string | null): Record<string, unknown> | null {
+  if (!raw) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function getPreferredModelFromPlan(
+  plan: Record<string, unknown> | null | undefined
+): { provider?: string; model?: string } | undefined {
+  if (!plan) {
+    return undefined;
+  }
+  const provider = typeof plan.provider === 'string' ? plan.provider.trim().toLowerCase() : '';
+  const model = typeof plan.model === 'string' ? plan.model.trim() : '';
+  if (!provider && !model) {
+    return undefined;
+  }
+  return {
+    ...(provider ? { provider } : {}),
+    ...(model ? { model } : {}),
+  };
+}
+
+function getNodeIdFromOutput(output: Record<string, unknown> | undefined): string | null {
+  if (!output) {
+    return null;
+  }
+
+  const directCandidates = [
+    output.nodeId,
+    (output.created as Record<string, unknown> | undefined)?.id,
+    (output.updated as Record<string, unknown> | undefined)?.id,
+    (output.moved as Record<string, unknown> | undefined)?.id,
+    (output.copied as Record<string, unknown> | undefined)?.id,
+    (
+      (output.postActionVerification as Record<string, unknown> | undefined)?.node as
+        | Record<string, unknown>
+        | undefined
+    )?.id,
+  ];
+
+  for (const candidate of directCandidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+  return null;
+}
+
+function getNodeNameFromOutput(output: Record<string, unknown> | undefined): string | null {
+  if (!output) {
+    return null;
+  }
+
+  const directCandidates = [
+    output.name,
+    (output.created as Record<string, unknown> | undefined)?.name,
+    (output.updated as Record<string, unknown> | undefined)?.name,
+    (output.moved as Record<string, unknown> | undefined)?.name,
+    (output.copied as Record<string, unknown> | undefined)?.name,
+    (
+      (output.postActionVerification as Record<string, unknown> | undefined)?.node as
+        | Record<string, unknown>
+        | undefined
+    )?.name,
+  ];
+
+  for (const candidate of directCandidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+  return null;
+}
+
+function buildRemainingTasksHint(
+  originalRequest: string,
+  completedOutput?: Record<string, unknown>
+): string[] {
+  const normalized = originalRequest.toLowerCase();
+  const nodeId = getNodeIdFromOutput(completedOutput);
+  const wantsDelete = /\b(delete|remove|verwijder|verwijderen|supprimer|löschen)\b/.test(
+    normalized
+  );
+  const wantsMetadata =
+    /\b(metadata|properties|property|eigenschappen|propriét|eigenschaft)\b/.test(normalized);
+
+  const tasks: string[] = [];
+  if (wantsMetadata) {
+    tasks.push(
+      nodeId
+        ? `Fetch full node metadata/properties for node ${nodeId} and include the full properties map in the response before any delete step.`
+        : 'Fetch full node metadata/properties for the created/updated target node and include the full properties map in the response before any delete step.'
+    );
+  }
+  if (wantsDelete) {
+    tasks.push(
+      nodeId
+        ? `Delete node ${nodeId} (this should trigger confirmation again if required).`
+        : 'Delete the created/updated target node (this should trigger confirmation again if required).'
+    );
+  }
+  return tasks;
 }
 
 export class AgentService {
@@ -274,21 +476,13 @@ export class AgentService {
       return AppErrors.forbidden('Invalid confirmation token');
     }
 
-    if (
-      resolveToolName(step.operation) === 'node_delete' &&
-      payload.approved &&
-      payload.confirmationText !== 'DELETE'
-    ) {
-      return AppErrors.validationError('Delete confirmation requires typing DELETE');
-    }
-
     const confirmationMessage = await this.repository.createMessage({
       chatId: run.chatId,
       userId,
       role: 'user',
       content: payload.approved
-        ? `Confirmation approved for step ${step.ordinal}: ${payload.confirmationText || 'OK'}`
-        : `Confirmation rejected for step ${step.ordinal}`,
+        ? `Approved: ${getConfirmationActionLabel(step)}.`
+        : `Rejected: ${getConfirmationActionLabel(step)}.`,
       mentions: [],
     });
 
@@ -366,7 +560,7 @@ export class AgentService {
       chatId: run.chatId,
       userId,
       role: 'assistant',
-      content: `Operation "${step.operation}" cancelled by user confirmation.`,
+      content: `Understood. I did not execute ${getConfirmationActionLabel(step)}.`,
       mentions: [],
     });
 
@@ -375,7 +569,12 @@ export class AgentService {
 
   private async approveStep(
     userId: number,
-    run: { id: number; chatId: number; serverId: number },
+    run: {
+      id: number;
+      chatId: number;
+      serverId: number;
+      plan: Record<string, unknown> | null;
+    },
     step: {
       id: number;
       ordinal: number;
@@ -480,16 +679,8 @@ export class AgentService {
       }
 
       await this.repository.updateRun(userId, run.id, {
-        status: 'completed',
-        finishedAt: new Date(),
+        status: 'running',
         error: null,
-      });
-
-      await this.repository.createRunEvent({
-        runId: run.id,
-        type: 'run.completed',
-        level: 'info',
-        payload: { finishedAt: nowIso(), progressMessage: 'Run completed' },
       });
 
       await this.repository.createOperationAudit({
@@ -508,11 +699,33 @@ export class AgentService {
         chatId: run.chatId,
         userId,
         role: 'assistant',
-        content: this.buildConfirmedOperationMessage(canonicalOperation, output),
+        content: this.buildConfirmedOperationMessage(canonicalOperation, output, stepInput),
         mentions: [],
       });
 
-      return { success: true, runStatus: 'completed' };
+      const completedAction = getConfirmationActionLabel(step);
+      const preferredModel = getPreferredModelFromPlan(run.plan);
+      const preferredLanguage = normalizeAppLanguage(
+        typeof run.plan?.appLanguage === 'string' ? run.plan.appLanguage : undefined
+      );
+
+      setImmediate(() => {
+        void this.executeRun(
+          userId,
+          run.id,
+          preferredModel,
+          preferredLanguage,
+          false,
+          { completedAction, completedOutput: output }
+        ).catch(error => {
+          log.error(
+            { err: error, runId: run.id, stepId: step.id },
+            'Continuation after confirmation failed'
+          );
+        });
+      });
+
+      return { success: true, runStatus: 'running' };
     } catch (error) {
       const message = extractErrorMessage(error);
 
@@ -697,7 +910,11 @@ export class AgentService {
     return lines.join('\n');
   }
 
-  private buildConfirmedOperationMessage(operation: string, output: Record<string, unknown>): string {
+  private buildConfirmedOperationMessage(
+    operation: string,
+    output: Record<string, unknown>,
+    stepInput: Record<string, unknown> = {}
+  ): string {
     const operationLabelMap: Record<string, string> = {
       node_create: 'Node created',
       node_update: 'Node updated',
@@ -710,8 +927,102 @@ export class AgentService {
       search: 'Search completed',
       script_execute: 'Script executed',
     };
-    const verification = output.postActionVerification as Record<string, unknown> | undefined;
-    const verifiedNode = verification?.node as Record<string, unknown> | undefined;
+    const verification = isRecord(output.postActionVerification)
+      ? output.postActionVerification
+      : null;
+    const verifiedNode = isRecord(verification?.node)
+      ? (verification.node as Record<string, unknown>)
+      : null;
+    const createdNode = isRecord(output.created) ? output.created : null;
+    const updatedNode = isRecord(output.updated) ? output.updated : null;
+    const movedNode = isRecord(output.moved) ? output.moved : null;
+    const copiedNode = isRecord(output.copied) ? output.copied : null;
+    const directNodeLike =
+      typeof output.id === 'string' || typeof output.name === 'string' || isRecord(output.properties)
+        ? output
+        : null;
+
+    if (operation === 'node_update') {
+      const resultNode = verifiedNode || updatedNode;
+      const updatedName =
+        typeof resultNode?.name === 'string'
+          ? resultNode.name
+          : typeof stepInput.name === 'string'
+            ? stepInput.name
+            : 'unknown';
+      const nodeId =
+        typeof resultNode?.id === 'string'
+          ? resultNode.id
+          : typeof output.nodeId === 'string'
+            ? output.nodeId
+            : '';
+      const nodePath = typeof resultNode?.path === 'string' ? resultNode.path.trim() : '';
+      const nodeType = typeof resultNode?.nodeType === 'string' ? resultNode.nodeType : '';
+      const isFolder = typeof resultNode?.isFolder === 'boolean' ? resultNode.isFolder : null;
+      const isFile = typeof resultNode?.isFile === 'boolean' ? resultNode.isFile : null;
+      const mimeType = typeof resultNode?.mimeType === 'string' ? resultNode.mimeType : '';
+      const modifiedAt = typeof resultNode?.modifiedAt === 'string' ? resultNode.modifiedAt : '';
+      const modifiedBy = typeof resultNode?.modifiedBy === 'string' ? resultNode.modifiedBy : '';
+
+      const lines = [
+        '### Node updated',
+        '',
+        'The node update completed successfully.',
+        '',
+        '- **Node:** ' + buildNodeBrowserMarkdownLink(nodeId, updatedName),
+      ];
+
+      if (nodePath) {
+        lines.push('- **Location:** ' + inlineCode(nodePath));
+      }
+      if (nodeType) {
+        lines.push('- **Type:** ' + inlineCode(nodeType));
+      }
+      if (isFolder !== null || isFile !== null) {
+        lines.push(
+          '- **Kind:** ' +
+            inlineCode(isFolder ? 'folder' : isFile ? 'file' : 'node')
+        );
+      }
+      if (mimeType) {
+        lines.push('- **MIME type:** ' + inlineCode(mimeType));
+      }
+
+      const requestedName = typeof stepInput.name === 'string' ? stepInput.name.trim() : '';
+      if (requestedName) {
+        lines.push('- **Requested name:** ' + inlineCode(requestedName));
+      }
+
+      const requestedProperties = isRecord(stepInput.properties) ? stepInput.properties : null;
+      const returnedProperties = isRecord(resultNode?.properties)
+        ? (resultNode.properties as Record<string, unknown>)
+        : null;
+      if (requestedProperties) {
+        const propertyEntries = Object.keys(requestedProperties).slice(0, 8);
+        if (propertyEntries.length > 0) {
+          const propertyChanges = propertyEntries
+            .map(key => {
+              const finalValue = returnedProperties?.[key] ?? requestedProperties[key];
+              return `${key}=${formatValueForInline(finalValue)}`;
+            })
+            .map(item => inlineCode(item));
+          const suffix =
+            Object.keys(requestedProperties).length > propertyEntries.length
+              ? ` (+${Object.keys(requestedProperties).length - propertyEntries.length} more)`
+              : '';
+          lines.push(`- **Property changes:** ${propertyChanges.join(', ')}${suffix}`);
+        }
+      }
+      if (modifiedAt || modifiedBy) {
+        const modifiedDetails = [modifiedAt, modifiedBy ? `by ${modifiedBy}` : '']
+          .filter(Boolean)
+          .join(' ');
+        lines.push('- **Last modified:** ' + inlineCode(modifiedDetails));
+      }
+      appendPropertiesSection(lines, returnedProperties);
+
+      return lines.join('\n');
+    }
 
     if (operation === 'node_delete') {
       const totalDeleted =
@@ -726,21 +1037,54 @@ export class AgentService {
       return ['### Node deleted', '', 'The delete operation completed successfully.'].join('\n');
     }
 
-    if (verifiedNode) {
-      const name = typeof verifiedNode.name === 'string' ? verifiedNode.name : 'unknown';
-      const id = typeof verifiedNode.id === 'string' ? verifiedNode.id : 'unknown';
-      const path = typeof verifiedNode.path === 'string' ? verifiedNode.path.trim() : '';
+    const resultNode = verifiedNode || createdNode || updatedNode || movedNode || copiedNode || directNodeLike;
+    if (resultNode) {
+      const name = typeof resultNode.name === 'string' ? resultNode.name : 'unknown';
+      const id = typeof resultNode.id === 'string' ? resultNode.id : '';
+      const path = typeof resultNode.path === 'string' ? resultNode.path.trim() : '';
+      const nodeType = typeof resultNode.nodeType === 'string' ? resultNode.nodeType : '';
+      const mimeType = typeof resultNode.mimeType === 'string' ? resultNode.mimeType : '';
+      const createdAt = typeof resultNode.createdAt === 'string' ? resultNode.createdAt : '';
+      const createdBy = typeof resultNode.createdBy === 'string' ? resultNode.createdBy : '';
+      const modifiedAt = typeof resultNode.modifiedAt === 'string' ? resultNode.modifiedAt : '';
+      const modifiedBy = typeof resultNode.modifiedBy === 'string' ? resultNode.modifiedBy : '';
+      const isFolder = typeof resultNode.isFolder === 'boolean' ? resultNode.isFolder : null;
+      const isFile = typeof resultNode.isFile === 'boolean' ? resultNode.isFile : null;
+      const properties = isRecord(resultNode.properties)
+        ? (resultNode.properties as Record<string, unknown>)
+        : null;
       const lines = [
         `### ${operationLabelMap[operation] ?? 'Operation completed'}`,
         '',
         'The operation completed successfully.',
         '',
-        '- **Name:** ' + inlineCode(name),
-        '- **Node ID:** ' + inlineCode(id),
+        '- **Node:** ' + buildNodeBrowserMarkdownLink(id, name),
       ];
       if (path) {
         lines.push('- **Location:** ' + inlineCode(path));
       }
+      if (nodeType) {
+        lines.push('- **Type:** ' + inlineCode(nodeType));
+      }
+      if (isFolder !== null || isFile !== null) {
+        lines.push('- **Kind:** ' + inlineCode(isFolder ? 'folder' : isFile ? 'file' : 'node'));
+      }
+      if (mimeType) {
+        lines.push('- **MIME type:** ' + inlineCode(mimeType));
+      }
+      if (createdAt || createdBy) {
+        const createdDetails = [createdAt, createdBy ? `by ${createdBy}` : '']
+          .filter(Boolean)
+          .join(' ');
+        lines.push('- **Created:** ' + inlineCode(createdDetails));
+      }
+      if (modifiedAt || modifiedBy) {
+        const modifiedDetails = [modifiedAt, modifiedBy ? `by ${modifiedBy}` : '']
+          .filter(Boolean)
+          .join(' ');
+        lines.push('- **Last modified:** ' + inlineCode(modifiedDetails));
+      }
+      appendPropertiesSection(lines, properties);
       return lines.join('\n');
     }
 
@@ -846,12 +1190,128 @@ export class AgentService {
     await emitRunEvent(this.repository, runId, type, level, extra);
   }
 
+  private async buildRunFailureMessage(runId: number, rawError: string): Promise<string> {
+    const steps = await this.prisma.agentRunStep.findMany({
+      where: { runId },
+      orderBy: { ordinal: 'asc' },
+      select: {
+        ordinal: true,
+        operation: true,
+        status: true,
+        summary: true,
+        outputJson: true,
+      },
+    });
+
+    const normalizedError = rawError.trim();
+    const isTimeout = /timed out/i.test(normalizedError);
+    const completedSteps = steps.filter(step => step.status === 'completed');
+    const failedSteps = steps.filter(step => step.status === 'failed');
+
+    let lastKnownTotalCount: number | null = null;
+    for (let index = completedSteps.length - 1; index >= 0; index -= 1) {
+      const output = parseJsonRecord(completedSteps[index].outputJson);
+      if (!output) {
+        continue;
+      }
+      const pagination = isRecord(output.pagination)
+        ? (output.pagination as Record<string, unknown>)
+        : null;
+      const totalCount = pagination?.totalCount;
+      if (typeof totalCount === 'number' && Number.isFinite(totalCount)) {
+        lastKnownTotalCount = totalCount;
+        break;
+      }
+    }
+
+    const lines: string[] = [];
+    lines.push(
+      isTimeout
+        ? "I couldn't finish the final response because the model timed out."
+        : "I couldn't finish the response because the run failed."
+    );
+    lines.push(`- **Reason:** ${inlineCode(truncateText(normalizedError || 'Unknown error', 300))}`);
+
+    if (completedSteps.length > 0) {
+      lines.push(`- **Completed steps before failure:** ${completedSteps.length}`);
+    }
+    if (failedSteps.length > 0) {
+      lines.push(`- **Failed steps:** ${failedSteps.length}`);
+    }
+    if (lastKnownTotalCount !== null) {
+      lines.push(`- **Last known total count:** **${lastKnownTotalCount}**`);
+    }
+
+    if (completedSteps.length > 0) {
+      lines.push('');
+      lines.push('Completed actions:');
+      for (const step of completedSteps.slice(-6)) {
+        const label =
+          (step.summary && cleanText(step.summary)) ||
+          humanizeOperation(resolveToolName(step.operation || 'operation'));
+        lines.push(`- ${label}`);
+      }
+    }
+
+    lines.push('');
+    lines.push(
+      'If you want, ask me to continue from these completed results with a smaller scope (for example a subfolder or max item limit).'
+    );
+
+    return lines.join('\n');
+  }
+
+  private buildContinuationContent(
+    originalRequest: string,
+    completedAction: string,
+    completedOutput?: Record<string, unknown>
+  ): string {
+    const nodeId = getNodeIdFromOutput(completedOutput);
+    const nodeName = getNodeNameFromOutput(completedOutput);
+    const remainingTaskHints = buildRemainingTasksHint(originalRequest, completedOutput);
+    const outputPreview = completedOutput
+      ? truncateText(
+          (() => {
+            try {
+              return JSON.stringify(completedOutput);
+            } catch {
+              return String(completedOutput);
+            }
+          })(),
+          2000
+        )
+      : '';
+
+    return [
+      'Continue the same user request from where you paused.',
+      '',
+      `Original user request: ${originalRequest}`,
+      `Already completed and confirmed: ${completedAction}.`,
+      ...(nodeId ? [`Target node id (if applicable): ${nodeId}`] : []),
+      ...(nodeName ? [`Target node name (if applicable): ${nodeName}`] : []),
+      'You are not done by default after the confirmed step.',
+      'Do not repeat completed actions.',
+      'Execute remaining requested tasks in order. If more actions remain, call tools now.',
+      'When referring to nodes in user-facing text, prefer node name links like [Name](nodebrowser://node/<nodeId>) instead of raw UUID-only references.',
+      ...(remainingTaskHints.length
+        ? ['', 'Remaining tasks to complete now:', ...remainingTaskHints.map(task => `- ${task}`)]
+        : []),
+      ...(outputPreview
+        ? ['', `Result from completed action (JSON): ${outputPreview}`]
+        : []),
+    ].join('\n');
+  }
+
   private async executeRun(
     userId: number,
     runId: number,
     preferredModel?: { provider?: string; model?: string },
     preferredLanguage?: string,
-    autoApproveConfirmations = false
+    autoApproveConfirmations = false,
+    continuation?: {
+      completedAction: string;
+      completedOutput?: Record<string, unknown>;
+    }
   ): Promise<void> {
     const runRow = await this.prisma.agentRun.findFirst({
       where: { id: runId, userId },
@@ -870,12 +1330,18 @@ export class AgentService {
       const runtime = await resolveAiRuntime(userId, preferredModel);
       if (!runtime) throw new Error('No AI provider configured.');
 
-      const content = runRow.triggerMessage.content;
+      const content = continuation
+        ? this.buildContinuationContent(
+            runRow.triggerMessage.content,
+            continuation.completedAction,
+            continuation.completedOutput
+          )
+        : runRow.triggerMessage.content;
       const mentions = parseMentions(runRow.triggerMessage.mentionsJson);
 
       await this.repository.updateRun(userId, runId, {
         status: 'running',
-        startedAt: new Date(),
+        ...(continuation ? {} : { startedAt: new Date() }),
         error: null,
         plan: {
           version: AGENT_MANIFEST_VERSION,
@@ -948,7 +1414,26 @@ export class AgentService {
         });
       }
 
-      if (!cancelled) log.error({ err: error, runId }, 'Agent run failed');
+      if (!cancelled) {
+        const failureContent = await this.buildRunFailureMessage(runId, message).catch(() =>
+          `I couldn't complete the request.\n- **Reason:** ${inlineCode(truncateText(message, 300))}`
+        );
+        await this.repository
+          .createMessage({
+            chatId: runRow.chatId,
+            userId,
+            role: 'assistant',
+            content: failureContent,
+            mentions: [],
+          })
+          .catch(messageError => {
+            log.warn(
+              { err: messageError, runId },
+              'Failed to write assistant failure message after run error'
+            );
+          });
+        log.error({ err: error, runId }, 'Agent run failed');
+      }
     } finally {
       AgentService.runControllers.delete(runId);
     }

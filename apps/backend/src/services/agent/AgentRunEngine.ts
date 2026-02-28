@@ -27,7 +27,7 @@ import {
 import { createLogger } from '../../lib/logger.js';
 import type { AgentRepository } from '../../repositories/agentRepository.js';
 import { emitRunEvent, formatConversationHistory } from './agentUtils.js';
-import { buildConfirmNote, buildDescriptionNote, type ProgressNote } from './progressMessages.js';
+import { buildDescriptionNote, type ProgressNote } from './progressMessages.js';
 import { buildSystemPrompt } from './systemPrompt.js';
 import { getAllToolSchemas, getToolByName, resolveToolName } from './tools/registry.js';
 import type { AgentExecutionContext, ResolvedAiRuntime, RunInput } from './types.js';
@@ -35,19 +35,42 @@ import type { AgentExecutionContext, ResolvedAiRuntime, RunInput } from './types
 const log = createLogger('agent.engine');
 
 const MAX_LOOP_STEPS = 8;
-const CALL_TIMEOUT_MS = 30_000;
+const CALL_TIMEOUT_MS = (() => {
+  const configured = Number(process.env.AGENT_CALL_TIMEOUT_MS);
+  if (Number.isFinite(configured) && configured >= 5_000 && configured <= 300_000) {
+    return Math.floor(configured);
+  }
+  return 60_000;
+})();
 const MAX_TOOL_RESULT_JSON_CHARS_FOR_MODEL = 60_000;
 const MAX_API_TRACE_ENTRIES_PREVIEW = 10;
 const MAX_API_TRACE_RESPONSE_CHARS_FOR_MODEL = 4_000;
+const MAX_SEARCH_SAMPLE_ITEMS_FOR_MODEL = 40;
+const MAX_SEARCH_PROJECTED_ITEMS_FOR_MODEL = 80;
+const MAX_SEARCH_NAMES_FOR_MODEL = 120;
+const MAX_STEP_SUMMARY_CHARS = 180;
 const AVG_CHARS_PER_TOKEN = 4;
 const DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000;
 const CONTEXT_NEAR_LIMIT_RATIO = 0.85;
 const CONTEXT_CRITICAL_LIMIT_RATIO = 0.95;
 const CONTEXT_TARGET_AFTER_COMPACTION_RATIO = 0.75;
 const MAX_COMPACTED_TOOL_RESULT_CHARS = 3_000;
+const SCRIPT_TOOL_NAME = 'script_execute';
 
 const KNOWN_MODEL_CONTEXT_WINDOWS: Array<{ pattern: RegExp; tokens: number }> = [
   { pattern: /claude/i, tokens: 200_000 },
+];
+
+const EXPLICIT_SCRIPT_REQUEST_PATTERNS: RegExp[] = [
+  /\bscript\b/i,
+  /\bjavascript\b/i,
+  /\bjs\s*console\b/i,
+  /\brun\s+(?:a\s+)?script\b/i,
+  /\bexecute\s+(?:a\s+)?script\b/i,
+  /\bskript\b/i,
+  /\bscript uitvoeren\b/i,
+  /\bex[ée]cuter\s+un\s+script\b/i,
+  /\bscript ausf[üu]hren\b/i,
 ];
 
 const withTimeout = <T>(p: Promise<T>, ms: number, label: string): Promise<T> => {
@@ -69,6 +92,129 @@ const toErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : typeof error === 'string' ? error : String(error);
 
 const toTokenEstimate = (text: string): number => Math.ceil(Math.max(text.length, 1) / AVG_CHARS_PER_TOKEN);
+
+const truncateText = (text: string, maxChars: number): string => {
+  if (text.length <= maxChars) {
+    return text;
+  }
+  return `${text.slice(0, maxChars - 3).trimEnd()}...`;
+};
+
+const normalizeSummaryText = (text: string): string =>
+  text
+    .replace(/\s+/g, ' ')
+    .replace(/[`*_#]+/g, '')
+    .trim();
+
+const toNonEmptyString = (value: unknown): string | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+};
+
+const formatOperationLabel = (operation: string): string =>
+  operation
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const buildFallbackStepSummary = (
+  operation: string,
+  args: Record<string, unknown>
+): string => {
+  switch (operation) {
+    case 'node_create': {
+      const name = toNonEmptyString(args.name);
+      const parentId = toNonEmptyString(args.parentId);
+      if (name && parentId) return `Create "${name}" in folder ${parentId}`;
+      if (name) return `Create "${name}"`;
+      return 'Create a new node';
+    }
+    case 'node_update': {
+      const nodeId = toNonEmptyString(args.nodeId);
+      const name = toNonEmptyString(args.name);
+      if (name && nodeId) return `Rename node ${nodeId} to "${name}"`;
+      if (nodeId) return `Update node ${nodeId}`;
+      return 'Update node metadata';
+    }
+    case 'node_update_content': {
+      const nodeId = toNonEmptyString(args.nodeId);
+      if (nodeId) return `Update content for node ${nodeId}`;
+      return 'Update node content';
+    }
+    case 'node_move': {
+      const sourceNodeId = toNonEmptyString(args.sourceNodeId);
+      const targetParentId = toNonEmptyString(args.targetParentId);
+      if (sourceNodeId && targetParentId) {
+        return `Move node ${sourceNodeId} to folder ${targetParentId}`;
+      }
+      return 'Move a node to another folder';
+    }
+    case 'node_copy': {
+      const sourceNodeId = toNonEmptyString(args.sourceNodeId);
+      const targetParentId = toNonEmptyString(args.targetParentId);
+      if (sourceNodeId && targetParentId) {
+        return `Copy node ${sourceNodeId} to folder ${targetParentId}`;
+      }
+      return 'Copy a node to another folder';
+    }
+    case 'node_delete': {
+      const nodeIds = Array.isArray(args.nodeIds)
+        ? args.nodeIds.map(id => String(id).trim()).filter(Boolean)
+        : [];
+      if (nodeIds.length === 1) return `Delete node ${nodeIds[0]}`;
+      if (nodeIds.length > 1) return `Delete ${nodeIds.length} nodes`;
+      return 'Delete node(s)';
+    }
+    case 'script_execute': {
+      const script = toNonEmptyString(args.script);
+      if (script) {
+        const preview = script.split(/\r?\n/).find(line => line.trim()) || script;
+        return `Execute script: ${truncateText(preview.trim(), 90)}`;
+      }
+      return 'Execute a server script';
+    }
+    case 'search': {
+      const query = toNonEmptyString(args.query);
+      if (query) return `Search for "${truncateText(query, 80)}"`;
+      return 'Search the repository';
+    }
+    default:
+      return `Run ${formatOperationLabel(operation)}`;
+  }
+};
+
+const buildStepSummary = ({
+  operation,
+  args,
+  reasoning,
+  callIndex,
+  totalCalls,
+}: {
+  operation: string;
+  args: Record<string, unknown>;
+  reasoning: string | null;
+  callIndex: number;
+  totalCalls: number;
+}): string => {
+  const normalizedReasoning = reasoning ? normalizeSummaryText(reasoning) : '';
+  if (normalizedReasoning && (totalCalls === 1 || callIndex === 0)) {
+    return truncateText(normalizedReasoning, MAX_STEP_SUMMARY_CHARS);
+  }
+
+  const fallback = buildFallbackStepSummary(operation, args);
+  return truncateText(normalizeSummaryText(fallback), MAX_STEP_SUMMARY_CHARS);
+};
+
+const isExplicitScriptExecutionRequested = (content: string): boolean => {
+  const normalized = content.trim();
+  if (!normalized) {
+    return false;
+  }
+  return EXPLICIT_SCRIPT_REQUEST_PATTERNS.some(pattern => pattern.test(normalized));
+};
 
 const toPercent = (value: number): number => Math.max(0, Math.round(value * 10) / 10);
 
@@ -249,6 +395,23 @@ const compactApiTraceResponseBodyForModel = (body: unknown): unknown => {
   }
 };
 
+const compactSearchSampleEntryForModel = (value: unknown): unknown => {
+  if (!isRecord(value)) {
+    return value;
+  }
+
+  return {
+    id: value.id ?? null,
+    name: value.name ?? null,
+    nodeType: value.nodeType ?? null,
+    isFolder: value.isFolder ?? null,
+    isFile: value.isFile ?? null,
+    path: value.path ?? null,
+    mimeType: value.mimeType ?? null,
+    modifiedAt: value.modifiedAt ?? null,
+  };
+};
+
 const compactToolDataForModel = (data: Record<string, unknown>): Record<string, unknown> => {
   let cloned: Record<string, unknown>;
   try {
@@ -259,6 +422,48 @@ const compactToolDataForModel = (data: Record<string, unknown>): Record<string, 
 
   if (isRecord(cloned.apiTrace) && Object.prototype.hasOwnProperty.call(cloned.apiTrace, 'responseBody')) {
     cloned.apiTrace.responseBody = compactApiTraceResponseBodyForModel(cloned.apiTrace.responseBody);
+  }
+  if (
+    isRecord(cloned.alfrescoSearchApi) &&
+    Object.prototype.hasOwnProperty.call(cloned.alfrescoSearchApi, 'responseBody')
+  ) {
+    cloned.alfrescoSearchApi.responseBody = compactApiTraceResponseBodyForModel(
+      cloned.alfrescoSearchApi.responseBody
+    );
+  }
+
+  if (Array.isArray(cloned.sample) && cloned.sample.length > MAX_SEARCH_SAMPLE_ITEMS_FOR_MODEL) {
+    const originalLength = cloned.sample.length;
+    cloned.sample = cloned.sample
+      .slice(0, MAX_SEARCH_SAMPLE_ITEMS_FOR_MODEL)
+      .map(compactSearchSampleEntryForModel);
+    cloned.sampleTruncated = originalLength - MAX_SEARCH_SAMPLE_ITEMS_FOR_MODEL;
+  } else if (Array.isArray(cloned.sample)) {
+    cloned.sample = cloned.sample.map(compactSearchSampleEntryForModel);
+  }
+
+  if (
+    Array.isArray(cloned.projectedItems) &&
+    cloned.projectedItems.length > MAX_SEARCH_PROJECTED_ITEMS_FOR_MODEL
+  ) {
+    const originalLength = cloned.projectedItems.length;
+    cloned.projectedItems = cloned.projectedItems.slice(0, MAX_SEARCH_PROJECTED_ITEMS_FOR_MODEL);
+    cloned.projectedItemsTruncated = originalLength - MAX_SEARCH_PROJECTED_ITEMS_FOR_MODEL;
+  }
+
+  if (Array.isArray(cloned.verifiedNames) && cloned.verifiedNames.length > MAX_SEARCH_NAMES_FOR_MODEL) {
+    const originalLength = cloned.verifiedNames.length;
+    cloned.verifiedNames = cloned.verifiedNames.slice(0, MAX_SEARCH_NAMES_FOR_MODEL);
+    cloned.verifiedNamesTruncated = originalLength - MAX_SEARCH_NAMES_FOR_MODEL;
+  }
+
+  if (
+    Array.isArray(cloned.uniqueVerifiedNames) &&
+    cloned.uniqueVerifiedNames.length > MAX_SEARCH_NAMES_FOR_MODEL
+  ) {
+    const originalLength = cloned.uniqueVerifiedNames.length;
+    cloned.uniqueVerifiedNames = cloned.uniqueVerifiedNames.slice(0, MAX_SEARCH_NAMES_FOR_MODEL);
+    cloned.uniqueVerifiedNamesTruncated = originalLength - MAX_SEARCH_NAMES_FOR_MODEL;
   }
 
   return cloned;
@@ -295,7 +500,11 @@ export class AgentRunEngine {
 
     // ── Build initial message list ─────────────────────────────────────────────
     const systemPrompt = buildSystemPrompt(mentionContext, input.preferredLanguage);
-    const tools = getAllToolSchemas();
+    const allTools = getAllToolSchemas();
+    const allowScriptExecution = isExplicitScriptExecutionRequested(input.content);
+    const tools = allowScriptExecution
+      ? allTools
+      : allTools.filter(schema => resolveToolName(schema.name) !== SCRIPT_TOOL_NAME);
 
     // Inject conversation history as a prior assistant message if available
     const messages: AgentMessageParam[] = [];
@@ -306,7 +515,7 @@ export class AgentRunEngine {
     messages.push({ role: 'user', content: input.content });
 
     // ── Tool-use loop ─────────────────────────────────────────────────────────
-    let stepOrdinal = 0;
+    let stepOrdinal = await this.repository.getMaxRunStepOrdinal(input.runId);
     const contextWindow = resolveModelContextWindow(this.runtime.model);
 
     for (let iteration = 0; iteration < MAX_LOOP_STEPS; iteration++) {
@@ -448,7 +657,7 @@ export class AgentRunEngine {
         is_error?: boolean;
       }> = [];
 
-      for (const call of response.calls) {
+      for (const [callIndex, call] of response.calls.entries()) {
         this.checkAborted();
 
         const tool = getToolByName(call.name);
@@ -464,11 +673,60 @@ export class AgentRunEngine {
           continue;
         }
 
-        const confirmationPhrase = tool.confirmation?.phrase ?? 'CONFIRM';
+        const scriptExecutionBlocked =
+          canonicalOperation === SCRIPT_TOOL_NAME && !allowScriptExecution;
+        if (scriptExecutionBlocked) {
+          const blockedMessage =
+            'Script execution is blocked unless the user explicitly asks to execute a script.';
+          const stepSummary = buildStepSummary({
+            operation: canonicalOperation,
+            args: call.args,
+            reasoning: response.reasoning,
+            callIndex,
+            totalCalls: response.calls.length,
+          });
+
+          stepOrdinal += 1;
+          const step = await this.repository.createRunStep({
+            runId: input.runId,
+            ordinal: stepOrdinal,
+            operation: canonicalOperation,
+            status: 'failed',
+            summary: stepSummary,
+            input: call.args,
+            requiresConfirmation: tool.requiresConfirmation,
+            completedAt: new Date(),
+            output: { error: blockedMessage, policy: 'script_execute_requires_explicit_user_request' },
+          });
+
+          await this.emitEvent(input.runId, 'step.failed', 'warn', {
+            stepId: step.id,
+            operation: canonicalOperation,
+            status: 'failed',
+            output: { error: blockedMessage },
+            error: blockedMessage,
+          });
+
+          toolResultContents.push({
+            type: 'tool_result',
+            tool_use_id: call.id,
+            content: JSON.stringify({ error: blockedMessage }),
+            is_error: true,
+          });
+          continue;
+        }
+
         const autoApproveEnabledForCall = Boolean(
-          input.autoApproveConfirmations && tool.requiresConfirmation && confirmationPhrase !== 'DELETE'
+          input.autoApproveConfirmations && tool.requiresConfirmation
         );
         const requiresManualConfirmation = tool.requiresConfirmation && !autoApproveEnabledForCall;
+        const stepSummary = buildStepSummary({
+          operation: canonicalOperation,
+          args: call.args,
+          reasoning: response.reasoning,
+          callIndex,
+          totalCalls: response.calls.length,
+        });
 
         stepOrdinal += 1;
         const step = await this.repository.createRunStep({
@@ -476,7 +734,7 @@ export class AgentRunEngine {
           ordinal: stepOrdinal,
           operation: canonicalOperation,
           status: requiresManualConfirmation ? 'waiting_confirmation' : 'running',
-          summary: `${canonicalOperation}`,
+          summary: stepSummary,
           input: call.args,
           requiresConfirmation: tool.requiresConfirmation,
         });
@@ -495,19 +753,12 @@ export class AgentRunEngine {
           await this.repository.updateRun(input.userId, input.runId, {
             status: 'waiting_confirmation',
           });
-          await this.emitNote(input.runId, buildConfirmNote(canonicalOperation));
           await this.emitEvent(input.runId, 'step.waiting_confirmation', 'warn', {
             stepId: step.id,
             confirmationToken: token,
             operation: canonicalOperation,
+            summary: stepSummary,
             output: { args: call.args },
-          });
-          await this.repository.createMessage({
-            chatId: input.chatId,
-            userId: input.userId,
-            role: 'assistant',
-            content: `Confirmation required before executing \`${call.name}\`.\nType **${confirmationPhrase}** to proceed.`,
-            mentions: [],
           });
           await this.repository.createOperationAudit({
             runId: input.runId,
@@ -516,7 +767,7 @@ export class AgentRunEngine {
             serverId: input.serverId,
             operation: canonicalOperation,
             action: 'requested',
-            targetSummary: canonicalOperation,
+            targetSummary: stepSummary,
             requestMessageId: input.triggerMessageId,
           });
           return; // halts — resumed by AgentService.approveStep

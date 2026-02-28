@@ -84,6 +84,38 @@ const setPersistedSectionOpened = (serverId: number | null, sectionId: string, o
   }
 };
 
+const formatElapsedCompact = (date: Date | string | null | undefined): string => {
+  if (!date) {
+    return '';
+  }
+
+  const target = date instanceof Date ? date : new Date(date);
+  const timestamp = target.getTime();
+  if (Number.isNaN(timestamp)) {
+    return '';
+  }
+
+  const diffMs = Date.now() - timestamp;
+  if (diffMs <= 0) {
+    return '0 m';
+  }
+
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  const week = 7 * day;
+  const month = 30 * day;
+  const year = 365 * day;
+
+  if (diffMs < minute) return '0 m';
+  if (diffMs < hour) return `${Math.floor(diffMs / minute)} m`;
+  if (diffMs < day) return `${Math.floor(diffMs / hour)} h`;
+  if (diffMs < week) return `${Math.floor(diffMs / day)} d`;
+  if (diffMs < month) return `${Math.floor(diffMs / week)} w`;
+  if (diffMs < year) return `${Math.floor(diffMs / month)} mo`;
+  return `${Math.floor(diffMs / year)} y`;
+};
+
 export function SimpleMenuNavigation() {
   const { t } = useTranslation(['submenu', 'addServer']);
   const { activeServerId, activePage, navigate, setActiveServer } = useNavigation();
@@ -437,6 +469,9 @@ export function SimpleMenuNavigation() {
       label: chat.title,
       icon: chat.hasActiveRun ? 'loading' : 'hash',
       viewMode: 'monaco' as const,
+      badgeLabel: chat.hasWaitingConfirmation ? t('submenu:waitingApproval') : undefined,
+      badgeColor: 'green',
+      metaLabel: formatElapsedCompact(chat.lastMessageAt || chat.updatedAt),
     }));
 
     const persistedOpened = getPersistedSectionOpened(activeServerId, 'agent-main');

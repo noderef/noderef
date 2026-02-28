@@ -25,6 +25,9 @@ export interface MenuItem {
   viewMode: 'monaco' | 'webview';
   content?: string;
   url?: string;
+  badgeLabel?: string;
+  badgeColor?: string;
+  metaLabel?: string;
 }
 
 export interface MenuSection {

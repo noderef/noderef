@@ -23,8 +23,8 @@ const note = (text: string): ProgressNote => ({ type: 'run.note', payload: { tex
 
 export const buildDescriptionNote = (description: string): ProgressNote => note(description);
 
-export const buildConfirmNote = (actionId: string): ProgressNote =>
-  note(`Awaiting confirmation for ${actionId}…`);
+export const buildConfirmNote = (actionSummary: string): ProgressNote =>
+  note(`Awaiting confirmation: ${actionSummary}`);
 
 export const buildCompletionNote = (success: boolean): ProgressNote =>
   note(success ? 'Done.' : 'Completed with errors.');

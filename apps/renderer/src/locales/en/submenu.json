@@ -14,6 +14,7 @@
   "system": "System",
   "search": "Search",
   "agentPage": "Agent",
+  "waitingApproval": "Awaiting approval",
   "jsConsole": "JavaScript Console",
   "textEditor": "Text Editor",
   "repoAdmin": "Repository Admin",

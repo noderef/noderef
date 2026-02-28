@@ -36,6 +36,7 @@ export interface AgentChatSummary {
   serverId: number;
   title: string;
   hasActiveRun: boolean;
+  hasWaitingConfirmation: boolean;
   lastMessageAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -173,13 +174,17 @@ const safeMentionsParse = (raw: string | null): AgentMention[] => {
 export class AgentRepository {
   constructor(private prisma: PrismaClient) {}
 
-  private toChatDTO(chat: PrismaAgentChat, hasActiveRun = false): AgentChatSummary {
+  private toChatDTO(
+    chat: PrismaAgentChat,
+    flags?: { hasActiveRun?: boolean; hasWaitingConfirmation?: boolean }
+  ): AgentChatSummary {
     return {
       id: chat.id,
       userId: chat.userId,
       serverId: chat.serverId,
       title: chat.title,
-      hasActiveRun,
+      hasActiveRun: Boolean(flags?.hasActiveRun),
+      hasWaitingConfirmation: Boolean(flags?.hasWaitingConfirmation),
       lastMessageAt: chat.lastMessageAt,
       createdAt: chat.createdAt,
       updatedAt: chat.updatedAt,
@@ -288,9 +293,10 @@ export class AgentRepository {
     ]);
 
     let activeChatIds = new Set<number>();
+    let waitingConfirmationChatIds = new Set<number>();
     if (rows.length > 0) {
       const activeRunGroups = await this.prisma.agentRun.groupBy({
-        by: ['chatId'],
+        by: ['chatId', 'status'],
         where: {
           userId,
           chatId: { in: rows.map(row => row.id) },
@@ -298,10 +304,20 @@ export class AgentRepository {
         },
       });
       activeChatIds = new Set(activeRunGroups.map(group => group.chatId));
+      waitingConfirmationChatIds = new Set(
+        activeRunGroups
+          .filter(group => group.status === 'waiting_confirmation')
+          .map(group => group.chatId)
+      );
     }
 
     return {
-      items: rows.map(row => this.toChatDTO(row, activeChatIds.has(row.id))),
+      items: rows.map(row =>
+        this.toChatDTO(row, {
+          hasActiveRun: activeChatIds.has(row.id),
+          hasWaitingConfirmation: waitingConfirmationChatIds.has(row.id),
+        })
+      ),
       totalItems,
     };
   }
@@ -560,6 +576,15 @@ export class AgentRepository {
     });
 
     return this.toRunStepDTO(row);
+  }
+
+  async getMaxRunStepOrdinal(runId: number): Promise<number> {
+    const row = await this.prisma.agentRunStep.findFirst({
+      where: { runId },
+      orderBy: { ordinal: 'desc' },
+      select: { ordinal: true },
+    });
+    return row?.ordinal ?? 0;
   }
 
   async findRunStep(userId: number, runId: number, stepId: number): Promise<AgentRunStep | null> {

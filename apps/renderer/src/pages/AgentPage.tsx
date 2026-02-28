@@ -24,6 +24,7 @@ import {
   type AgentRunSummary,
 } from '@/core/ipc/backend';
 import { useAgentStore } from '@/core/store/agent';
+import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
 import { useServersStore } from '@/core/store/servers';
 import { useUIStore } from '@/core/store/ui';
 import { useNavigation } from '@/hooks/useNavigation';
@@ -61,6 +62,28 @@ import { AgentChatInput, AgentChatInputRef } from '../components/agent/AgentChat
 
 const ACTIVE_RUN_STATUSES = new Set(['queued', 'running', 'waiting_confirmation']);
 const THREAD_AUTO_CONFIRM_ACCEPT_PATTERN = /^\s*(i accept|ik accepteer)\s*[.!]*\s*$/i;
+const NODE_BROWSER_LINK_PROTOCOL = 'nodebrowser:';
+const NODE_BROWSER_LINK_HOST = 'node';
+
+const parseNodeBrowserLink = (href: string): { nodeId: string; nodeName: string | null } | null => {
+  try {
+    const parsed = new URL(href);
+    if (parsed.protocol !== NODE_BROWSER_LINK_PROTOCOL || parsed.hostname !== NODE_BROWSER_LINK_HOST) {
+      return null;
+    }
+
+    const nodeId = decodeURIComponent(parsed.pathname.replace(/^\/+/, '').trim());
+    if (!nodeId) {
+      return null;
+    }
+
+    const nodeNameRaw = parsed.searchParams.get('name');
+    const nodeName = nodeNameRaw && nodeNameRaw.trim() ? nodeNameRaw.trim() : null;
+    return { nodeId, nodeName };
+  } catch {
+    return null;
+  }
+};
 
 const escapeHtml = (value: string): string =>
   value
@@ -120,7 +143,7 @@ const detectCodeLanguageFromContent = (code: string): string => {
     return 'yaml';
   }
 
-  if (/^\s*#\!\/bin\/(ba)?sh/m.test(sample) || /\b(?:echo|fi|done|esac)\b/.test(sample)) {
+  if (/^\s*#!\/bin\/(ba)?sh/m.test(sample) || /\b(?:echo|fi|done|esac)\b/.test(sample)) {
     return 'bash';
   }
 
@@ -509,13 +532,19 @@ interface RunActivityItem {
   operation?: string;
 }
 
+const humanizeOperation = (operation: string): string =>
+  operation
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
 const EXECUTION_EVENT_KEYS: Record<string, string> = {
   'step.completed': 'stepCompleted',
   'step.failed': 'stepFailed',
   'step.waiting_confirmation': 'stepAwaitingConfirmation',
   'step.confirmed': 'stepConfirmed',
   'step.rejected': 'stepRejected',
-  'run.failed': 'runFailed',
+  'run.failed': 'stepFailed',
 };
 
 const SKIP_EVENT_TYPES = new Set([
@@ -704,11 +733,16 @@ const formatEventDetail = (event: AgentRunEvent): string | null => {
 
   if (event.type === 'step.waiting_confirmation') {
     const args = (payload.output as Record<string, unknown> | undefined)?.args;
+    const summary =
+      typeof payload.summary === 'string' && payload.summary.trim()
+        ? payload.summary.trim()
+        : typeof payload.operation === 'string'
+          ? humanizeOperation(payload.operation)
+          : null;
     return buildMarkdownDetail(
       [
         '**Status:** awaiting confirmation',
-        `**Operation:** ${typeof payload.operation === 'string' ? payload.operation : 'unknown'}`,
-        ...(typeof payload.summary === 'string' ? [`**Details:** ${payload.summary}`] : []),
+        `**Action:** ${summary || 'unknown'}`,
       ],
       args ? [{ title: 'Arguments', value: args }] : []
     );
@@ -746,7 +780,12 @@ const buildRunActivity = (events: AgentRunEvent[]): RunActivityItem[] => {
     const label = key ? `__i18n:${key}` : event.type;
     const detail = formatEventDetail(event);
     const level = event.level === 'error' ? 'error' : event.level === 'warn' ? 'warn' : 'info';
-    const operation = typeof event.payload?.operation === 'string' ? event.payload.operation : undefined;
+    const operation =
+      typeof event.payload?.summary === 'string' && event.payload.summary.trim()
+        ? event.payload.summary.trim()
+        : typeof event.payload?.operation === 'string'
+          ? humanizeOperation(event.payload.operation)
+          : undefined;
     items.push({ kind: 'execution', label, detail, level, operation });
   }
 
@@ -755,9 +794,10 @@ const buildRunActivity = (events: AgentRunEvent[]): RunActivityItem[] => {
 
 export function AgentPage() {
   const { t } = useTranslation('agent');
-  const { activePage, activeServerId } = useNavigation();
+  const { activePage, activeServerId, navigate } = useNavigation();
   const servers = useServersStore(state => state.servers);
   const appLanguage = useUIStore(state => state.language);
+  const openNodeTab = useNodeBrowserTabsStore(state => state.openTab);
 
   const chats = useAgentStore(state => state.chats);
   const activeChatId = useAgentStore(state => state.activeChatId);
@@ -1463,6 +1503,48 @@ export function AgentPage() {
     }
   };
 
+  const handleAgentMarkdownClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+
+      const anchor = target.closest('a');
+      if (!(anchor instanceof HTMLAnchorElement)) {
+        return;
+      }
+
+      const link =
+        parseNodeBrowserLink(anchor.getAttribute('href') || '') ||
+        parseNodeBrowserLink(anchor.href);
+      if (!link) {
+        return;
+      }
+
+      event.preventDefault();
+
+      const serverId = activeChat?.serverId || activeServerId;
+      if (!serverId) {
+        notifications.show({
+          title: t('errors.generic'),
+          message: t('errors.serverRequiredMessage'),
+          color: 'red',
+        });
+        return;
+      }
+
+      const fallbackName = anchor.textContent?.trim() || null;
+      openNodeTab({
+        nodeId: link.nodeId,
+        nodeName: link.nodeName || fallbackName || link.nodeId,
+        serverId,
+      });
+      navigate('node-browser');
+    },
+    [activeChat?.serverId, activeServerId, navigate, openNodeTab, t]
+  );
+
   return (
     <Box
       style={{
@@ -1484,6 +1566,7 @@ export function AgentPage() {
       >
         <Box
           ref={conversationViewportRef}
+          onClick={handleAgentMarkdownClick}
           style={{
             minHeight: 0,
             height: '100%',
@@ -1533,20 +1616,15 @@ export function AgentPage() {
                               const translatedLabel = step.label.startsWith('__i18n:')
                                 ? t(step.label.replace('__i18n:', ''))
                                 : step.label;
-                              const accordionLabel = step.operation
-                                ? `${translatedLabel} (${step.operation})`
-                                : translatedLabel;
 
                               return (
                                 <StepDetailAccordion
                                   key={idx}
-                                  label={accordionLabel}
+                                  label={translatedLabel}
                                   color={
                                     step.level === 'error'
                                       ? 'red'
-                                      : step.level === 'warn'
-                                        ? 'orange'
-                                        : 'var(--mantine-color-text)'
+                                      : 'var(--mantine-color-text)'
                                   }
                                   detail={step.detail}
                                 />
@@ -1557,15 +1635,12 @@ export function AgentPage() {
                               const translatedLabel = step.label.startsWith('__i18n:')
                                 ? t(step.label.replace('__i18n:', ''))
                                 : step.label;
-                              const accordionLabel = step.operation
-                                ? `${translatedLabel} (${step.operation})`
-                                : translatedLabel;
 
                               if (step.detail) {
                                 return (
                                   <StepDetailAccordion
                                     key={idx}
-                                    label={accordionLabel}
+                                    label={translatedLabel}
                                     color="red"
                                     detail={step.detail}
                                   />
@@ -1767,9 +1842,9 @@ export function AgentPage() {
                     </Button>
                   ) : null}
                 </Group>
-                {activeChatId ? (
+                {activeChatId && autoConfirmForActiveChat ? (
                   <Text size="xs" c="dimmed">
-                    {autoConfirmForActiveChat ? t('autoConfirmActive') : t('autoConfirmOnNext')}
+                    {t('autoConfirmActive')}
                   </Text>
                 ) : null}
               </Stack>

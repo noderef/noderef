@@ -3,28 +3,23 @@
  */
 
 import { NodesApi } from '@alfresco/js-api';
+import {
+  getAlfrescoNodeChildrenPath,
+  getAlfrescoNodeContentPath,
+  getAlfrescoNodePath,
+} from '../../../../lib/alfresco-endpoints.js';
 import type { AgentExecutionContext } from '../../types.js';
+import {
+  buildContentRequestPreview,
+  extractContentCandidate,
+  normalizeContentArg,
+} from './contentNormalization.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
 
 const normalizeNodePath = (p: string | undefined): string | null =>
   p?.trim().length ? p.trim() : null;
 
-const CREATE_NODE_API_PATH_TEMPLATE = '/alfresco/api/-default-/public/alfresco/versions/1/nodes/{parentId}/children';
-const GET_NODE_API_PATH_TEMPLATE = '/alfresco/api/-default-/public/alfresco/versions/1/nodes/{nodeId}';
-const UPDATE_CONTENT_API_PATH_TEMPLATE = '/alfresco/api/-default-/public/alfresco/versions/1/nodes/{nodeId}/content';
 const MAX_TRACE_CONTENT_CHARS = 4000;
-
-function buildContentRequestPreview(content: string): Record<string, unknown> {
-  if (content.length <= MAX_TRACE_CONTENT_CHARS) {
-    return { content, chars: content.length, truncated: false };
-  }
-  return {
-    contentPreview: content.slice(0, MAX_TRACE_CONTENT_CHARS),
-    chars: content.length,
-    truncated: true,
-    truncatedChars: content.length - MAX_TRACE_CONTENT_CHARS,
-  };
-}
 
 export const nodeCreateTool: ToolDefinition = {
   name: 'node_create',
@@ -48,9 +43,9 @@ export const nodeCreateTool: ToolDefinition = {
         description: 'If true, Alfresco will auto-rename on name collisions.',
       },
       content: {
-        type: 'string',
+        oneOf: [{ type: 'string' }, { type: 'array' }, { type: 'object' }],
         description:
-          'Optional initial text content. The tool first creates the node and then updates content via PUT /nodes/{id}/content.',
+          'Optional initial node content. Prefer string, but arrays/objects are accepted and serialized to text. The tool first creates the node and then updates content via PUT /nodes/{id}/content.',
       },
     },
     required: ['parentId', 'name'],
@@ -72,11 +67,18 @@ export const nodeCreateTool: ToolDefinition = {
           ? (args.properties as Record<string, unknown>)
           : undefined;
       const autoRename = Boolean(args.autoRename);
-      const contentProvided = Object.prototype.hasOwnProperty.call(args, 'content');
-      if (contentProvided && typeof args.content !== 'string') {
-        return { ok: false, error: 'content must be a string when provided' };
+      const contentCandidate = extractContentCandidate(args);
+      const contentProvided = Boolean(contentCandidate);
+      const normalizedContent = contentCandidate
+        ? normalizeContentArg(contentCandidate.value, contentCandidate.sourceType)
+        : null;
+      if (contentProvided && !normalizedContent) {
+        return {
+          ok: false,
+          error: 'content must be serializable when provided',
+        };
       }
-      const content = typeof args.content === 'string' ? args.content : null;
+      const content = normalizedContent?.content ?? null;
       if (contentProvided && nodeType === 'cm:folder') {
         return { ok: false, error: 'content cannot be provided when creating a folder (cm:folder)' };
       }
@@ -130,25 +132,27 @@ export const nodeCreateTool: ToolDefinition = {
             ? {
                 method: 'POST+PUT',
                 path: [
-                  CREATE_NODE_API_PATH_TEMPLATE.replace('{parentId}', parentId),
-                  UPDATE_CONTENT_API_PATH_TEMPLATE.replace('{nodeId}', createdId || '{nodeId}'),
+                  getAlfrescoNodeChildrenPath(parentId),
+                  getAlfrescoNodeContentPath(createdId || '{nodeId}'),
                 ],
                 steps: [
                   {
                     method: 'POST',
-                    path: CREATE_NODE_API_PATH_TEMPLATE.replace('{parentId}', parentId),
+                    path: getAlfrescoNodeChildrenPath(parentId),
                     request: { body: requestBody, query: requestQuery },
                     responseBody: createResult,
                   },
                   {
                     method: 'PUT',
-                    path: UPDATE_CONTENT_API_PATH_TEMPLATE.replace('{nodeId}', createdId || '{nodeId}'),
-                    request: { body: buildContentRequestPreview(content ?? '') },
+                    path: getAlfrescoNodeContentPath(createdId || '{nodeId}'),
+                    request: {
+                      body: buildContentRequestPreview(content ?? '', MAX_TRACE_CONTENT_CHARS),
+                    },
                     responseBody: updateContentResult,
                   },
                   {
                     method: 'GET',
-                    path: GET_NODE_API_PATH_TEMPLATE.replace('{nodeId}', createdId || '{nodeId}'),
+                    path: getAlfrescoNodePath(createdId || '{nodeId}'),
                     request: {
                       query: {
                         fields: ['id', 'name', 'nodeType', 'isFolder', 'isFile', 'path', 'content', 'properties'],
@@ -160,7 +164,9 @@ export const nodeCreateTool: ToolDefinition = {
                 ],
                 request: {
                   create: { body: requestBody, query: requestQuery },
-                  updateContent: { body: buildContentRequestPreview(content ?? '') },
+                  updateContent: {
+                    body: buildContentRequestPreview(content ?? '', MAX_TRACE_CONTENT_CHARS),
+                  },
                 },
                 responseBody: {
                   create: createResult,
@@ -170,7 +176,7 @@ export const nodeCreateTool: ToolDefinition = {
               }
             : {
                 method: 'POST',
-                path: CREATE_NODE_API_PATH_TEMPLATE.replace('{parentId}', parentId),
+                path: getAlfrescoNodeChildrenPath(parentId),
                 request: { body: requestBody, query: requestQuery },
                 responseBody: createResult,
               },
@@ -188,6 +194,8 @@ export const nodeCreateTool: ToolDefinition = {
           autoRename,
           contentUpdated: contentProvided,
           contentChars: contentProvided ? (content ?? '').length : 0,
+          contentSourceType: normalizedContent?.sourceType ?? null,
+          contentTransformed: normalizedContent?.transformed ?? false,
         },
       };
     } catch (err) {

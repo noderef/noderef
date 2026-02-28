@@ -22,6 +22,8 @@ import type { AlfrescoApi } from '@alfresco/js-api';
 import { NodesApi } from '@alfresco/js-api';
 import axios from 'axios';
 import type { RequestHandler } from 'express';
+import { getAlfrescoNodeContentPath } from '../lib/alfresco-endpoints.js';
+import { normalizeBaseUrl } from '../lib/alfresco-url.js';
 import { sendAppError } from '../lib/errorHandler.js';
 import { log } from '../lib/logger.js';
 import { getPrismaClient } from '../lib/prisma.js';
@@ -98,7 +100,7 @@ async function handleNodeContentDownload(
     // Build URL: /alfresco/api/-default-/public/alfresco/versions/1/nodes/{nodeId}/content;{property}
     const apiClient = authenticatedApi.contentClient;
     const basePath = apiClient.basePath || baseUrl;
-    const contentUrl = `${basePath}/alfresco/api/-default-/public/alfresco/versions/1/nodes/${nodeId}/content;${property}`;
+    const contentUrl = `${normalizeBaseUrl(basePath)}${getAlfrescoNodeContentPath(nodeId, property)}`;
 
     // Make direct HTTP request with authentication
     const response = await fetch(contentUrl, {

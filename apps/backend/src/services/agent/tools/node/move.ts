@@ -3,6 +3,7 @@
  */
 
 import { NodesApi } from '@alfresco/js-api';
+import { getAlfrescoNodeMovePath } from '../../../../lib/alfresco-endpoints.js';
 import type { AgentExecutionContext } from '../../types.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
 
@@ -45,7 +46,7 @@ export const nodeMoveTool: ToolDefinition = {
         data: {
           apiTrace: {
             method: 'POST',
-            path: `/alfresco/api/-default-/public/alfresco/versions/1/nodes/${sourceNodeId}/move`,
+            path: getAlfrescoNodeMovePath(sourceNodeId),
             request: {
               body: requestBody,
               query: requestQuery,

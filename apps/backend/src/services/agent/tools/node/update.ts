@@ -3,6 +3,7 @@
  */
 
 import { NodesApi } from '@alfresco/js-api';
+import { getAlfrescoNodePath } from '../../../../lib/alfresco-endpoints.js';
 import type { AgentExecutionContext } from '../../types.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
 
@@ -63,7 +64,7 @@ export const nodeUpdateTool: ToolDefinition = {
         data: {
           apiTrace: {
             method: 'PUT',
-            path: `/alfresco/api/-default-/public/alfresco/versions/1/nodes/${nodeId}`,
+            path: getAlfrescoNodePath(nodeId),
             request: { body: requestBody, query: requestQuery },
             responseBody: result,
           },
@@ -85,4 +86,3 @@ export const nodeUpdateTool: ToolDefinition = {
     }
   },
 };
-
