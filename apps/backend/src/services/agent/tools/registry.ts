@@ -10,9 +10,11 @@ import { nodeCopyTool } from './node/copy.js';
 import { nodeCreateTool } from './node/create.js';
 import { nodeDeleteTool } from './node/delete.js';
 import { nodeGetTool } from './node/get.js';
+import { nodeGetContentTool } from './node/get_content.js';
 import { nodeListChildrenTool } from './node/list_children.js';
 import { nodeMoveTool } from './node/move.js';
 import { nodeUpdateTool } from './node/update.js';
+import { nodeUpdateContentTool } from './node/update_content.js';
 import { searchTool } from './search/query.js';
 import { scriptExecuteTool } from './script/execute.js';
 import type { ToolDefinition } from './types.js';
@@ -24,9 +26,11 @@ export type { ToolDefinition };
 export const ALL_TOOLS: ToolDefinition[] = [
   searchTool,
   nodeGetTool,
+  nodeGetContentTool,
   nodeListChildrenTool,
   nodeCreateTool,
   nodeUpdateTool,
+  nodeUpdateContentTool,
   nodeMoveTool,
   nodeCopyTool,
   nodeDeleteTool,
@@ -37,6 +41,8 @@ const toolMap = new Map<string, ToolDefinition>(ALL_TOOLS.map(t => [t.name, t]))
 
 const TOOL_NAME_ALIASES: Record<string, string> = {
   get_node: 'node_get',
+  get_content: 'node_get_content',
+  update_content: 'node_update_content',
   get_children: 'node_list_children',
   move_node: 'node_move',
   copy_node: 'node_copy',

@@ -25,6 +25,7 @@ import { create } from 'zustand';
 interface AgentState {
   chats: AgentChatSummary[];
   activeChatId: number | null;
+  autoConfirmByChat: Record<number, boolean>;
   messagesByChat: Record<number, AgentMessage[]>;
   runsByChat: Record<number, AgentRunSummary[]>;
   eventsByRun: Record<number, AgentRunEvent[]>;
@@ -32,6 +33,7 @@ interface AgentState {
   upsertChat: (chat: AgentChatSummary) => void;
   removeChat: (chatId: number) => void;
   setActiveChatId: (chatId: number | null) => void;
+  setChatAutoConfirm: (chatId: number, enabled: boolean) => void;
   setMessages: (chatId: number, messages: AgentMessage[]) => void;
   addMessage: (chatId: number, message: AgentMessage) => void;
   setRuns: (chatId: number, runs: AgentRunSummary[]) => void;
@@ -55,6 +57,7 @@ const sortChats = (items: AgentChatSummary[]): AgentChatSummary[] =>
 export const useAgentStore = create<AgentState>(set => ({
   chats: [],
   activeChatId: null,
+  autoConfirmByChat: {},
   messagesByChat: {},
   runsByChat: {},
   eventsByRun: {},
@@ -93,6 +96,7 @@ export const useAgentStore = create<AgentState>(set => ({
       const chats = state.chats.filter(chat => chat.id !== chatId);
       const { [chatId]: _messagesToRemove, ...messagesByChat } = state.messagesByChat;
       const { [chatId]: _runsToRemove, ...runsByChat } = state.runsByChat;
+      const { [chatId]: _autoConfirmToRemove, ...autoConfirmByChat } = state.autoConfirmByChat;
 
       const runIdsToRemove = new Set((state.runsByChat[chatId] || []).map(run => run.id));
       const eventsByRun = Object.fromEntries(
@@ -102,6 +106,7 @@ export const useAgentStore = create<AgentState>(set => ({
       return {
         chats,
         activeChatId: state.activeChatId === chatId ? (chats[0]?.id ?? null) : state.activeChatId,
+        autoConfirmByChat,
         messagesByChat,
         runsByChat,
         eventsByRun,
@@ -110,6 +115,15 @@ export const useAgentStore = create<AgentState>(set => ({
   },
 
   setActiveChatId: chatId => set({ activeChatId: chatId }),
+
+  setChatAutoConfirm: (chatId, enabled) => {
+    set(state => ({
+      autoConfirmByChat: {
+        ...state.autoConfirmByChat,
+        [chatId]: enabled,
+      },
+    }));
+  },
 
   setMessages: (chatId, messages) => {
     set(state => ({
@@ -196,6 +210,7 @@ export const useAgentStore = create<AgentState>(set => ({
     set({
       chats: [],
       activeChatId: null,
+      autoConfirmByChat: {},
       messagesByChat: {},
       runsByChat: {},
       eventsByRun: {},

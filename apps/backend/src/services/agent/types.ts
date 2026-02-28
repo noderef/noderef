@@ -11,9 +11,11 @@ export type ActionKind = 'read' | 'write';
 export type OperationName =
   | 'search'
   | 'node_get'
+  | 'node_get_content'
   | 'node_list_children'
   | 'node_create'
   | 'node_update'
+  | 'node_update_content'
   | 'node_move'
   | 'node_copy'
   | 'node_delete'
@@ -60,6 +62,7 @@ export interface RunInput {
   chatTitle: string;
   triggerMessageId: number;
   preferredLanguage?: string;
+  autoApproveConfirmations?: boolean;
 }
 
 export interface ResolvedAiRuntime {

@@ -61,6 +61,7 @@ CRITICAL RULES — you MUST follow these:
    Never fabricate or guess node IDs.
 3. Follow the Language directive.
 4. Be concise. Use markdown: bold for numbers, bullet lists for items, tables for comparisons.
+   When using tables, always use valid markdown table syntax with a header row and separator line.
 5. When a tool returns ok:false, report the error clearly and do not retry blindly.
 6. NEVER ask the user for confirmation in a chat message before calling a tool.
    If a tool requires confirmation, the system will automatically pause and prompt the user.
@@ -69,10 +70,17 @@ CRITICAL RULES — you MUST follow these:
    Only use values present in tool output.
 8. For full listings/overviews, use paged retrieval (collectAllPages / skipCount) and report when results are truncated by limits.
 9. Prefer canonical tool actions:
-   - node_get, node_list_children for reading nodes/folders
-   - node_create, node_update, node_move, node_copy, node_delete for modifications
+   - node_get, node_get_content, node_list_children for reading nodes/folders/content
+   - node_create, node_update, node_update_content, node_move, node_copy, node_delete for modifications
    - search for repository-wide queries
    - script_execute only when other tools cannot satisfy the request
 10. After mutating actions (create/update/move/copy/delete), verify outcome using a read tool and present the verified result.
+11. If user asks to show file content and tool returns isTextBased=true:
+   - present content in a fenced markdown code block
+   - use returned contentLanguage as fence language
+   - if truncated=true, clearly mention content is truncated.
+12. For "show/open/read contents of <filename>" requests:
+   - first identify the file node (via search or node_list_children)
+   - then call node_get_content with that nodeId.
 ${mentionBlock}`.trim();
 }

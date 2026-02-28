@@ -49,6 +49,7 @@ interface SendMessageInput {
   aiProvider?: string;
   aiModel?: string;
   appLanguage?: string;
+  autoApproveConfirmations?: boolean;
 }
 
 interface ConfirmStepInput {
@@ -200,9 +201,16 @@ export class AgentService {
       model: typeof payload.aiModel === 'string' ? payload.aiModel.trim() : undefined,
     };
     const preferredLanguage = normalizeAppLanguage(payload.appLanguage);
+    const autoApproveConfirmations = Boolean(payload.autoApproveConfirmations);
 
     setImmediate(() => {
-      void this.executeRun(userId, run.id, aiSelection, preferredLanguage).catch(error => {
+      void this.executeRun(
+        userId,
+        run.id,
+        aiSelection,
+        preferredLanguage,
+        autoApproveConfirmations
+      ).catch(error => {
         log.error({ err: error, runId: run.id }, 'Background run execution crashed');
       });
     });
@@ -562,6 +570,10 @@ export class AgentService {
       const id = (output.updated as { id?: unknown } | undefined)?.id;
       return typeof id === 'string' && id.trim() ? id.trim() : null;
     }
+    if (operation === 'node_update_content') {
+      const id = (output.updated as { id?: unknown } | undefined)?.id;
+      return typeof id === 'string' && id.trim() ? id.trim() : null;
+    }
     if (operation === 'node_move') {
       const id = (output.moved as { id?: unknown } | undefined)?.id;
       return typeof id === 'string' && id.trim() ? id.trim() : null;
@@ -629,6 +641,7 @@ export class AgentService {
     const operationLabelMap: Record<string, { title: string; action: string }> = {
       node_create: { title: 'Create node failed', action: 'create the node' },
       node_update: { title: 'Update node failed', action: 'update the node' },
+      node_update_content: { title: 'Update node content failed', action: 'update node content' },
       node_move: { title: 'Move node failed', action: 'move the node' },
       node_copy: { title: 'Copy node failed', action: 'copy the node' },
       node_delete: { title: 'Delete node failed', action: 'delete the node' },
@@ -688,6 +701,7 @@ export class AgentService {
     const operationLabelMap: Record<string, string> = {
       node_create: 'Node created',
       node_update: 'Node updated',
+      node_update_content: 'Node content updated',
       node_move: 'Node moved',
       node_copy: 'Node copied',
       node_delete: 'Node deleted',
@@ -836,7 +850,8 @@ export class AgentService {
     userId: number,
     runId: number,
     preferredModel?: { provider?: string; model?: string },
-    preferredLanguage?: string
+    preferredLanguage?: string,
+    autoApproveConfirmations = false
   ): Promise<void> {
     const runRow = await this.prisma.agentRun.findFirst({
       where: { id: runId, userId },
@@ -890,6 +905,7 @@ export class AgentService {
         chatTitle: runRow.chat.title,
         triggerMessageId: runRow.triggerMessage.id,
         preferredLanguage,
+        autoApproveConfirmations,
       });
 
       // Only mark as completed if the engine didn't pause for confirmation

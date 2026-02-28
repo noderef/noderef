@@ -360,6 +360,7 @@ export const backendRpc = {
       aiProvider?: string;
       aiModel?: string;
       appLanguage?: string;
+      autoApproveConfirmations?: boolean;
     }): Promise<{ message: AgentMessage; run: AgentRunSummary }> {
       return rpc('backend.agent.sendMessage', data);
     },

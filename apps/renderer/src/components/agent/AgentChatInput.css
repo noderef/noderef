@@ -31,6 +31,14 @@
   color: var(--mantine-color-dimmed);
 }
 
+.agent-chat-input .ProseMirror {
+  line-height: 1.35;
+}
+
+.agent-chat-input .ProseMirror p {
+  margin: 0;
+}
+
 .agent-constraint-pill {
   background-color: var(--mantine-color-blue-light);
   color: var(--mantine-color-blue-filled);

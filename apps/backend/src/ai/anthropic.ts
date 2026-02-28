@@ -106,14 +106,22 @@ export interface AgentToolCall {
   args: Record<string, unknown>;
 }
 
+export interface AgentUsageMetrics {
+  inputTokens: number | null;
+  outputTokens: number | null;
+  cacheCreationInputTokens: number | null;
+  cacheReadInputTokens: number | null;
+}
+
 export type AgentCallResult =
-  | { type: 'text'; text: string; stopReason: string }
+  | { type: 'text'; text: string; stopReason: string; usage: AgentUsageMetrics | null }
   | {
       type: 'tool_calls';
       calls: AgentToolCall[];
       reasoning: string | null;
       rawContent: Anthropic.ContentBlock[];
       stopReason: string;
+      usage: AgentUsageMetrics | null;
     };
 
 export type AgentMessageParam = Anthropic.MessageParam;
@@ -155,6 +163,28 @@ export async function callWithTools({
     messages,
     tools: tools as Anthropic.Tool[],
   } as any);
+  const usageRaw = (response as any)?.usage as
+    | {
+        input_tokens?: unknown;
+        output_tokens?: unknown;
+        cache_creation_input_tokens?: unknown;
+        cache_read_input_tokens?: unknown;
+      }
+    | undefined;
+  const usage: AgentUsageMetrics | null = usageRaw
+    ? {
+        inputTokens: typeof usageRaw.input_tokens === 'number' ? usageRaw.input_tokens : null,
+        outputTokens: typeof usageRaw.output_tokens === 'number' ? usageRaw.output_tokens : null,
+        cacheCreationInputTokens:
+          typeof usageRaw.cache_creation_input_tokens === 'number'
+            ? usageRaw.cache_creation_input_tokens
+            : null,
+        cacheReadInputTokens:
+          typeof usageRaw.cache_read_input_tokens === 'number'
+            ? usageRaw.cache_read_input_tokens
+            : null,
+      }
+    : null;
 
   const textBlocks = response.content.filter((b): b is Anthropic.TextBlock => b.type === 'text');
   const toolBlocks = response.content.filter(
@@ -174,6 +204,7 @@ export async function callWithTools({
       stopReason: response.stop_reason ?? 'tool_use',
       reasoning,
       rawContent: response.content,
+      usage,
       calls: toolBlocks.map(b => ({
         id: b.id,
         name: b.name,
@@ -190,6 +221,7 @@ export async function callWithTools({
     type: 'text',
     text: text || '(no response)',
     stopReason: response.stop_reason ?? 'end_turn',
+    usage,
   };
 }
 

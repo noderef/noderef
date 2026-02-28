@@ -40,6 +40,7 @@ import { Extension } from '@tiptap/core';
 
 export interface AgentChatInputRef {
   submit: () => void;
+  focus: () => void;
 }
 
 export interface AgentChatInputProps {
@@ -71,12 +72,7 @@ const ChatSubmitExtension = Extension.create({
         return true;
       },
       'Shift-Enter': () => {
-        return this.editor.commands.first(({ commands }) => [
-          () => commands.newlineInCode(),
-          () => commands.createParagraphNear(),
-          () => commands.liftEmptyBlock(),
-          () => commands.splitBlock(),
-        ]);
+        return this.editor.commands.setHardBreak();
       },
     };
   },
@@ -116,6 +112,18 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
     const isDesktopMode = useMemo(
       () => typeof window !== 'undefined' && isNeutralinoMode() && !!(window as any).Neutralino,
       []
+    );
+    const editorAttributes = useMemo<Record<string, string>>(
+      () => ({
+        spellcheck: 'false',
+        autocomplete: 'off',
+        autocapitalize: isDesktopMode ? 'off' : 'sentences',
+        autocorrect: isDesktopMode ? 'off' : 'on',
+        'data-gramm': 'false',
+        'data-gramm_editor': 'false',
+        'data-enable-grammarly': 'false',
+      }),
+      [isDesktopMode]
     );
 
     useEffect(() => {
@@ -184,6 +192,14 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
     useImperativeHandle(ref, () => ({
       submit: () => {
         handleSend(editor);
+      },
+      focus: () => {
+        if (editor) {
+          editor.commands.focus('end');
+          return;
+        }
+        const fallback = containerRef.current?.querySelector('.ProseMirror') as HTMLElement | null;
+        fallback?.focus();
       },
     }));
 
@@ -368,6 +384,9 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
       editable: !disabled,
       onUpdate({ editor }) {
         onChange(editor.getText());
+      },
+      editorProps: {
+        attributes: editorAttributes,
       },
     });
 

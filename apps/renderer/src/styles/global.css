@@ -113,3 +113,127 @@ code {
 .agent-message-group:hover .agent-message-copy-btn {
   opacity: 1 !important;
 }
+
+/* Agent markdown content */
+.agent-markdown {
+  --agent-code-comment: #6b7280;
+  --agent-code-keyword: #6d28d9;
+  --agent-code-string: #047857;
+  --agent-code-number: #1d4ed8;
+  --agent-code-property: #b45309;
+  --agent-code-tag: #be123c;
+}
+
+.agent-markdown table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.75rem 0;
+  font-size: 0.95em;
+}
+
+.agent-markdown th,
+.agent-markdown td {
+  border: 1px solid var(--mantine-color-gray-3);
+  padding: 0.4rem 0.55rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.agent-markdown th {
+  background: var(--mantine-color-gray-1);
+  font-weight: 600;
+}
+
+.agent-markdown table thead th:first-child,
+.agent-markdown table tbody td:first-child {
+  width: 70%;
+}
+
+.agent-markdown pre {
+  margin: 0.75rem 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--mantine-radius-sm);
+  background: var(--mantine-color-gray-1);
+  border: 1px solid var(--mantine-color-gray-3);
+  overflow-x: auto;
+}
+
+.agent-markdown pre code {
+  display: block;
+  font-family: Monaco, Menlo, Consolas, 'Courier New', monospace;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  white-space: pre;
+}
+
+.agent-markdown .agent-code-comment {
+  color: #6b7280;
+}
+
+.agent-markdown .agent-code-keyword {
+  color: #6d28d9;
+  font-weight: 600;
+}
+
+.agent-markdown .agent-code-string {
+  color: #047857;
+}
+
+.agent-markdown .agent-code-number {
+  color: #1d4ed8;
+}
+
+.agent-markdown .agent-code-property {
+  color: #b45309;
+}
+
+.agent-markdown .agent-code-tag {
+  color: #be123c;
+}
+
+:root[data-mantine-color-scheme='dark'] .agent-markdown th,
+:root[data-mantine-color-scheme='dark'] .agent-markdown td {
+  border-color: var(--mantine-color-dark-3);
+}
+
+:root[data-mantine-color-scheme='dark'] .agent-markdown {
+  --agent-code-comment: #9ca3af;
+  --agent-code-keyword: #c4b5fd;
+  --agent-code-string: #6ee7b7;
+  --agent-code-number: #93c5fd;
+  --agent-code-property: #fbbf24;
+  --agent-code-tag: #fda4af;
+}
+
+:root[data-mantine-color-scheme='dark'] .agent-markdown th {
+  background: var(--mantine-color-dark-5);
+}
+
+:root[data-mantine-color-scheme='dark'] .agent-markdown pre {
+  background: var(--mantine-color-dark-6);
+  border-color: var(--mantine-color-dark-3);
+}
+
+:root[data-mantine-color-scheme='dark'] .agent-markdown .agent-code-comment {
+  color: #9ca3af;
+}
+
+:root[data-mantine-color-scheme='dark'] .agent-markdown .agent-code-keyword {
+  color: #c4b5fd;
+}
+
+:root[data-mantine-color-scheme='dark'] .agent-markdown .agent-code-string {
+  color: #6ee7b7;
+}
+
+:root[data-mantine-color-scheme='dark'] .agent-markdown .agent-code-number {
+  color: #93c5fd;
+}
+
+:root[data-mantine-color-scheme='dark'] .agent-markdown .agent-code-property {
+  color: #fbbf24;
+}
+
+:root[data-mantine-color-scheme='dark'] .agent-markdown .agent-code-tag {
+  color: #fda4af;
+}

@@ -18,7 +18,12 @@
 
 import { NodesApi } from '@alfresco/js-api';
 import { randomUUID } from 'crypto';
-import { callWithTools, type AgentCallResult, type AgentMessageParam } from '../../ai/anthropic.js';
+import {
+  callWithTools,
+  type AgentCallResult,
+  type AgentMessageParam,
+  type AgentToolSchema,
+} from '../../ai/anthropic.js';
 import { createLogger } from '../../lib/logger.js';
 import type { AgentRepository } from '../../repositories/agentRepository.js';
 import { emitRunEvent, formatConversationHistory } from './agentUtils.js';
@@ -34,6 +39,16 @@ const CALL_TIMEOUT_MS = 30_000;
 const MAX_TOOL_RESULT_JSON_CHARS_FOR_MODEL = 60_000;
 const MAX_API_TRACE_ENTRIES_PREVIEW = 10;
 const MAX_API_TRACE_RESPONSE_CHARS_FOR_MODEL = 4_000;
+const AVG_CHARS_PER_TOKEN = 4;
+const DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000;
+const CONTEXT_NEAR_LIMIT_RATIO = 0.85;
+const CONTEXT_CRITICAL_LIMIT_RATIO = 0.95;
+const CONTEXT_TARGET_AFTER_COMPACTION_RATIO = 0.75;
+const MAX_COMPACTED_TOOL_RESULT_CHARS = 3_000;
+
+const KNOWN_MODEL_CONTEXT_WINDOWS: Array<{ pattern: RegExp; tokens: number }> = [
+  { pattern: /claude/i, tokens: 200_000 },
+];
 
 const withTimeout = <T>(p: Promise<T>, ms: number, label: string): Promise<T> => {
   let h: ReturnType<typeof setTimeout> | null = null;
@@ -49,6 +64,145 @@ const withTimeout = <T>(p: Promise<T>, ms: number, label: string): Promise<T> =>
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const toErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : typeof error === 'string' ? error : String(error);
+
+const toTokenEstimate = (text: string): number => Math.ceil(Math.max(text.length, 1) / AVG_CHARS_PER_TOKEN);
+
+const toPercent = (value: number): number => Math.max(0, Math.round(value * 10) / 10);
+
+interface ContextWindowResolution {
+  tokens: number;
+  source: 'known' | 'default';
+}
+
+interface ContextTokenEstimate {
+  systemTokens: number;
+  messagesTokens: number;
+  toolsTokens: number;
+  promptTokens: number;
+}
+
+interface ContextCompactionResult {
+  removedHistoryMessages: number;
+  trimmedToolResultBlocks: number;
+  beforePromptTokens: number;
+  afterPromptTokens: number;
+  applied: boolean;
+}
+
+const resolveModelContextWindow = (model: string): ContextWindowResolution => {
+  for (const candidate of KNOWN_MODEL_CONTEXT_WINDOWS) {
+    if (candidate.pattern.test(model)) {
+      return { tokens: candidate.tokens, source: 'known' };
+    }
+  }
+  return { tokens: DEFAULT_CONTEXT_WINDOW_TOKENS, source: 'default' };
+};
+
+const estimateMessageContentTokens = (content: unknown): number => {
+  if (typeof content === 'string') {
+    return toTokenEstimate(content);
+  }
+
+  if (!Array.isArray(content)) {
+    try {
+      return toTokenEstimate(JSON.stringify(content));
+    } catch {
+      return 0;
+    }
+  }
+
+  let tokens = 0;
+  for (const block of content) {
+    if (!isRecord(block)) {
+      tokens += 4;
+      continue;
+    }
+
+    if (block.type === 'text' && typeof block.text === 'string') {
+      tokens += toTokenEstimate(block.text) + 4;
+      continue;
+    }
+
+    if (block.type === 'tool_use') {
+      const toolName = typeof block.name === 'string' ? block.name : '';
+      tokens += toTokenEstimate(toolName) + 6;
+      if (isRecord(block.input)) {
+        tokens += toTokenEstimate(JSON.stringify(block.input));
+      }
+      continue;
+    }
+
+    if (block.type === 'tool_result') {
+      if (typeof block.content === 'string') {
+        tokens += toTokenEstimate(block.content) + 6;
+      } else {
+        try {
+          tokens += toTokenEstimate(JSON.stringify(block.content)) + 6;
+        } catch {
+          tokens += 6;
+        }
+      }
+      continue;
+    }
+
+    try {
+      tokens += toTokenEstimate(JSON.stringify(block));
+    } catch {
+      tokens += 8;
+    }
+  }
+
+  return tokens;
+};
+
+const estimatePromptTokens = (
+  systemPrompt: string,
+  messages: AgentMessageParam[],
+  tools: AgentToolSchema[]
+): ContextTokenEstimate => {
+  const systemTokens = toTokenEstimate(systemPrompt);
+  const messagesTokens = messages.reduce((sum, message) => {
+    const messageContent = (message as { content?: unknown }).content;
+    return sum + estimateMessageContentTokens(messageContent) + 6;
+  }, 0);
+  const toolsTokens = toTokenEstimate(JSON.stringify(tools));
+  return {
+    systemTokens,
+    messagesTokens,
+    toolsTokens,
+    promptTokens: systemTokens + messagesTokens + toolsTokens + 32,
+  };
+};
+
+const trimHistoricalToolResults = (messages: AgentMessageParam[]): number => {
+  let trimmedCount = 0;
+
+  // Preserve the most recent two turns intact.
+  for (let index = 0; index < Math.max(0, messages.length - 2); index += 1) {
+    const message = messages[index] as { content?: unknown };
+    if (!Array.isArray(message.content)) {
+      continue;
+    }
+
+    for (const block of message.content) {
+      if (!isRecord(block) || block.type !== 'tool_result' || typeof block.content !== 'string') {
+        continue;
+      }
+      if (block.content.length <= MAX_COMPACTED_TOOL_RESULT_CHARS) {
+        continue;
+      }
+
+      const removed = block.content.length - MAX_COMPACTED_TOOL_RESULT_CHARS;
+      block.content = `${block.content.slice(0, MAX_COMPACTED_TOOL_RESULT_CHARS)}\n... [trimmed ${removed} chars to preserve context window]`;
+      trimmedCount += 1;
+    }
+  }
+
+  return trimmedCount;
+};
 
 const compactApiTraceResponseBodyForModel = (body: unknown): unknown => {
   if (isRecord(body) && isRecord(body.list)) {
@@ -153,9 +307,45 @@ export class AgentRunEngine {
 
     // ── Tool-use loop ─────────────────────────────────────────────────────────
     let stepOrdinal = 0;
+    const contextWindow = resolveModelContextWindow(this.runtime.model);
 
     for (let iteration = 0; iteration < MAX_LOOP_STEPS; iteration++) {
       this.checkAborted();
+
+      const iterationIndex = iteration + 1;
+      const preCompactionEstimate = estimatePromptTokens(systemPrompt, messages, tools);
+      const compaction = this.compactMessagesForContextWindow(
+        messages,
+        systemPrompt,
+        tools,
+        contextWindow.tokens
+      );
+      const effectiveEstimate =
+        compaction.applied && compaction.afterPromptTokens > 0
+          ? estimatePromptTokens(systemPrompt, messages, tools)
+          : preCompactionEstimate;
+      const preCallPromptTokens = effectiveEstimate.promptTokens;
+      const preCallPromptUtilization = preCallPromptTokens / contextWindow.tokens;
+
+      await this.emitEvent(input.runId, 'run.context', 'info', {
+        phase: 'pre_call',
+        iteration: iterationIndex,
+        provider: this.runtime.provider,
+        model: this.runtime.model,
+        contextWindowTokens: contextWindow.tokens,
+        contextWindowSource: contextWindow.source,
+        estimated: {
+          systemTokens: effectiveEstimate.systemTokens,
+          messagesTokens: effectiveEstimate.messagesTokens,
+          toolsTokens: effectiveEstimate.toolsTokens,
+          promptTokens: preCallPromptTokens,
+        },
+        utilizationPctPrompt: toPercent(preCallPromptUtilization * 100),
+        nearLimit: preCallPromptUtilization >= CONTEXT_NEAR_LIMIT_RATIO,
+        criticalLimit: preCallPromptUtilization >= CONTEXT_CRITICAL_LIMIT_RATIO,
+        remainingTokens: Math.max(0, contextWindow.tokens - preCallPromptTokens),
+        compaction,
+      });
 
       let response: AgentCallResult;
       try {
@@ -171,12 +361,64 @@ export class AgentRunEngine {
             temperature: this.runtime.temperature,
           }),
           CALL_TIMEOUT_MS,
-          `Agent call (iteration ${iteration + 1})`
+          `Agent call (iteration ${iterationIndex})`
         );
       } catch (err) {
+        await this.emitEvent(input.runId, 'run.context', 'warn', {
+          phase: 'call_failed',
+          iteration: iterationIndex,
+          provider: this.runtime.provider,
+          model: this.runtime.model,
+          contextWindowTokens: contextWindow.tokens,
+          contextWindowSource: contextWindow.source,
+          estimated: {
+            systemTokens: effectiveEstimate.systemTokens,
+            messagesTokens: effectiveEstimate.messagesTokens,
+            toolsTokens: effectiveEstimate.toolsTokens,
+            promptTokens: preCallPromptTokens,
+          },
+          utilizationPctPrompt: toPercent(preCallPromptUtilization * 100),
+          nearLimit: preCallPromptUtilization >= CONTEXT_NEAR_LIMIT_RATIO,
+          criticalLimit: preCallPromptUtilization >= CONTEXT_CRITICAL_LIMIT_RATIO,
+          remainingTokens: Math.max(0, contextWindow.tokens - preCallPromptTokens),
+          compaction,
+          error: toErrorMessage(err),
+        });
         log.error({ err, iteration }, 'Model call failed');
         throw err;
       }
+
+      const apiInputTokens = response.usage?.inputTokens ?? null;
+      const apiOutputTokens = response.usage?.outputTokens ?? null;
+      const promptTokens = apiInputTokens ?? preCallPromptTokens;
+      const totalTokens = promptTokens + (apiOutputTokens ?? 0);
+      const promptUtilization = promptTokens / contextWindow.tokens;
+      const totalUtilization = totalTokens / contextWindow.tokens;
+
+      await this.emitEvent(input.runId, 'run.context', 'info', {
+        phase: 'post_call',
+        iteration: iterationIndex,
+        provider: this.runtime.provider,
+        model: this.runtime.model,
+        contextWindowTokens: contextWindow.tokens,
+        contextWindowSource: contextWindow.source,
+        estimated: {
+          systemTokens: effectiveEstimate.systemTokens,
+          messagesTokens: effectiveEstimate.messagesTokens,
+          toolsTokens: effectiveEstimate.toolsTokens,
+          promptTokens: preCallPromptTokens,
+        },
+        usage: response.usage,
+        promptTokens,
+        outputTokens: apiOutputTokens,
+        totalTokens,
+        utilizationPctPrompt: toPercent(promptUtilization * 100),
+        utilizationPctTotal: toPercent(totalUtilization * 100),
+        nearLimit: totalUtilization >= CONTEXT_NEAR_LIMIT_RATIO,
+        criticalLimit: totalUtilization >= CONTEXT_CRITICAL_LIMIT_RATIO,
+        remainingTokens: Math.max(0, contextWindow.tokens - totalTokens),
+        compaction,
+      });
 
       log.info(
         { type: response.type, stopReason: response.stopReason, iteration },
@@ -222,12 +464,18 @@ export class AgentRunEngine {
           continue;
         }
 
+        const confirmationPhrase = tool.confirmation?.phrase ?? 'CONFIRM';
+        const autoApproveEnabledForCall = Boolean(
+          input.autoApproveConfirmations && tool.requiresConfirmation && confirmationPhrase !== 'DELETE'
+        );
+        const requiresManualConfirmation = tool.requiresConfirmation && !autoApproveEnabledForCall;
+
         stepOrdinal += 1;
         const step = await this.repository.createRunStep({
           runId: input.runId,
           ordinal: stepOrdinal,
           operation: canonicalOperation,
-          status: tool.requiresConfirmation ? 'waiting_confirmation' : 'running',
+          status: requiresManualConfirmation ? 'waiting_confirmation' : 'running',
           summary: `${canonicalOperation}`,
           input: call.args,
           requiresConfirmation: tool.requiresConfirmation,
@@ -238,7 +486,7 @@ export class AgentRunEngine {
           await this.emitNote(input.runId, buildDescriptionNote(response.reasoning.trim()));
         }
         // ── Confirmation gate ────────────────────────────────────────────────
-        if (tool.requiresConfirmation) {
+        if (requiresManualConfirmation) {
           const token = randomUUID();
           await this.repository.updateRunStep(input.userId, input.runId, step.id, {
             status: 'waiting_confirmation',
@@ -254,12 +502,11 @@ export class AgentRunEngine {
             operation: canonicalOperation,
             output: { args: call.args },
           });
-          const phrase = tool.confirmation?.phrase ?? 'CONFIRM';
           await this.repository.createMessage({
             chatId: input.chatId,
             userId: input.userId,
             role: 'assistant',
-            content: `Confirmation required before executing \`${call.name}\`.\nType **${phrase}** to proceed.`,
+            content: `Confirmation required before executing \`${call.name}\`.\nType **${confirmationPhrase}** to proceed.`,
             mentions: [],
           });
           await this.repository.createOperationAudit({
@@ -340,6 +587,62 @@ export class AgentRunEngine {
         'I was unable to complete the request within the step limit. Please try a more specific question.',
       mentions: [],
     });
+  }
+
+  private compactMessagesForContextWindow(
+    messages: AgentMessageParam[],
+    systemPrompt: string,
+    tools: AgentToolSchema[],
+    contextWindowTokens: number
+  ): ContextCompactionResult {
+    const beforeEstimate = estimatePromptTokens(systemPrompt, messages, tools);
+    const nearThresholdTokens = Math.floor(contextWindowTokens * CONTEXT_NEAR_LIMIT_RATIO);
+    const targetTokens = Math.floor(contextWindowTokens * CONTEXT_TARGET_AFTER_COMPACTION_RATIO);
+
+    if (beforeEstimate.promptTokens < nearThresholdTokens) {
+      return {
+        removedHistoryMessages: 0,
+        trimmedToolResultBlocks: 0,
+        beforePromptTokens: beforeEstimate.promptTokens,
+        afterPromptTokens: beforeEstimate.promptTokens,
+        applied: false,
+      };
+    }
+
+    let removedHistoryMessages = 0;
+    const canDropConversationHistoryPair = () =>
+      messages.length >= 3 &&
+      messages[0]?.role === 'user' &&
+      (messages[0] as { content?: unknown }).content === '<conversation_history>' &&
+      messages[1]?.role === 'assistant';
+
+    // Always drop injected conversation history first when possible.
+    if (canDropConversationHistoryPair()) {
+      messages.splice(0, 2);
+      removedHistoryMessages += 2;
+    }
+
+    let estimate = estimatePromptTokens(systemPrompt, messages, tools);
+    while (estimate.promptTokens > targetTokens && messages.length >= 4) {
+      // Remove oldest assistant/user pair while keeping the most recent context.
+      messages.splice(0, 2);
+      removedHistoryMessages += 2;
+      estimate = estimatePromptTokens(systemPrompt, messages, tools);
+    }
+
+    let trimmedToolResultBlocks = 0;
+    if (estimate.promptTokens > targetTokens) {
+      trimmedToolResultBlocks = trimHistoricalToolResults(messages);
+      estimate = estimatePromptTokens(systemPrompt, messages, tools);
+    }
+
+    return {
+      removedHistoryMessages,
+      trimmedToolResultBlocks,
+      beforePromptTokens: beforeEstimate.promptTokens,
+      afterPromptTokens: estimate.promptTokens,
+      applied: removedHistoryMessages > 0 || trimmedToolResultBlocks > 0,
+    };
   }
 
   // ── Resolve @mention nodes ─────────────────────────────────────────────────

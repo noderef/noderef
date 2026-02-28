@@ -124,6 +124,7 @@ export function registerAgentHandlers(routes: Routes, ctx: RpcContext): void {
       aiProvider: z.string().min(1).optional(),
       aiModel: z.string().min(1).optional(),
       appLanguage: z.string().trim().min(2).max(20).optional(),
+      autoApproveConfirmations: z.boolean().optional(),
     }),
     handler: async params => {
       const userId = await getCurrentUserId();
