@@ -24,13 +24,16 @@ import type { AgentRepository } from '../../repositories/agentRepository.js';
 import { emitRunEvent, formatConversationHistory } from './agentUtils.js';
 import { buildConfirmNote, buildDescriptionNote, type ProgressNote } from './progressMessages.js';
 import { buildSystemPrompt } from './systemPrompt.js';
-import { getAllToolSchemas, getToolByName } from './tools/registry.js';
+import { getAllToolSchemas, getToolByName, resolveToolName } from './tools/registry.js';
 import type { AgentExecutionContext, ResolvedAiRuntime, RunInput } from './types.js';
 
 const log = createLogger('agent.engine');
 
 const MAX_LOOP_STEPS = 8;
 const CALL_TIMEOUT_MS = 30_000;
+const MAX_TOOL_RESULT_JSON_CHARS_FOR_MODEL = 60_000;
+const MAX_API_TRACE_ENTRIES_PREVIEW = 10;
+const MAX_API_TRACE_RESPONSE_CHARS_FOR_MODEL = 4_000;
 
 const withTimeout = <T>(p: Promise<T>, ms: number, label: string): Promise<T> => {
   let h: ReturnType<typeof setTimeout> | null = null;
@@ -42,6 +45,69 @@ const withTimeout = <T>(p: Promise<T>, ms: number, label: string): Promise<T> =>
   ]).finally(() => {
     if (h) clearTimeout(h);
   });
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const compactApiTraceResponseBodyForModel = (body: unknown): unknown => {
+  if (isRecord(body) && isRecord(body.list)) {
+    const list = body.list as Record<string, unknown>;
+    const entries = Array.isArray(list.entries) ? list.entries : [];
+    const entriesPreview = entries.slice(0, MAX_API_TRACE_ENTRIES_PREVIEW).map(item => {
+      if (isRecord(item) && isRecord(item.entry)) {
+        const e = item.entry as Record<string, unknown>;
+        return {
+          id: e.id ?? null,
+          name: e.name ?? null,
+          nodeType: e.nodeType ?? null,
+          isFolder: e.isFolder ?? null,
+          isFile: e.isFile ?? null,
+        };
+      }
+      return item;
+    });
+
+    return {
+      list: {
+        pagination: list.pagination ?? null,
+        returned: entries.length,
+        entriesPreview,
+      },
+    };
+  }
+
+  try {
+    const serialized = JSON.stringify(body);
+    if (serialized.length <= MAX_API_TRACE_RESPONSE_CHARS_FOR_MODEL) {
+      return body;
+    }
+    return {
+      omitted: true,
+      reason: 'responseBody too large for model context',
+      originalSizeChars: serialized.length,
+    };
+  } catch {
+    return {
+      omitted: true,
+      reason: 'responseBody could not be serialized for model context',
+    };
+  }
+};
+
+const compactToolDataForModel = (data: Record<string, unknown>): Record<string, unknown> => {
+  let cloned: Record<string, unknown>;
+  try {
+    cloned = JSON.parse(JSON.stringify(data)) as Record<string, unknown>;
+  } catch {
+    return data;
+  }
+
+  if (isRecord(cloned.apiTrace) && Object.prototype.hasOwnProperty.call(cloned.apiTrace, 'responseBody')) {
+    cloned.apiTrace.responseBody = compactApiTraceResponseBodyForModel(cloned.apiTrace.responseBody);
+  }
+
+  return cloned;
 };
 
 export class AgentRunEngine {
@@ -74,7 +140,7 @@ export class AgentRunEngine {
     }
 
     // ── Build initial message list ─────────────────────────────────────────────
-    const systemPrompt = buildSystemPrompt(mentionContext);
+    const systemPrompt = buildSystemPrompt(mentionContext, input.preferredLanguage);
     const tools = getAllToolSchemas();
 
     // Inject conversation history as a prior assistant message if available
@@ -144,6 +210,7 @@ export class AgentRunEngine {
         this.checkAborted();
 
         const tool = getToolByName(call.name);
+        const canonicalOperation = resolveToolName(call.name);
         if (!tool) {
           log.warn({ name: call.name }, 'Unknown tool called by model');
           toolResultContents.push({
@@ -159,9 +226,9 @@ export class AgentRunEngine {
         const step = await this.repository.createRunStep({
           runId: input.runId,
           ordinal: stepOrdinal,
-          operation: call.name,
+          operation: canonicalOperation,
           status: tool.requiresConfirmation ? 'waiting_confirmation' : 'running',
-          summary: `${call.name}`,
+          summary: `${canonicalOperation}`,
           input: call.args,
           requiresConfirmation: tool.requiresConfirmation,
         });
@@ -180,11 +247,11 @@ export class AgentRunEngine {
           await this.repository.updateRun(input.userId, input.runId, {
             status: 'waiting_confirmation',
           });
-          await this.emitNote(input.runId, buildConfirmNote(call.name));
+          await this.emitNote(input.runId, buildConfirmNote(canonicalOperation));
           await this.emitEvent(input.runId, 'step.waiting_confirmation', 'warn', {
             stepId: step.id,
             confirmationToken: token,
-            operation: call.name,
+            operation: canonicalOperation,
             output: { args: call.args },
           });
           const phrase = tool.confirmation?.phrase ?? 'CONFIRM';
@@ -200,9 +267,9 @@ export class AgentRunEngine {
             stepId: step.id,
             userId: input.userId,
             serverId: input.serverId,
-            operation: call.name,
+            operation: canonicalOperation,
             action: 'requested',
-            targetSummary: call.name,
+            targetSummary: canonicalOperation,
             requestMessageId: input.triggerMessageId,
           });
           return; // halts — resumed by AgentService.approveStep
@@ -211,10 +278,16 @@ export class AgentRunEngine {
         // ── Execute tool ─────────────────────────────────────────────────────
         await this.emitEvent(input.runId, 'run.executing', 'info', { stepId: step.id });
 
+        const executionStartedAt = Date.now();
         const toolResult = await tool.execute(this.execCtx, call.args);
-        const resultStr = JSON.stringify(
-          toolResult.ok ? toolResult.data : { error: toolResult.error }
-        );
+        const durationMs = Date.now() - executionStartedAt;
+        const modelPayload = toolResult.ok
+          ? compactToolDataForModel(toolResult.data)
+          : { error: toolResult.error };
+        let resultStr = JSON.stringify(modelPayload);
+        if (resultStr.length > MAX_TOOL_RESULT_JSON_CHARS_FOR_MODEL) {
+          resultStr = `${resultStr.slice(0, MAX_TOOL_RESULT_JSON_CHARS_FOR_MODEL)}\n... [truncated ${resultStr.length - MAX_TOOL_RESULT_JSON_CHARS_FOR_MODEL} chars for model context]`;
+        }
 
         if (toolResult.ok) {
           await this.repository.updateRunStep(input.userId, input.runId, step.id, {
@@ -224,6 +297,9 @@ export class AgentRunEngine {
           });
           await this.emitEvent(input.runId, 'step.completed', 'info', {
             stepId: step.id,
+            operation: canonicalOperation,
+            status: 'completed',
+            durationMs,
             output: toolResult.data,
           });
         } else {
@@ -234,6 +310,10 @@ export class AgentRunEngine {
           });
           await this.emitEvent(input.runId, 'step.failed', 'error', {
             stepId: step.id,
+            operation: canonicalOperation,
+            status: 'failed',
+            durationMs,
+            output: { error: toolResult.error },
             error: toolResult.error,
           });
         }

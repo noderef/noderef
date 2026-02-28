@@ -3,14 +3,14 @@
  */
 
 import { NodesApi } from '@alfresco/js-api';
-import type { AgentExecutionContext } from '../types.js';
-import type { ToolDefinition, ToolResult } from './types.js';
+import type { AgentExecutionContext } from '../../types.js';
+import type { ToolDefinition, ToolResult } from '../types.js';
 
 const normalizeNodePath = (p: string | undefined): string | null =>
   p?.trim().length ? p.trim() : null;
 
-export const getChildrenTool: ToolDefinition = {
-  name: 'get_children',
+export const nodeListChildrenTool: ToolDefinition = {
+  name: 'node_list_children',
   description: [
     'List the direct children of a folder node.',
     'Returns pagination.totalCount (TRUE total children count) and a sample of child nodes.',
@@ -39,12 +39,14 @@ export const getChildrenTool: ToolDefinition = {
           : 20;
 
       const nodesApi = new NodesApi(ctx.api);
-      const result = await nodesApi.listNodeChildren(nodeId, {
+      const requestQuery = {
         maxItems,
         skipCount: 0,
         fields: ['id', 'name', 'nodeType', 'isFolder', 'isFile', 'content', 'path'],
         include: ['path'],
-      });
+      };
+
+      const result = await nodesApi.listNodeChildren(nodeId, requestQuery);
 
       const entries = (result.list?.entries ?? []).map((e: any) => e.entry);
       const totalCount = result.list?.pagination?.totalItems ?? entries.length;
@@ -58,6 +60,18 @@ export const getChildrenTool: ToolDefinition = {
       return {
         ok: true,
         data: {
+          apiTrace: {
+            method: 'GET',
+            path: `/alfresco/api/-default-/public/alfresco/versions/1/nodes/${nodeId}/children`,
+            request: { query: requestQuery },
+            responseBody: result,
+          },
+          alfrescoNodesApi: {
+            method: 'GET',
+            path: `/alfresco/api/-default-/public/alfresco/versions/1/nodes/${nodeId}/children`,
+            query: requestQuery,
+            responseBody: result,
+          },
           nodeId,
           pagination: { totalCount, returned: entries.length, maxItems },
           breakdown: {

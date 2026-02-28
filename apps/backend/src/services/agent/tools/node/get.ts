@@ -3,14 +3,14 @@
  */
 
 import { NodesApi } from '@alfresco/js-api';
-import type { AgentExecutionContext } from '../types.js';
-import type { ToolDefinition, ToolResult } from './types.js';
+import type { AgentExecutionContext } from '../../types.js';
+import type { ToolDefinition, ToolResult } from '../types.js';
 
 const normalizeNodePath = (p: string | undefined): string | null =>
   p?.trim().length ? p.trim() : null;
 
-export const getNodeTool: ToolDefinition = {
-  name: 'get_node',
+export const nodeGetTool: ToolDefinition = {
+  name: 'node_get',
   description:
     'Fetch metadata for a single Alfresco node by ID. Returns name, path, type, dates, and properties.',
   inputSchema: {
@@ -47,9 +47,39 @@ export const getNodeTool: ToolDefinition = {
       });
 
       const e = (result as any)?.entry ?? result;
+      const requestQuery = {
+        fields: [
+          'id',
+          'name',
+          'nodeType',
+          'isFolder',
+          'isFile',
+          'path',
+          'content',
+          'properties',
+          'createdAt',
+          'modifiedAt',
+          'createdByUser',
+          'modifiedByUser',
+        ],
+        include: ['path', 'properties', 'allowableOperations'],
+      };
+
       return {
         ok: true,
         data: {
+          apiTrace: {
+            method: 'GET',
+            path: `/alfresco/api/-default-/public/alfresco/versions/1/nodes/${nodeId}`,
+            request: { query: requestQuery },
+            responseBody: result,
+          },
+          alfrescoNodesApi: {
+            method: 'GET',
+            path: `/alfresco/api/-default-/public/alfresco/versions/1/nodes/${nodeId}`,
+            query: requestQuery,
+            responseBody: result,
+          },
           id: e?.id,
           name: e?.name,
           nodeType: e?.nodeType,

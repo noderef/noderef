@@ -3,14 +3,14 @@
  */
 
 import { NodesApi } from '@alfresco/js-api';
-import type { AgentExecutionContext } from '../types.js';
-import type { ToolDefinition, ToolResult } from './types.js';
+import type { AgentExecutionContext } from '../../types.js';
+import type { ToolDefinition, ToolResult } from '../types.js';
 
 const normalizeNodePath = (p: string | undefined): string | null =>
   p?.trim().length ? p.trim() : null;
 
-export const copyTool: ToolDefinition = {
-  name: 'copy_node',
+export const nodeCopyTool: ToolDefinition = {
+  name: 'node_copy',
   description: 'Copy a node to a different parent folder. Requires explicit user confirmation.',
   inputSchema: {
     type: 'object',
@@ -32,15 +32,26 @@ export const copyTool: ToolDefinition = {
         return { ok: false, error: 'sourceNodeId and targetParentId are required' };
       }
       const nodesApi = new NodesApi(ctx.api);
+      const requestBody = { targetParentId };
+      const requestQuery = { fields: ['id', 'name', 'path'] };
       const result = await nodesApi.copyNode(
         sourceNodeId,
-        { targetParentId },
-        { fields: ['id', 'name', 'path'] }
+        requestBody,
+        requestQuery
       );
       const e = (result as any)?.entry ?? result;
       return {
         ok: true,
         data: {
+          apiTrace: {
+            method: 'POST',
+            path: `/alfresco/api/-default-/public/alfresco/versions/1/nodes/${sourceNodeId}/copy`,
+            request: {
+              body: requestBody,
+              query: requestQuery,
+            },
+            responseBody: result,
+          },
           copied: { id: e?.id, name: e?.name, path: normalizeNodePath(e?.path?.name) },
           sourceNodeId,
           targetParentId,

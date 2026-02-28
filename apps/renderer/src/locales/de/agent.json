@@ -29,6 +29,7 @@
   "stepAwaitingConfirmation": "Warte auf Bestätigung",
   "stepConfirmed": "Bestätigt",
   "stepRejected": "Abgelehnt",
+  "runFailed": "Ausführung fehlgeschlagen",
   "confirmationRequired": "Bestätigung erforderlich",
   "confirmationDescription": "Dieser Vorgang erfordert eine ausdrückliche Bestätigung.",
   "confirm": "Bestätigen",

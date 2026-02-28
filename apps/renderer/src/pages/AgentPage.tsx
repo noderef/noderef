@@ -17,6 +17,7 @@
 import { getAiSettings, listAiModels, listAiProviders } from '@/core/ipc/aiSettings';
 import {
   backendRpc,
+  type AgentMention,
   type AgentMentionSuggestion,
   type AgentMessage,
   type AgentRunEvent,
@@ -24,9 +25,8 @@ import {
 } from '@/core/ipc/backend';
 import { useAgentStore } from '@/core/store/agent';
 import { useServersStore } from '@/core/store/servers';
+import { useUIStore } from '@/core/store/ui';
 import { useNavigation } from '@/hooks/useNavigation';
-import { CodeHighlight } from '@mantine/code-highlight';
-import '@mantine/code-highlight/styles.css';
 import {
   Accordion,
   ActionIcon,
@@ -40,7 +40,6 @@ import {
   Select,
   Stack,
   Text,
-  Textarea,
   Tooltip,
 } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
@@ -55,6 +54,7 @@ import {
 import { marked } from 'marked';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AgentChatInput, AgentChatInputRef } from '../components/agent/AgentChatInput';
 
 const ACTIVE_RUN_STATUSES = new Set(['queued', 'running', 'waiting_confirmation']);
 
@@ -66,11 +66,44 @@ const renderMarkdown = (md: string): string => {
   }
 };
 
-const extractMentionQuery = (value: string, caret: number): string | null => {
-  const left = value.slice(0, caret);
-  const match = left.match(/(?:^|\s)@([a-zA-Z0-9._-]{1,64})$/);
-  return match?.[1] || null;
-};
+function renderUserMessageContent(content: string, mentions: AgentMention[]) {
+  if (!mentions || !mentions.length || !content) return content;
+
+  try {
+    const sortedMentions = [...mentions].sort((a, b) => b.label.length - a.label.length);
+    const escapeRegExp = (string: string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regexStr = sortedMentions.map(m => escapeRegExp('@' + m.label)).join('|');
+    const regex = new RegExp(`(${regexStr})`, 'g');
+
+    const parts = content.split(regex);
+
+    return parts.map((part, index) => {
+      const matchedMention = sortedMentions.find(m => '@' + m.label === part);
+      if (matchedMention) {
+        return (
+          <Badge
+            key={index}
+            component="span"
+            variant="default"
+            size="md"
+            style={{
+              textTransform: 'none',
+              verticalAlign: 'bottom',
+              margin: '0 2px',
+              backgroundColor: 'var(--mantine-color-gray-2)',
+              color: 'var(--mantine-color-dark-4)',
+            }}
+          >
+            {part}
+          </Badge>
+        );
+      }
+      return <span key={index}>{part}</span>;
+    });
+  } catch {
+    return content;
+  }
+}
 
 type ConversationTimelineItem =
   | {
@@ -243,16 +276,16 @@ const StepDetailAccordion = ({
         </Text>
       </Accordion.Control>
       <Accordion.Panel>
-        <CodeHighlight
-          code={detail}
-          language="json"
-          withCopyButton={false}
+        <Box
+          className="agent-markdown"
+          dangerouslySetInnerHTML={{ __html: renderMarkdown(detail) }}
           style={{
             margin: 0,
-            padding: 0,
-            fontSize: 11,
-            lineHeight: 1.4,
+            padding: '8px 10px',
+            fontSize: 12,
+            lineHeight: 1.5,
             borderRadius: 'var(--mantine-radius-xs)',
+            backgroundColor: 'var(--mantine-color-gray-1)',
             maxHeight: 300,
             overflow: 'auto',
             width: 'calc(100vw - 80px)',
@@ -269,6 +302,7 @@ interface RunActivityItem {
   label: string;
   detail: string | null;
   level: 'info' | 'warn' | 'error';
+  operation?: string;
 }
 
 const EXECUTION_EVENT_KEYS: Record<string, string> = {
@@ -277,6 +311,7 @@ const EXECUTION_EVENT_KEYS: Record<string, string> = {
   'step.waiting_confirmation': 'stepAwaitingConfirmation',
   'step.confirmed': 'stepConfirmed',
   'step.rejected': 'stepRejected',
+  'run.failed': 'runFailed',
 };
 
 const SKIP_EVENT_TYPES = new Set([
@@ -284,9 +319,38 @@ const SKIP_EVENT_TYPES = new Set([
   'run.executing',
   'run.summarizing',
   'run.completed',
-  'run.failed',
   'run.cancelled',
 ]);
+const MAX_EVENT_DETAIL_CHARS = 12_000;
+
+const stringifyTruncated = (value: unknown): string | null => {
+  try {
+    const serialized = JSON.stringify(value, null, 2);
+    if (serialized.length <= MAX_EVENT_DETAIL_CHARS) {
+      return serialized;
+    }
+    return `${serialized.slice(0, MAX_EVENT_DETAIL_CHARS)}\n... [truncated ${serialized.length - MAX_EVENT_DETAIL_CHARS} chars]`;
+  } catch {
+    return null;
+  }
+};
+
+const buildMarkdownDetail = (
+  summaryLines: string[],
+  sections: Array<{ title: string; value: unknown }>
+): string => {
+  const lines = ['### Summary', ...summaryLines, ''];
+  for (const section of sections) {
+    const json = stringifyTruncated(section.value);
+    if (!json) continue;
+    lines.push(`### ${section.title}`);
+    lines.push('```json');
+    lines.push(json);
+    lines.push('```');
+    lines.push('');
+  }
+  return lines.join('\n').trim();
+};
 
 const formatEventDetail = (event: AgentRunEvent): string | null => {
   const payload = event.payload;
@@ -294,31 +358,55 @@ const formatEventDetail = (event: AgentRunEvent): string | null => {
 
   if (event.type === 'step.completed' || event.type === 'step.failed') {
     const output = payload.output as Record<string, unknown> | undefined;
-    if (!output) return null;
-    try {
-      return JSON.stringify(output, null, 2).slice(0, 1500);
-    } catch {
-      return null;
+    const toolName = typeof payload.operation === 'string' ? payload.operation : null;
+    const durationMs = typeof payload.durationMs === 'number' ? payload.durationMs : null;
+    const status =
+      typeof payload.status === 'string'
+        ? payload.status
+        : event.type === 'step.failed'
+          ? 'failed'
+          : 'completed';
+    if (!output && !payload.error && !toolName && durationMs === null) return null;
+
+    const summaryLines = [
+      `- **Tool:** ${toolName ? `\`${toolName}\`` : 'unknown'}`,
+      `- **Status:** ${status}`,
+      ...(durationMs !== null ? [`- **Duration:** ${durationMs} ms`] : []),
+    ];
+
+    const sections: Array<{ title: string; value: unknown }> = [];
+    if (output) {
+      sections.push({ title: 'Result', value: output });
+    } else if (payload.error) {
+      sections.push({ title: 'Result', value: { error: String(payload.error) } });
     }
+
+    return buildMarkdownDetail(summaryLines, sections);
   }
 
   if (event.type === 'step.waiting_confirmation') {
-    const parts: string[] = [];
-    if (payload.operation) parts.push(`Operation: ${payload.operation}`);
-    if (payload.summary) parts.push(`${payload.summary}`);
     const args = (payload.output as Record<string, unknown> | undefined)?.args;
-    if (args) {
-      try {
-        parts.push(`Args: ${JSON.stringify(args, null, 2)}`);
-      } catch {
-        /* skip */
-      }
-    }
-    return parts.join('\n') || null;
+    return buildMarkdownDetail(
+      [
+        `- **Status:** awaiting confirmation`,
+        `- **Operation:** ${
+          typeof payload.operation === 'string' ? `\`${payload.operation}\`` : 'unknown'
+        }`,
+        ...(typeof payload.summary === 'string' ? [`- **Summary:** ${payload.summary}`] : []),
+      ],
+      args ? [{ title: 'Arguments', value: args }] : []
+    );
+  }
+
+  if (event.type === 'run.failed') {
+    return buildMarkdownDetail(
+      ['- **Status:** failed'],
+      [{ title: 'Error', value: { error: payload.error ? String(payload.error) : 'Unknown run failure' } }]
+    );
   }
 
   if (payload.error) {
-    return String(payload.error);
+    return buildMarkdownDetail(['- **Status:** error'], [{ title: 'Error', value: { error: String(payload.error) } }]);
   }
 
   return null;
@@ -342,7 +430,8 @@ const buildRunActivity = (events: AgentRunEvent[]): RunActivityItem[] => {
     const label = key ? `__i18n:${key}` : event.type;
     const detail = formatEventDetail(event);
     const level = event.level === 'error' ? 'error' : event.level === 'warn' ? 'warn' : 'info';
-    items.push({ kind: 'execution', label, detail, level });
+    const operation = typeof event.payload?.operation === 'string' ? event.payload.operation : undefined;
+    items.push({ kind: 'execution', label, detail, level, operation });
   }
 
   return items;
@@ -352,6 +441,7 @@ export function AgentPage() {
   const { t } = useTranslation('agent');
   const { activeServerId } = useNavigation();
   const servers = useServersStore(state => state.servers);
+  const appLanguage = useUIStore(state => state.language);
 
   const chats = useAgentStore(state => state.chats);
   const activeChatId = useAgentStore(state => state.activeChatId);
@@ -370,17 +460,9 @@ export function AgentPage() {
   const [loadingConversation, setLoadingConversation] = useState(false);
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState('');
-  const [selectedMentions, setSelectedMentions] = useState<
-    Array<{
-      id: string;
-      type: 'node' | 'person' | 'group' | 'server';
-      label: string;
-      path?: string | null;
-    }>
-  >([]);
 
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
-  const [debouncedMentionQuery] = useDebouncedValue(mentionQuery, 250);
+  const [debouncedMentionQuery] = useDebouncedValue(mentionQuery, 300);
   const [mentionItems, setMentionItems] = useState<AgentMentionSuggestion[]>([]);
   const [mentionSkipCount, setMentionSkipCount] = useState(0);
   const [mentionHasMore, setMentionHasMore] = useState(false);
@@ -399,9 +481,9 @@ export function AgentPage() {
   });
   const [aiModelsLoading, setAiModelsLoading] = useState(false);
 
-  const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
-  const caretRef = useRef<number>(0);
+  const chatInputRef = useRef<AgentChatInputRef>(null);
   const conversationViewportRef = useRef<HTMLDivElement | null>(null);
+  const loadChatsRequestIdRef = useRef(0);
 
   const activeChat = useMemo(
     () => chats.find(chat => chat.id === activeChatId) || null,
@@ -515,14 +597,25 @@ export function AgentPage() {
   );
 
   const loadChats = useCallback(async () => {
+    const requestId = ++loadChatsRequestIdRef.current;
+
     try {
       const result = await backendRpc.agent.listChats({
         serverId: activeServerId || undefined,
         skipCount: 0,
         maxItems: 100,
       });
+
+      if (requestId !== loadChatsRequestIdRef.current) {
+        return;
+      }
+
       setChats(result.items);
     } catch (error) {
+      if (requestId !== loadChatsRequestIdRef.current) {
+        return;
+      }
+
       notifications.show({
         title: t('errors.loadChatsTitle'),
         message: error instanceof Error ? error.message : t('errors.generic'),
@@ -768,8 +861,6 @@ export function AgentPage() {
     setMentionItems([]);
     setMentionSkipCount(0);
     setMentionHasMore(false);
-    setSelectedMentions([]);
-    caretRef.current = 0;
   }, [activeChatId]);
 
   useEffect(() => {
@@ -833,64 +924,14 @@ export function AgentPage() {
 
     viewport.scrollTop = viewport.scrollHeight;
   }, [activeChatId, conversationTimeline.length, totalRunEventCount, thinkingRunIds.length]);
-
-  const handleDraftChange = (value: string) => {
-    setDraft(value);
-    const textarea = textAreaRef.current;
-    const caret = textarea?.selectionStart ?? value.length;
-    caretRef.current = caret;
-    const query = extractMentionQuery(value, caret);
-    setMentionQuery(query);
-  };
-
-  const handleInsertMention = (item: AgentMentionSuggestion) => {
-    const caret = caretRef.current;
-    const left = draft.slice(0, caret);
-    const right = draft.slice(caret);
-    const replacedLeft = left.replace(/@([a-zA-Z0-9._-]{1,64})$/, `@${item.label} `);
-    const next = `${replacedLeft}${right}`;
-
-    setDraft(next);
-    setMentionQuery(null);
-    setMentionItems([]);
-    setMentionSkipCount(0);
-    setMentionHasMore(false);
-    setSelectedMentions(prev => {
-      const exists = prev.some(mention => mention.id === item.id && mention.type === item.type);
-      if (exists) {
-        return prev;
-      }
-      return [
-        ...prev,
-        {
-          id: item.id,
-          type: item.type,
-          label: item.label,
-          path: item.path ?? null,
-        },
-      ];
-    });
-
-    setTimeout(() => {
-      const textarea = textAreaRef.current;
-      if (!textarea) {
-        return;
-      }
-      const position = replacedLeft.length;
-      textarea.focus();
-      textarea.setSelectionRange(position, position);
-      caretRef.current = position;
-    }, 0);
-  };
-
-  const handleSend = async () => {
-    if (!draft.trim()) {
+  const handleSend = async (text: string, mentions: AgentMentionSuggestion[]) => {
+    if (!text.trim()) {
       return;
     }
 
     setSending(true);
     try {
-      let chatId = activeChatId;
+      let chatId = activeChatId ?? useAgentStore.getState().activeChatId;
 
       // Create chat on first message if no chat exists yet
       if (!chatId) {
@@ -905,26 +946,27 @@ export function AgentPage() {
         }
 
         // Use first 80 chars of user message as initial title
-        const title = draft.trim().substring(0, 80);
+        const title = text.trim().substring(0, 80);
         const chat = await backendRpc.agent.createChat({ serverId, title });
         upsertChat(chat);
         setActiveChatId(chat.id);
         chatId = chat.id;
+        void loadChats();
       }
 
       const response = await backendRpc.agent.sendMessage({
         chatId,
-        content: draft.trim(),
-        mentions: selectedMentions,
+        content: text.trim(),
+        mentions: mentions,
         aiProvider: aiProvider || undefined,
         aiModel: aiModel || undefined,
+        appLanguage: appLanguage || undefined,
       });
 
       addMessage(chatId, response.message);
       upsertRun(chatId, response.run);
 
       setDraft('');
-      setSelectedMentions([]);
       setMentionQuery(null);
       setMentionItems([]);
       setMentionSkipCount(0);
@@ -1049,11 +1091,14 @@ export function AgentPage() {
                               const translatedLabel = step.label.startsWith('__i18n:')
                                 ? t(step.label.replace('__i18n:', ''))
                                 : step.label;
+                              const accordionLabel = step.operation
+                                ? `${translatedLabel} (${step.operation})`
+                                : translatedLabel;
 
                               return (
                                 <StepDetailAccordion
                                   key={idx}
-                                  label={translatedLabel}
+                                  label={accordionLabel}
                                   color={
                                     step.level === 'error'
                                       ? 'red'
@@ -1070,12 +1115,15 @@ export function AgentPage() {
                               const translatedLabel = step.label.startsWith('__i18n:')
                                 ? t(step.label.replace('__i18n:', ''))
                                 : step.label;
+                              const accordionLabel = step.operation
+                                ? `${translatedLabel} (${step.operation})`
+                                : translatedLabel;
 
                               if (step.detail) {
                                 return (
                                   <StepDetailAccordion
                                     key={idx}
-                                    label={translatedLabel}
+                                    label={accordionLabel}
                                     color="red"
                                     detail={step.detail}
                                   />
@@ -1183,8 +1231,12 @@ export function AgentPage() {
                           backgroundColor: 'var(--mantine-color-gray-light)',
                         }}
                       >
-                        <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>
-                          {message.content}
+                        <Text
+                          component="div"
+                          size="sm"
+                          style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}
+                        >
+                          {renderUserMessageContent(message.content, message.mentions)}
                         </Text>
                       </Paper>
 
@@ -1268,47 +1320,19 @@ export function AgentPage() {
             </Paper>
           ) : (
             <>
-              {!!selectedMentions.length && (
-                <Group gap="xs">
-                  {selectedMentions.map(item => (
-                    <Badge key={`${item.type}-${item.id}`} variant="light">
-                      @{item.label}
-                    </Badge>
-                  ))}
-                </Group>
-              )}
-
               <Box style={{ position: 'relative' }}>
                 <Paper withBorder p="sm" radius="md">
-                  <Textarea
-                    ref={textAreaRef}
-                    minRows={3}
-                    maxRows={8}
+                  <AgentChatInput
+                    ref={chatInputRef}
                     value={draft}
-                    onChange={event => handleDraftChange(event.currentTarget.value)}
-                    onSelect={event => {
-                      caretRef.current = event.currentTarget.selectionStart || 0;
-                    }}
-                    onKeyDown={event => {
-                      if (event.key === 'Enter' && !event.shiftKey) {
-                        event.preventDefault();
-                        if (draft.trim()) {
-                          void handleSend();
-                        }
-                      }
-                    }}
-                    placeholder={t('composerPlaceholder')}
-                    autosize
-                    variant="unstyled"
-                    autoComplete="off"
-                    autoCorrect="off"
-                    autoCapitalize="off"
-                    spellCheck={false}
-                    styles={{
-                      input: {
-                        padding: 0,
-                      },
-                    }}
+                    onChange={setDraft}
+                    onSend={handleSend}
+                    disabled={sending}
+                    onMentionQueryChange={setMentionQuery}
+                    mentionItems={mentionItems}
+                    mentionHasMore={mentionHasMore}
+                    mentionLoading={mentionLoading}
+                    onLoadMoreMentions={() => void loadMentions(mentionQuery ?? '', false)}
                   />
 
                   <Group justify="space-between" align="center" mt="xs" wrap="nowrap">
@@ -1386,7 +1410,7 @@ export function AgentPage() {
                         radius="xl"
                         variant="filled"
                         color="dark"
-                        onClick={() => void handleSend()}
+                        onClick={() => chatInputRef.current?.submit()}
                         loading={sending}
                         disabled={!draft.trim()}
                       >
@@ -1395,58 +1419,6 @@ export function AgentPage() {
                     )}
                   </Group>
                 </Paper>
-
-                {mentionQuery && (mentionItems.length > 0 || mentionLoading) && (
-                  <Paper
-                    withBorder
-                    shadow="sm"
-                    p="xs"
-                    style={{
-                      position: 'absolute',
-                      left: 0,
-                      right: 0,
-                      bottom: 'calc(100% + 6px)',
-                      zIndex: 20,
-                      maxHeight: 220,
-                      overflow: 'auto',
-                    }}
-                  >
-                    <Stack gap={4}>
-                      {mentionItems.map(item => (
-                        <Button
-                          key={`${item.type}-${item.id}`}
-                          variant="subtle"
-                          justify="start"
-                          size="xs"
-                          onClick={() => handleInsertMention(item)}
-                        >
-                          <Group justify="space-between" style={{ width: '100%' }}>
-                            <Text size="sm">@{item.label}</Text>
-                            <Text size="xs" c="dimmed">
-                              {item.type}
-                            </Text>
-                          </Group>
-                        </Button>
-                      ))}
-
-                      {mentionLoading && (
-                        <Group justify="center" py={4}>
-                          <Loader size="xs" />
-                        </Group>
-                      )}
-
-                      {mentionHasMore && !mentionLoading && mentionQuery && (
-                        <Button
-                          size="xs"
-                          variant="light"
-                          onClick={() => void loadMentions(mentionQuery, false)}
-                        >
-                          {t('loadMoreMentions')}
-                        </Button>
-                      )}
-                    </Stack>
-                  </Paper>
-                )}
               </Box>
             </>
           )}

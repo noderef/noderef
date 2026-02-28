@@ -29,6 +29,7 @@
   "stepAwaitingConfirmation": "Wacht op bevestiging",
   "stepConfirmed": "Bevestigd",
   "stepRejected": "Afgewezen",
+  "runFailed": "Run mislukt",
   "confirmationRequired": "Bevestiging vereist",
   "confirmationDescription": "Deze actie vereist expliciete bevestiging.",
   "confirm": "Bevestigen",

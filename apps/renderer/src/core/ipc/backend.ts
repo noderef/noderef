@@ -359,6 +359,7 @@ export const backendRpc = {
       mentions?: AgentMention[];
       aiProvider?: string;
       aiModel?: string;
+      appLanguage?: string;
     }): Promise<{ message: AgentMessage; run: AgentRunSummary }> {
       return rpc('backend.agent.sendMessage', data);
     },

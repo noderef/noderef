@@ -8,7 +8,16 @@ import type { AgentMention } from '@app/contracts';
 // ── Manifest types (used by agentManifest.ts) ─────────────────────────────────
 
 export type ActionKind = 'read' | 'write';
-export type OperationName = 'search' | 'getNode' | 'move' | 'copy' | 'delete' | 'executeScript';
+export type OperationName =
+  | 'search'
+  | 'node_get'
+  | 'node_list_children'
+  | 'node_create'
+  | 'node_update'
+  | 'node_move'
+  | 'node_copy'
+  | 'node_delete'
+  | 'script_execute';
 
 export interface ActionDefinition {
   description: string;
@@ -50,6 +59,7 @@ export interface RunInput {
   mentions: AgentMention[];
   chatTitle: string;
   triggerMessageId: number;
+  preferredLanguage?: string;
 }
 
 export interface ResolvedAiRuntime {

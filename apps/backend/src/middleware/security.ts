@@ -60,7 +60,7 @@ export function helmetMiddleware(): RequestHandler {
 export function rpcRateLimiter(): RequestHandler {
   return rateLimit({
     windowMs: 10_000,
-    max: 100,
+    max: 500,
     standardHeaders: true,
     legacyHeaders: false,
   });

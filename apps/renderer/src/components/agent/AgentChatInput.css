@@ -1,0 +1,40 @@
+.agent-chat-input .mantine-RichTextEditor-content > div {
+  min-height: 64px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.agent-chat-input .mantine-RichTextEditor-root {
+  border: none !important;
+  background: transparent !important;
+  outline: none !important;
+}
+
+.agent-chat-input .mantine-RichTextEditor-root:focus-within,
+.agent-chat-input .mantine-RichTextEditor-root:focus,
+.agent-chat-input .mantine-RichTextEditor-root[data-active='true'] {
+  border-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.agent-chat-input .mantine-RichTextEditor-content,
+.agent-chat-input .mantine-RichTextEditor-content:focus-within,
+.agent-chat-input .mantine-RichTextEditor-content > div:focus,
+.agent-chat-input .mantine-RichTextEditor-content > div:focus-visible {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.agent-chat-input .mantine-RichTextEditor-content p.is-editor-empty:first-of-type::before {
+  color: var(--mantine-color-dimmed);
+}
+
+.agent-constraint-pill {
+  background-color: var(--mantine-color-blue-light);
+  color: var(--mantine-color-blue-filled);
+  border-radius: var(--mantine-radius-sm);
+  padding: 0 4px;
+  font-weight: 500;
+}

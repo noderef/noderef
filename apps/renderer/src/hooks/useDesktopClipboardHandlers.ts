@@ -219,6 +219,7 @@ export const useDesktopClipboardHandlers = ({
 
         const editableTarget = getEditableTarget(event.target);
         if (!editableTarget) return;
+        if (!container.contains(editableTarget)) return;
 
         event.preventDefault();
         event.stopPropagation();

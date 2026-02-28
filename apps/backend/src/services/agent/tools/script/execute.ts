@@ -3,13 +3,13 @@
  */
 
 import axios from 'axios';
-import { buildAlfrescoUrl } from '../../../lib/alfresco-url.js';
-import { AppErrors } from '../../../lib/errors.js';
-import type { AgentExecutionContext } from '../types.js';
-import type { ToolDefinition, ToolResult } from './types.js';
+import { buildAlfrescoUrl } from '../../../../lib/alfresco-url.js';
+import { AppErrors } from '../../../../lib/errors.js';
+import type { AgentExecutionContext } from '../../types.js';
+import type { ToolDefinition, ToolResult } from '../types.js';
 
-export const executScriptTool: ToolDefinition = {
-  name: 'execute_script',
+export const scriptExecuteTool: ToolDefinition = {
+  name: 'script_execute',
   description:
     'Execute a JavaScript Console script on the Alfresco server. Use when no other tool can accomplish the task. Requires explicit user confirmation.',
   inputSchema: {
@@ -35,6 +35,7 @@ export const executScriptTool: ToolDefinition = {
         ctx.serverBaseUrl,
         `/service/${ctx.jsconsoleEndpoint.replace(/^\/+/, '')}/execute`
       );
+      const executePath = `/service/${ctx.jsconsoleEndpoint.replace(/^\/+/, '')}/execute`;
 
       let authHeader: Record<string, string>;
       if (ctx.authType === 'openid_connect') {
@@ -47,18 +48,20 @@ export const executScriptTool: ToolDefinition = {
         };
       }
 
+      const requestBody = {
+        script,
+        template: '',
+        spaceNodeRef: '',
+        transaction: 'readwrite',
+        runas: ctx.username ?? '',
+        urlargs: '',
+        documentNodeRef: '',
+        resultChannel,
+      };
+
       const response = await axios.post(
         executeUrl,
-        {
-          script,
-          template: '',
-          spaceNodeRef: '',
-          transaction: 'readwrite',
-          runas: ctx.username ?? '',
-          urlargs: '',
-          documentNodeRef: '',
-          resultChannel,
-        },
+        requestBody,
         {
           headers: { 'Content-Type': 'application/json', ...authHeader },
           validateStatus: s => s < 600,
@@ -75,6 +78,12 @@ export const executScriptTool: ToolDefinition = {
       return {
         ok: true,
         data: {
+          apiTrace: {
+            method: 'POST',
+            path: executePath,
+            request: { body: requestBody },
+            responseBody: response.data,
+          },
           status: response.status,
           output: printOutput,
           error: data?.error ?? data?.message ?? null,

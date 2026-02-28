@@ -6,13 +6,15 @@
  */
 
 import type { AgentToolSchema } from '../../../ai/anthropic.js';
-import { copyTool } from './copy.js';
-import { deleteTool } from './delete.js';
-import { getChildrenTool } from './getChildren.js';
-import { getNodeTool } from './getNode.js';
-import { moveTool } from './move.js';
-import { executScriptTool } from './script.js';
-import { searchTool } from './search.js';
+import { nodeCopyTool } from './node/copy.js';
+import { nodeCreateTool } from './node/create.js';
+import { nodeDeleteTool } from './node/delete.js';
+import { nodeGetTool } from './node/get.js';
+import { nodeListChildrenTool } from './node/list_children.js';
+import { nodeMoveTool } from './node/move.js';
+import { nodeUpdateTool } from './node/update.js';
+import { searchTool } from './search/query.js';
+import { scriptExecuteTool } from './script/execute.js';
 import type { ToolDefinition } from './types.js';
 import { toAnthropicSchema } from './types.js';
 
@@ -21,19 +23,35 @@ export type { ToolDefinition };
 /** All tools available to the agent, in the order they are presented to the LLM */
 export const ALL_TOOLS: ToolDefinition[] = [
   searchTool,
-  getNodeTool,
-  getChildrenTool,
-  moveTool,
-  copyTool,
-  deleteTool,
-  executScriptTool,
+  nodeGetTool,
+  nodeListChildrenTool,
+  nodeCreateTool,
+  nodeUpdateTool,
+  nodeMoveTool,
+  nodeCopyTool,
+  nodeDeleteTool,
+  scriptExecuteTool,
 ];
 
 const toolMap = new Map<string, ToolDefinition>(ALL_TOOLS.map(t => [t.name, t]));
 
+const TOOL_NAME_ALIASES: Record<string, string> = {
+  get_node: 'node_get',
+  get_children: 'node_list_children',
+  move_node: 'node_move',
+  copy_node: 'node_copy',
+  delete_nodes: 'node_delete',
+  execute_script: 'script_execute',
+  delete: 'node_delete',
+};
+
+export function resolveToolName(name: string): string {
+  return TOOL_NAME_ALIASES[name] || name;
+}
+
 /** Look up a tool by name. Returns undefined if not registered. */
 export function getToolByName(name: string): ToolDefinition | undefined {
-  return toolMap.get(name);
+  return toolMap.get(resolveToolName(name));
 }
 
 /** Return Anthropic-format tool schemas for all tools */

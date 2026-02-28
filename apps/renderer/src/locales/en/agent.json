@@ -29,6 +29,7 @@
   "stepAwaitingConfirmation": "Awaiting confirmation",
   "stepConfirmed": "Confirmed",
   "stepRejected": "Rejected",
+  "runFailed": "Run failed",
   "confirmationRequired": "Confirmation required",
   "confirmationDescription": "This operation needs explicit human confirmation.",
   "confirm": "Confirm",
