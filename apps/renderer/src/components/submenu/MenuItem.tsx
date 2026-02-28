@@ -181,7 +181,7 @@ export function MenuItem({
             {icon}
           </div>
         )}
-        <Text size="sm" style={{ flex: 1 }}>
+        <Text size="sm" truncate title={item.label} style={{ flex: 1 }}>
           {item.label}
         </Text>
       </Group>

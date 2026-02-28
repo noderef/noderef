@@ -372,6 +372,33 @@ export class AgentRepository {
     return rows.reverse().map(row => this.toMessageDTO(row));
   }
 
+  async getRecentMessages(
+    chatId: number,
+    options: { maxItems?: number; excludeMessageId?: number } = {}
+  ): Promise<AgentMessage[]> {
+    const maxItems = Math.max(1, Math.min(options.maxItems ?? 20, 50));
+
+    const rows = await this.prisma.agentMessage.findMany({
+      where: {
+        chatId,
+        ...(options.excludeMessageId ? { id: { not: options.excludeMessageId } } : {}),
+      },
+      orderBy: { id: 'desc' },
+      take: maxItems,
+      select: {
+        id: true,
+        chatId: true,
+        userId: true,
+        role: true,
+        content: true,
+        mentionsJson: true,
+        createdAt: true,
+      },
+    });
+
+    return rows.reverse().map(row => this.toMessageDTO(row));
+  }
+
   async createMessage(data: {
     chatId: number;
     userId: number;

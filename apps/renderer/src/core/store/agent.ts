@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-import { create } from 'zustand';
 import type {
   AgentChatSummary,
   AgentMessage,
   AgentRunEvent,
   AgentRunSummary,
 } from '@/core/ipc/backend';
+import { create } from 'zustand';
 
 interface AgentState {
   chats: AgentChatSummary[];
@@ -43,8 +43,12 @@ interface AgentState {
 
 const sortChats = (items: AgentChatSummary[]): AgentChatSummary[] =>
   [...items].sort((a, b) => {
-    const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : new Date(a.updatedAt).getTime();
-    const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : new Date(b.updatedAt).getTime();
+    const aTime = a.lastMessageAt
+      ? new Date(a.lastMessageAt).getTime()
+      : new Date(a.updatedAt).getTime();
+    const bTime = b.lastMessageAt
+      ? new Date(b.lastMessageAt).getTime()
+      : new Date(b.updatedAt).getTime();
     return bTime - aTime;
   });
 
@@ -58,11 +62,16 @@ export const useAgentStore = create<AgentState>(set => ({
   setChats: items => {
     set(state => {
       const sorted = sortChats(items);
-      const activeIsValid = state.activeChatId ? sorted.some(chat => chat.id === state.activeChatId) : false;
+      let newActiveChatId = state.activeChatId;
+
+      // If we currently have an active chat ID but it's missing from the new list, gracefully fall back
+      if (state.activeChatId !== null && !sorted.some(chat => chat.id === state.activeChatId)) {
+        newActiveChatId = sorted[0]?.id ?? null;
+      }
 
       return {
         chats: sorted,
-        activeChatId: activeIsValid ? state.activeChatId : sorted[0]?.id ?? null,
+        activeChatId: newActiveChatId,
       };
     });
   },
@@ -92,7 +101,7 @@ export const useAgentStore = create<AgentState>(set => ({
 
       return {
         chats,
-        activeChatId: state.activeChatId === chatId ? chats[0]?.id ?? null : state.activeChatId,
+        activeChatId: state.activeChatId === chatId ? (chats[0]?.id ?? null) : state.activeChatId,
         messagesByChat,
         runsByChat,
         eventsByRun,

@@ -15,8 +15,8 @@
  */
 
 import { backendRpc } from '@/core/ipc/backend';
-import type { PageKey } from '@/core/store/keys';
 import { useAgentStore } from '@/core/store/agent';
+import type { PageKey } from '@/core/store/keys';
 import { useSavedSearchesStore } from '@/core/store/savedSearches';
 import { useServersStore } from '@/core/store/servers';
 import { useNavigation } from '@/hooks/useNavigation';
@@ -24,7 +24,7 @@ import type { MenuItem as MenuItemType, MenuSection as MenuSectionType } from '@
 import { ScrollArea, Stack, Text } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MenuItem } from './MenuItem';
 import { MenuSection } from './MenuSection';
@@ -88,7 +88,7 @@ export function SimpleMenuNavigation() {
   const { t } = useTranslation(['submenu', 'addServer']);
   const { activeServerId, activePage, navigate, setActiveServer } = useNavigation();
   const getServerById = useServersStore(state => state.getServerById);
-  const allServers = useServersStore(state => state.servers);
+
   const savedSearches = useSavedSearchesStore(state => state.savedSearches);
   const setSavedSearches = useSavedSearchesStore(state => state.setSavedSearches);
   const setActiveSavedSearchId = useSavedSearchesStore(state => state.setActiveSavedSearchId);
@@ -97,10 +97,13 @@ export function SimpleMenuNavigation() {
   const setAgentChats = useAgentStore(state => state.setChats);
   const setActiveChatId = useAgentStore(state => state.setActiveChatId);
   const activeChatId = useAgentStore(state => state.activeChatId);
-  const upsertAgentChat = useAgentStore(state => state.upsertChat);
+
   const removeAgentChat = useAgentStore(state => state.removeChat);
   const serverInitializationRef = useRef<number | null>(null);
   const searchSectionOpenedRef = useRef(true);
+  const [agentSectionOpened, setAgentSectionOpened] = useState(
+    () => getPersistedSectionOpened(activeServerId, 'agent-main') ?? true
+  );
 
   const server = getServerById(activeServerId);
   const isNodeRefSpace = !server || !server.serverType;
@@ -131,7 +134,9 @@ export function SimpleMenuNavigation() {
           if (serverInitializationRef.current !== activeServerId) {
             serverInitializationRef.current = activeServerId;
             const shouldPreservePage =
-              activePage === 'jsconsole' || activePage === 'text-editor' || activePage === 'agentPage';
+              activePage === 'jsconsole' ||
+              activePage === 'text-editor' ||
+              activePage === 'agentPage';
 
             if (!shouldPreservePage) {
               if (searches.length > 0) {
@@ -190,7 +195,7 @@ export function SimpleMenuNavigation() {
       }
     };
 
-    if (activePage !== 'agentPage') {
+    if (activePage !== 'agentPage' && !agentSectionOpened) {
       return () => {
         cancelled = true;
         if (intervalId !== null) {
@@ -200,9 +205,13 @@ export function SimpleMenuNavigation() {
     }
 
     void loadAgentChats();
-    intervalId = window.setInterval(() => {
-      void loadAgentChats();
-    }, 2000);
+
+    // Only poll when on the agent page
+    if (activePage === 'agentPage') {
+      intervalId = window.setInterval(() => {
+        void loadAgentChats();
+      }, 2000);
+    }
 
     return () => {
       cancelled = true;
@@ -210,7 +219,7 @@ export function SimpleMenuNavigation() {
         window.clearInterval(intervalId);
       }
     };
-  }, [activePage, activeServerId, setAgentChats]);
+  }, [activePage, activeServerId, agentSectionOpened, setAgentChats]);
 
   // Convert PageKey navigation to MenuItem format for MenuSection
   const handleItemSelect = async (item: MenuItemType) => {
@@ -382,30 +391,9 @@ export function SimpleMenuNavigation() {
     });
   };
 
-  const handleCreateAgentChat = async () => {
-    const serverId = activeServerId || allServers[0]?.id;
-    if (!serverId) {
-      notifications.show({
-        title: t('common:error'),
-        message: t('agent:errors.serverRequiredMessage'),
-        color: 'red',
-      });
-      return;
-    }
-
-    try {
-      const chat = await backendRpc.agent.createChat({ serverId });
-      upsertAgentChat(chat);
-      setActiveChatId(chat.id);
-      setActiveServer(serverId);
-      navigate('agentPage');
-    } catch (error) {
-      notifications.show({
-        title: t('common:error'),
-        message: error instanceof Error ? error.message : t('agent:errors.generic'),
-        color: 'red',
-      });
-    }
+  const handleCreateAgentChat = () => {
+    setActiveChatId(null);
+    navigate('agentPage');
   };
 
   // Alfresco server sections - dynamically build search items from saved searches
@@ -435,8 +423,12 @@ export function SimpleMenuNavigation() {
 
   const agentSections: MenuSectionType[] = useMemo(() => {
     const sortedChats = [...agentChats].sort((a, b) => {
-      const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : new Date(a.updatedAt).getTime();
-      const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : new Date(b.updatedAt).getTime();
+      const aTime = a.lastMessageAt
+        ? new Date(a.lastMessageAt).getTime()
+        : new Date(a.updatedAt).getTime();
+      const bTime = b.lastMessageAt
+        ? new Date(b.lastMessageAt).getTime()
+        : new Date(b.updatedAt).getTime();
       return bTime - aTime;
     });
 
@@ -592,7 +584,11 @@ export function SimpleMenuNavigation() {
           activeItemId={activeMenuItemId}
           onItemSelect={handleItemSelect}
           onItemDelete={
-            isSearchSection ? handleDeleteSavedSearch : isAgentSection ? handleDeleteAgentChat : undefined
+            isSearchSection
+              ? handleDeleteSavedSearch
+              : isAgentSection
+                ? handleDeleteAgentChat
+                : undefined
           }
           onItemRename={isSearchSection ? handleRenameSavedSearch : undefined}
           onSectionAction={(sectionData, actionId) => {
@@ -600,7 +596,11 @@ export function SimpleMenuNavigation() {
               void handleCreateAgentChat();
             }
           }}
-          onOpenedChange={opened => persistOpenedState(section.id, opened)}
+          onOpenedChange={opened => {
+            persistOpenedState(section.id, opened);
+            if (isAgentSection) setAgentSectionOpened(opened);
+          }}
+          maxInitialItems={isAgentSection ? 10 : undefined}
         />
       );
     });
@@ -613,12 +613,14 @@ export function SimpleMenuNavigation() {
           {isNodeRefSpace && renderMenuItems(nodeRefMenuItems)}
 
           {/* Saved searches should stay on top when available */}
-          {(isNodeRefSpace || server?.serverType === 'alfresco') && renderSections(sectionsBeforeTopLevel)}
+          {(isNodeRefSpace || server?.serverType === 'alfresco') &&
+            renderSections(sectionsBeforeTopLevel)}
 
           {/* JavaScript Console next (server context) */}
           {!isNodeRefSpace && renderMenuItems(topLevelItems)}
 
-          {(isNodeRefSpace || server?.serverType === 'alfresco') && renderSections(sectionsAfterTopLevel)}
+          {(isNodeRefSpace || server?.serverType === 'alfresco') &&
+            renderSections(sectionsAfterTopLevel)}
 
           {/* Repository Tree Section for Alfresco servers */}
           {!isNodeRefSpace && server?.serverType === 'alfresco' && (

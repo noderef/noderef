@@ -39,7 +39,7 @@ import { NodeHistoryService } from '../../services/nodeHistoryService.js';
 import { SavedSearchService } from '../../services/savedSearchService.js';
 import { SearchHistoryService } from '../../services/searchHistoryService.js';
 import { ServerService } from '../../services/serverService.js';
-import { AgentService } from '../../services/agentService.js';
+import { AgentService } from '../../services/agent/AgentService.js';
 
 // Domain handlers
 import { registerAiHandlers } from './ai.js';

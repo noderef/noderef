@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import { getAiSettings, listAiModels, listAiProviders } from '@/core/ipc/aiSettings';
 import {
   backendRpc,
   type AgentMentionSuggestion,
@@ -21,47 +22,48 @@ import {
   type AgentRunEvent,
   type AgentRunSummary,
 } from '@/core/ipc/backend';
-import {
-  getAiSettings,
-  listAiModels,
-  listAiProviders,
-} from '@/core/ipc/aiSettings';
 import { useAgentStore } from '@/core/store/agent';
 import { useServersStore } from '@/core/store/servers';
 import { useNavigation } from '@/hooks/useNavigation';
+import { CodeHighlight } from '@mantine/code-highlight';
+import '@mantine/code-highlight/styles.css';
 import {
   Accordion,
+  ActionIcon,
   Badge,
   Box,
   Button,
+  CopyButton,
   Group,
   Loader,
   Paper,
   Select,
   Stack,
   Text,
-  TextInput,
   Textarea,
+  Tooltip,
 } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
-import { IconChevronDown, IconPlayerStop, IconSend } from '@tabler/icons-react';
+import {
+  IconArrowUp,
+  IconCheck,
+  IconChevronDown,
+  IconCopy,
+  IconPlayerStop,
+} from '@tabler/icons-react';
+import { marked } from 'marked';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const ACTIVE_RUN_STATUSES = new Set(['queued', 'running', 'waiting_confirmation']);
 
-const formatActivityType = (value: string): string =>
-  value
-    .replace(/\./g, ' ')
-    .replace(/_/g, ' ')
-    .trim();
-
-const getActivityLevelColor = (level: 'debug' | 'info' | 'warn' | 'error'): string => {
-  if (level === 'error') return 'red';
-  if (level === 'warn') return 'orange';
-  if (level === 'debug') return 'gray';
-  return 'blue';
+const renderMarkdown = (md: string): string => {
+  try {
+    return marked.parse(md, { async: false, breaks: true }) as string;
+  } catch {
+    return md;
+  }
 };
 
 const extractMentionQuery = (value: string, caret: number): string | null => {
@@ -187,39 +189,163 @@ const writeStoredModelSelection = (
       nextStore[MODEL_SELECTION_GLOBAL_SCOPE] = { provider, model };
     }
 
-    window.localStorage.setItem(
-      AGENT_MODEL_SELECTION_STORAGE_KEY,
-      JSON.stringify(nextStore)
-    );
+    window.localStorage.setItem(AGENT_MODEL_SELECTION_STORAGE_KEY, JSON.stringify(nextStore));
   } catch {
     // ignore storage failures
   }
 };
 
-const toPayloadSnippet = (value: Record<string, unknown> | null): string | null => {
-  if (!value) {
-    return null;
-  }
+const RunTimer = ({ createdAt }: { createdAt: string | Date }) => {
+  const [duration, setDuration] = useState(0);
 
-  try {
-    const raw = JSON.stringify(value, null, 2);
-    if (raw.length <= 1400) {
-      return raw;
-    }
-    return `${raw.slice(0, 1400)}\n...`;
-  } catch {
-    return null;
-  }
+  useEffect(() => {
+    const start = new Date(createdAt).getTime();
+    const update = () => setDuration(Math.floor((Date.now() - start) / 1000));
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [createdAt]);
+
+  return <>{duration}s</>;
 };
 
-const eventProgressText = (event: AgentRunEvent): string =>
-  (event.payload?.progressMessage as string | undefined) || formatActivityType(event.type);
+const StepDetailAccordion = ({
+  label,
+  color,
+  detail,
+}: {
+  label: string;
+  color?: string;
+  detail: string;
+}) => (
+  <Accordion
+    variant="default"
+    chevronPosition="right"
+    chevronSize={14}
+    styles={{
+      root: { border: 'none', width: 'fit-content' },
+      item: { border: 'none' },
+      control: {
+        padding: '2px 0',
+        minHeight: 'unset',
+        width: 'fit-content',
+      },
+      label: { padding: 0 },
+      chevron: { marginLeft: 6, margin: 0 },
+      panel: { padding: '4px 0', width: '100%' },
+      content: { padding: 0 },
+    }}
+  >
+    <Accordion.Item value="detail">
+      <Accordion.Control>
+        <Text size="sm" c={color}>
+          {label}
+        </Text>
+      </Accordion.Control>
+      <Accordion.Panel>
+        <CodeHighlight
+          code={detail}
+          language="json"
+          withCopyButton={false}
+          style={{
+            margin: 0,
+            padding: 0,
+            fontSize: 11,
+            lineHeight: 1.4,
+            borderRadius: 'var(--mantine-radius-xs)',
+            maxHeight: 300,
+            overflow: 'auto',
+            width: 'calc(100vw - 80px)',
+            maxWidth: 800,
+          }}
+        />
+      </Accordion.Panel>
+    </Accordion.Item>
+  </Accordion>
+);
 
-const deriveStepStatus = (eventType: string): string => {
-  if (eventType.startsWith('step.')) {
-    return formatActivityType(eventType.replace(/^step\./, ''));
+interface RunActivityItem {
+  kind: 'note' | 'execution';
+  label: string;
+  detail: string | null;
+  level: 'info' | 'warn' | 'error';
+}
+
+const EXECUTION_EVENT_KEYS: Record<string, string> = {
+  'step.completed': 'stepCompleted',
+  'step.failed': 'stepFailed',
+  'step.waiting_confirmation': 'stepAwaitingConfirmation',
+  'step.confirmed': 'stepConfirmed',
+  'step.rejected': 'stepRejected',
+};
+
+const SKIP_EVENT_TYPES = new Set([
+  'run.queued',
+  'run.executing',
+  'run.summarizing',
+  'run.completed',
+  'run.failed',
+  'run.cancelled',
+]);
+
+const formatEventDetail = (event: AgentRunEvent): string | null => {
+  const payload = event.payload;
+  if (!payload) return null;
+
+  if (event.type === 'step.completed' || event.type === 'step.failed') {
+    const output = payload.output as Record<string, unknown> | undefined;
+    if (!output) return null;
+    try {
+      return JSON.stringify(output, null, 2).slice(0, 1500);
+    } catch {
+      return null;
+    }
   }
-  return formatActivityType(eventType);
+
+  if (event.type === 'step.waiting_confirmation') {
+    const parts: string[] = [];
+    if (payload.operation) parts.push(`Operation: ${payload.operation}`);
+    if (payload.summary) parts.push(`${payload.summary}`);
+    const args = (payload.output as Record<string, unknown> | undefined)?.args;
+    if (args) {
+      try {
+        parts.push(`Args: ${JSON.stringify(args, null, 2)}`);
+      } catch {
+        /* skip */
+      }
+    }
+    return parts.join('\n') || null;
+  }
+
+  if (payload.error) {
+    return String(payload.error);
+  }
+
+  return null;
+};
+
+const buildRunActivity = (events: AgentRunEvent[]): RunActivityItem[] => {
+  const items: RunActivityItem[] = [];
+
+  for (const event of events) {
+    if (SKIP_EVENT_TYPES.has(event.type)) continue;
+
+    if (event.type === 'run.note') {
+      const text = (event.payload?.text as string) || '';
+      if (text) {
+        items.push({ kind: 'note', label: text, detail: null, level: 'info' });
+      }
+      continue;
+    }
+
+    const key = EXECUTION_EVENT_KEYS[event.type];
+    const label = key ? `__i18n:${key}` : event.type;
+    const detail = formatEventDetail(event);
+    const level = event.level === 'error' ? 'error' : event.level === 'warn' ? 'warn' : 'info';
+    items.push({ kind: 'execution', label, detail, level });
+  }
+
+  return items;
 };
 
 export function AgentPage() {
@@ -238,12 +364,19 @@ export function AgentPage() {
   const setRuns = useAgentStore(state => state.setRuns);
   const upsertRun = useAgentStore(state => state.upsertRun);
   const appendRunEvents = useAgentStore(state => state.appendRunEvents);
+  const upsertChat = useAgentStore(state => state.upsertChat);
+  const setActiveChatId = useAgentStore(state => state.setActiveChatId);
 
   const [loadingConversation, setLoadingConversation] = useState(false);
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState('');
   const [selectedMentions, setSelectedMentions] = useState<
-    Array<{ id: string; type: 'node' | 'person' | 'group' | 'server'; label: string; path?: string | null }>
+    Array<{
+      id: string;
+      type: 'node' | 'person' | 'group' | 'server';
+      label: string;
+      path?: string | null;
+    }>
   >([]);
 
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -252,7 +385,7 @@ export function AgentPage() {
   const [mentionSkipCount, setMentionSkipCount] = useState(0);
   const [mentionHasMore, setMentionHasMore] = useState(false);
   const [mentionLoading, setMentionLoading] = useState(false);
-  const [confirmationText, setConfirmationText] = useState('');
+
   const [aiModelOptions, setAiModelOptions] = useState<AiModelChoice[]>([]);
   const [selectedAiModelOption, setSelectedAiModelOption] = useState<string | null>(null);
   const [aiProvider, setAiProvider] = useState<string | null>(null);
@@ -436,6 +569,11 @@ export function AgentPage() {
     }
 
     try {
+      const existingMessages = useAgentStore.getState().messagesByChat[chatId] || [];
+      const lastMessageId = existingMessages.length
+        ? existingMessages[existingMessages.length - 1].id
+        : undefined;
+
       const [messages, runsPage] = await Promise.all([
         backendRpc.agent.listMessages({ chatId, maxItems: 200 }),
         backendRpc.agent.listRuns({ chatId, maxItems: 100, skipCount: 0 }),
@@ -444,11 +582,37 @@ export function AgentPage() {
       useAgentStore.getState().setMessages(chatId, messages);
       useAgentStore.getState().setRuns(chatId, runsPage.items);
 
-      for (const run of runsPage.items) {
+      const activeRuns = runsPage.items.filter(run => ACTIVE_RUN_STATUSES.has(run.status));
+      for (const run of activeRuns) {
         const existingEvents = useAgentStore.getState().eventsByRun[run.id] || [];
-        const afterId = existingEvents.length ? existingEvents[existingEvents.length - 1].id : undefined;
-        const events = await backendRpc.agent.listRunEvents({ runId: run.id, afterId, maxItems: 200 });
+        const afterId = existingEvents.length
+          ? existingEvents[existingEvents.length - 1].id
+          : undefined;
+        const events = await backendRpc.agent.listRunEvents({
+          runId: run.id,
+          afterId,
+          maxItems: 200,
+        });
         useAgentStore.getState().appendRunEvents(run.id, events);
+      }
+
+      const newMessages = messages.filter(m => lastMessageId && m.id > lastMessageId);
+      const hasNewAssistantMessage = newMessages.some(m => m.role === 'assistant');
+      const stillHasActiveRuns = activeRuns.length > 0;
+
+      if (hasNewAssistantMessage && !stillHasActiveRuns) {
+        for (const run of runsPage.items) {
+          const existingEvents = useAgentStore.getState().eventsByRun[run.id] || [];
+          const afterId = existingEvents.length
+            ? existingEvents[existingEvents.length - 1].id
+            : undefined;
+          const events = await backendRpc.agent.listRunEvents({
+            runId: run.id,
+            afterId,
+            maxItems: 200,
+          });
+          useAgentStore.getState().appendRunEvents(run.id, events);
+        }
       }
     } catch {
       // polling should not spam notifications
@@ -523,10 +687,9 @@ export function AgentPage() {
         const optionGroups = await Promise.all(
           configuredProviders.map(async provider => {
             const remote = await listAiModels({ provider: provider.value }).catch(() => null);
-            const models =
-              remote?.models?.length
-                ? remote.models
-                : [{ id: provider.defaultModel, displayName: provider.defaultModel }];
+            const models = remote?.models?.length
+              ? remote.models
+              : [{ id: provider.defaultModel, displayName: provider.defaultModel }];
             return models.map(model => ({
               value: `${provider.value}::${model.id}`,
               label: `${provider.label} · ${model.displayName || model.id}`,
@@ -553,7 +716,6 @@ export function AgentPage() {
           setAiModel(null);
           return;
         }
-
       } catch {
         // keep composer functional without model selector data
       } finally {
@@ -586,7 +748,8 @@ export function AgentPage() {
       [storedValue, configuredValue, aiModelOptions[0].value].find(value =>
         Boolean(value && aiModelOptions.some(option => option.value === value))
       ) || aiModelOptions[0].value;
-    const selected = aiModelOptions.find(option => option.value === selectedValue) || aiModelOptions[0];
+    const selected =
+      aiModelOptions.find(option => option.value === selectedValue) || aiModelOptions[0];
 
     setSelectedAiModelOption(selected.value);
     setAiProvider(selected.provider);
@@ -600,14 +763,32 @@ export function AgentPage() {
   ]);
 
   useEffect(() => {
+    setDraft('');
+    setMentionQuery(null);
+    setMentionItems([]);
+    setMentionSkipCount(0);
+    setMentionHasMore(false);
+    setSelectedMentions([]);
+    caretRef.current = 0;
+  }, [activeChatId]);
+
+  useEffect(() => {
     if (!activeChatId) {
       return;
     }
     void loadConversation(activeChatId);
   }, [activeChatId, loadConversation]);
 
+  const hasActiveRuns = activeRuns.some(run => ACTIVE_RUN_STATUSES.has(run.status));
+  const [recentlySentMessage, setRecentlySentMessage] = useState(false);
+
   useEffect(() => {
     if (!activeChatId) {
+      return;
+    }
+
+    const shouldPoll = hasActiveRuns || recentlySentMessage;
+    if (!shouldPoll) {
       return;
     }
 
@@ -616,7 +797,21 @@ export function AgentPage() {
     }, 1500);
 
     return () => clearInterval(interval);
-  }, [activeChatId, pollActiveChat]);
+  }, [activeChatId, hasActiveRuns, recentlySentMessage, pollActiveChat]);
+
+  useEffect(() => {
+    if (!recentlySentMessage) {
+      return;
+    }
+
+    if (hasActiveRuns) {
+      setRecentlySentMessage(false);
+      return;
+    }
+
+    const timeout = setTimeout(() => setRecentlySentMessage(false), 10000);
+    return () => clearTimeout(timeout);
+  }, [recentlySentMessage, hasActiveRuns]);
 
   useEffect(() => {
     if (!debouncedMentionQuery) {
@@ -629,12 +824,6 @@ export function AgentPage() {
     setMentionSkipCount(0);
     void loadMentions(debouncedMentionQuery, true);
   }, [debouncedMentionQuery, loadMentions]);
-
-  useEffect(() => {
-    if (!pendingConfirmation) {
-      setConfirmationText('');
-    }
-  }, [pendingConfirmation]);
 
   useEffect(() => {
     const viewport = conversationViewportRef.current;
@@ -695,22 +884,44 @@ export function AgentPage() {
   };
 
   const handleSend = async () => {
-    if (!activeChatId || !draft.trim()) {
+    if (!draft.trim()) {
       return;
     }
 
     setSending(true);
     try {
+      let chatId = activeChatId;
+
+      // Create chat on first message if no chat exists yet
+      if (!chatId) {
+        const serverId = activeServerId || servers[0]?.id;
+        if (!serverId) {
+          notifications.show({
+            title: t('errors.sendMessageTitle'),
+            message: t('errors.serverRequiredMessage'),
+            color: 'red',
+          });
+          return;
+        }
+
+        // Use first 80 chars of user message as initial title
+        const title = draft.trim().substring(0, 80);
+        const chat = await backendRpc.agent.createChat({ serverId, title });
+        upsertChat(chat);
+        setActiveChatId(chat.id);
+        chatId = chat.id;
+      }
+
       const response = await backendRpc.agent.sendMessage({
-        chatId: activeChatId,
+        chatId,
         content: draft.trim(),
         mentions: selectedMentions,
         aiProvider: aiProvider || undefined,
         aiModel: aiModel || undefined,
       });
 
-      addMessage(activeChatId, response.message);
-      upsertRun(activeChatId, response.run);
+      addMessage(chatId, response.message);
+      upsertRun(chatId, response.run);
 
       setDraft('');
       setSelectedMentions([]);
@@ -718,6 +929,7 @@ export function AgentPage() {
       setMentionItems([]);
       setMentionSkipCount(0);
       setMentionHasMore(false);
+      setRecentlySentMessage(true);
 
       await pollActiveChat();
     } catch (error) {
@@ -755,7 +967,6 @@ export function AgentPage() {
         stepId: pendingConfirmation.pendingStep.id,
         confirmationToken: pendingConfirmation.pendingStep.confirmationToken || '',
         approved,
-        confirmationText,
       });
 
       await pollActiveChat();
@@ -778,503 +989,469 @@ export function AgentPage() {
         padding: 'var(--mantine-spacing-md)',
       }}
     >
-      {!activeChatId ? (
-        <Paper withBorder p="lg">
-          <Text c="dimmed">{t('noChatSelected')}</Text>
-        </Paper>
-      ) : (
+      <Box
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: 'grid',
+          gridTemplateRows: 'minmax(0, 1fr) auto',
+          rowGap: 'var(--mantine-spacing-sm)',
+        }}
+      >
         <Box
+          ref={conversationViewportRef}
           style={{
-            flex: 1,
             minHeight: 0,
-            display: 'grid',
-            gridTemplateRows: 'minmax(0, 1fr) auto',
-            rowGap: 'var(--mantine-spacing-sm)',
+            height: '100%',
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
           }}
         >
-          <Box
-            ref={conversationViewportRef}
-            style={{
-              minHeight: 0,
-              height: '100%',
-              overflowY: 'auto',
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
-            <Stack gap="xs" pr="sm" style={{ marginTop: 'auto' }}>
-              {loadingConversation && (
-                <Group justify="center" py={2}>
-                  <Loader size="xs" />
-                </Group>
-              )}
+          <Stack gap="xs" pr="sm" style={{ marginTop: 'auto' }}>
+            {loadingConversation && (
+              <Group justify="center" py={2}>
+                <Loader size="xs" />
+              </Group>
+            )}
 
-              {conversationTimeline.length === 0 ? (
-                <Text size="sm" c="dimmed">
-                  {t('noMessages')}
-                </Text>
-              ) : (
-                <>
-                  {conversationTimeline.map(item => {
-                    if (item.kind === 'run') {
-                      const run = item.run;
-                      const runEvents = (eventsByRun[run.id] || []).slice().sort((left, right) => left.id - right.id);
+            {conversationTimeline.length === 0 ? (
+              <Text size="sm" c="dimmed">
+                {t('noMessages')}
+              </Text>
+            ) : (
+              <>
+                {conversationTimeline.map(item => {
+                  if (item.kind === 'run') {
+                    const run = item.run;
+                    const runEvents = (eventsByRun[run.id] || [])
+                      .slice()
+                      .sort((a, b) => a.id - b.id);
+                    const isActive = ACTIVE_RUN_STATUSES.has(run.status);
+                    const activity = buildRunActivity(runEvents);
 
-                      const stepEventsMap = new Map<number, AgentRunEvent[]>();
-                      for (const event of runEvents) {
-                        if (!event.stepId) {
-                          continue;
-                        }
-                        const current = stepEventsMap.get(event.stepId) || [];
-                        current.push(event);
-                        stepEventsMap.set(event.stepId, current);
-                      }
+                    return (
+                      <Box key={`timeline-run-${run.id}`} py={2}>
+                        <Stack gap="xs">
+                          {activity.map((step, idx) => {
+                            if (step.kind === 'note') {
+                              return (
+                                <Box
+                                  key={idx}
+                                  className="agent-markdown"
+                                  dangerouslySetInnerHTML={{ __html: renderMarkdown(step.label) }}
+                                  style={{ fontSize: 14, lineHeight: 1.6 }}
+                                />
+                              );
+                            }
 
-                      const stepGroups = Array.from(stepEventsMap.entries())
-                        .map(([stepId, events]) => {
-                          const firstEvent = events[0];
-                          const lastStepEvent = events[events.length - 1];
-                          const firstWithOrdinal = events.find(candidate =>
-                            Number.isFinite(candidate.payload?.ordinal)
-                          );
-                          const firstWithOperation = events.find(
-                            candidate =>
-                              typeof candidate.payload?.operation === 'string' &&
-                              String(candidate.payload.operation).trim().length > 0
-                          );
+                            if (step.kind === 'execution' && step.detail) {
+                              const translatedLabel = step.label.startsWith('__i18n:')
+                                ? t(step.label.replace('__i18n:', ''))
+                                : step.label;
 
-                          const ordinal = Number(firstWithOrdinal?.payload?.ordinal);
-                          const operation =
-                            typeof firstWithOperation?.payload?.operation === 'string'
-                              ? String(firstWithOperation.payload.operation)
-                              : null;
+                              return (
+                                <StepDetailAccordion
+                                  key={idx}
+                                  label={translatedLabel}
+                                  color={
+                                    step.level === 'error'
+                                      ? 'red'
+                                      : step.level === 'warn'
+                                        ? 'orange'
+                                        : 'var(--mantine-color-text)'
+                                  }
+                                  detail={step.detail}
+                                />
+                              );
+                            }
 
-                          return {
-                            stepId,
-                            events,
-                            firstEventId: firstEvent?.id || Number.MAX_SAFE_INTEGER,
-                            ordinal: Number.isFinite(ordinal) ? ordinal : Number.MAX_SAFE_INTEGER,
-                            operation,
-                            status: deriveStepStatus(lastStepEvent?.type || 'step.pending'),
-                            statusLevel: lastStepEvent?.level || 'info',
-                            latestProgress: lastStepEvent ? eventProgressText(lastStepEvent) : t('noActivity'),
-                          };
-                        })
-                        .sort((left, right) => {
-                          if (left.firstEventId !== right.firstEventId) {
-                            return left.firstEventId - right.firstEventId;
-                          }
-                          return left.ordinal - right.ordinal;
-                        });
+                            if (step.level === 'error') {
+                              const translatedLabel = step.label.startsWith('__i18n:')
+                                ? t(step.label.replace('__i18n:', ''))
+                                : step.label;
 
-                      const stepGroupById = new Map(stepGroups.map(step => [step.stepId, step]));
-                      const renderedSteps = new Set<number>();
-                      const runStreamItems: Array<
-                        | { kind: 'run_event'; event: AgentRunEvent }
-                        | { kind: 'step'; step: (typeof stepGroups)[number] }
-                      > = [];
-
-                      for (const event of runEvents) {
-                        if (!event.stepId) {
-                          runStreamItems.push({
-                            kind: 'run_event',
-                            event,
-                          });
-                          continue;
-                        }
-
-                        if (renderedSteps.has(event.stepId)) {
-                          continue;
-                        }
-
-                        const step = stepGroupById.get(event.stepId);
-                        if (!step) {
-                          continue;
-                        }
-
-                        renderedSteps.add(event.stepId);
-                        runStreamItems.push({
-                          kind: 'step',
-                          step,
-                        });
-                      }
-
-                      return (
-                        <Box key={`timeline-run-${run.id}`} py={2}>
-                          <Stack gap={4}>
-                            {runStreamItems.map(streamItem => {
-                              if (streamItem.kind === 'run_event') {
-                                const event = streamItem.event;
-                                const payloadSnippet = toPayloadSnippet(event.payload);
-                                const shouldRenderPayloadSnippet =
-                                  Boolean(payloadSnippet) &&
-                                  (event.level === 'warn' ||
-                                    event.level === 'error' ||
-                                    event.type.includes('error') ||
-                                    event.type.includes('failed'));
-
+                              if (step.detail) {
                                 return (
-                                  <Box key={`run-${run.id}-event-inline-${event.id}`} pl="xs">
-                                    <Stack gap={2}>
-                                      <Text size="sm">{eventProgressText(event)}</Text>
-                                      {shouldRenderPayloadSnippet && (
-                                        <Box
-                                          component="pre"
-                                          style={{
-                                            margin: 0,
-                                            fontSize: 11,
-                                            whiteSpace: 'pre-wrap',
-                                            overflowX: 'auto',
-                                            color: 'var(--mantine-color-dimmed)',
-                                          }}
-                                        >
-                                          {payloadSnippet}
-                                        </Box>
-                                      )}
-                                    </Stack>
-                                  </Box>
+                                  <StepDetailAccordion
+                                    key={idx}
+                                    label={translatedLabel}
+                                    color="red"
+                                    detail={step.detail}
+                                  />
                                 );
                               }
 
-                              const step = streamItem.step;
-                              const stepOrdinalLabel =
-                                Number.isFinite(step.ordinal) && step.ordinal !== Number.MAX_SAFE_INTEGER
-                                  ? `#${step.ordinal}`
-                                  : `#${step.stepId}`;
-                              const stepOperationLabel = step.operation ? `${step.operation}` : 'operation';
-
                               return (
-                                <Accordion
-                                  key={`run-${run.id}-step-inline-${step.stepId}`}
-                                  multiple={false}
-                                  variant="default"
-                                  radius={0}
-                                  chevronPosition="right"
-                                  styles={{
-                                    root: { border: 'none' },
-                                    item: { border: 'none' },
-                                    control: { padding: '2px 4px' },
-                                    label: { padding: 0 },
-                                    panel: { padding: '4px 4px 8px 4px' },
-                                  }}
-                                >
-                                  <Accordion.Item value={`step-${step.stepId}`}>
-                                    <Accordion.Control>
-                                      <Group justify="space-between" wrap="nowrap">
-                                        <Group gap={8} wrap="nowrap">
-                                          <Badge size="xs" variant="dot" color={getActivityLevelColor(step.statusLevel)}>
-                                            {stepOrdinalLabel}
-                                          </Badge>
-                                          <Text size="sm">{step.latestProgress}</Text>
-                                        </Group>
-                                        <Text size="xs" c="dimmed">
-                                          {stepOperationLabel}
-                                        </Text>
-                                      </Group>
-                                    </Accordion.Control>
-                                    <Accordion.Panel>
-                                      <Stack gap={6} pl="xs">
-                                        {step.events.map(event => {
-                                          const payloadSnippet = toPayloadSnippet(event.payload);
-                                          const scriptPreview =
-                                            (event.payload?.output as Record<string, unknown> | undefined)
-                                              ?.scriptPreview;
-                                          return (
-                                            <Stack key={`run-${run.id}-step-${step.stepId}-event-${event.id}`} gap={4}>
-                                              <Group gap={8} wrap="nowrap">
-                                                <Badge
-                                                  size="xs"
-                                                  variant="dot"
-                                                  color={getActivityLevelColor(event.level)}
-                                                  style={{ textTransform: 'none' }}
-                                                >
-                                                  {formatActivityType(event.type)}
-                                                </Badge>
-                                                <Text size="xs">{eventProgressText(event)}</Text>
-                                              </Group>
-                                              {typeof scriptPreview === 'string' && scriptPreview.trim().length > 0 && (
-                                                <Box
-                                                  component="pre"
-                                                  style={{
-                                                    margin: 0,
-                                                    fontSize: 11,
-                                                    whiteSpace: 'pre-wrap',
-                                                    overflowX: 'auto',
-                                                  }}
-                                                >
-                                                  {scriptPreview}
-                                                </Box>
-                                              )}
-                                              {payloadSnippet && (
-                                                <Box
-                                                  component="pre"
-                                                  style={{
-                                                    margin: 0,
-                                                    fontSize: 11,
-                                                    whiteSpace: 'pre-wrap',
-                                                    overflowX: 'auto',
-                                                    color: 'var(--mantine-color-dimmed)',
-                                                  }}
-                                                >
-                                                  {payloadSnippet}
-                                                </Box>
-                                              )}
-                                            </Stack>
-                                          );
-                                        })}
-                                      </Stack>
-                                    </Accordion.Panel>
-                                  </Accordion.Item>
-                                </Accordion>
+                                <Text key={idx} size="sm" c="red">
+                                  {translatedLabel}
+                                </Text>
                               );
-                            })}
-                          </Stack>
-                        </Box>
-                      );
-                    }
+                            }
 
-                    const { message } = item;
-                    const isUserMessage = message.role === 'user';
-                    const isSystemMessage = message.role === 'system';
+                            return (
+                              <Text key={idx} size="xs" c="dimmed">
+                                {step.label.startsWith('__i18n:')
+                                  ? t(step.label.replace('__i18n:', ''))
+                                  : step.label}
+                              </Text>
+                            );
+                          })}
 
-                    if (message.role === 'assistant') {
-                      return (
-                        <Box key={`message-${message.id}`} py={2}>
-                          <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>
-                            {message.content}
-                          </Text>
-                        </Box>
-                      );
-                    }
-
-                    return (
-                      <Group key={`message-${message.id}`} justify={isUserMessage ? 'flex-end' : 'flex-start'}>
-                        <Paper
-                          p="sm"
-                          withBorder
-                          bg={isUserMessage ? 'blue.0' : isSystemMessage ? 'yellow.0' : undefined}
-                          style={{ maxWidth: '72%', width: 'fit-content' }}
-                        >
-                          <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>
-                            {message.content}
-                          </Text>
-                        </Paper>
-                      </Group>
+                          {isActive && (
+                            <Group gap="xs" py={2}>
+                              <Loader size={14} />
+                              <Text size="xs" c="dimmed">
+                                {t('thinking')} (
+                                <RunTimer createdAt={run.createdAt} />)
+                              </Text>
+                            </Group>
+                          )}
+                        </Stack>
+                      </Box>
                     );
-                  })}
+                  }
 
-                </>
-              )}
-            </Stack>
-          </Box>
+                  const { message } = item;
 
-          <Stack
-            gap="xs"
-            style={{
-              position: 'sticky',
-              bottom: 0,
-              background: 'var(--mantine-color-body)',
-              paddingTop: 'var(--mantine-spacing-xs)',
-            }}
-          >
-            {pendingConfirmation?.pendingStep && (
-              <Paper withBorder p="sm" bg="orange.0">
-                <Stack gap="xs">
-                  <Text size="sm" fw={600}>
-                    {t('confirmationRequired')}
-                  </Text>
-                  <Text size="sm" c="dimmed">
-                    {pendingConfirmation.pendingStep.summary || t('confirmationDescription')}
-                  </Text>
-                  {pendingConfirmation.pendingStep.operation === 'delete' && (
-                    <TextInput
-                      value={confirmationText}
-                      onChange={event => setConfirmationText(event.currentTarget.value)}
-                      placeholder={t('typeDelete')}
-                      size="xs"
-                    />
-                  )}
-                  <Group gap="xs">
-                    <Button size="xs" color="red" onClick={() => void handleConfirmPendingStep(true)}>
-                      {t('confirm')}
-                    </Button>
-                    <Button size="xs" variant="default" onClick={() => void handleConfirmPendingStep(false)}>
-                      {t('reject')}
-                    </Button>
-                  </Group>
-                </Stack>
-              </Paper>
-            )}
-
-            {!!selectedMentions.length && (
-              <Group gap="xs">
-                {selectedMentions.map(item => (
-                  <Badge key={`${item.type}-${item.id}`} variant="light">
-                    @{item.label}
-                  </Badge>
-                ))}
-              </Group>
-            )}
-
-            <Box style={{ position: 'relative' }}>
-              <Paper withBorder p="sm" radius="md">
-                <Textarea
-                  ref={textAreaRef}
-                  minRows={3}
-                  maxRows={8}
-                  value={draft}
-                  onChange={event => handleDraftChange(event.currentTarget.value)}
-                  onSelect={event => {
-                    caretRef.current = event.currentTarget.selectionStart || 0;
-                  }}
-                  placeholder={t('composerPlaceholder')}
-                  autosize
-                  variant="unstyled"
-                  styles={{
-                    input: {
-                      padding: 0,
-                    },
-                  }}
-                />
-
-                <Group justify="space-between" align="center" mt="xs" wrap="nowrap">
-                  <Select
-                    size="xs"
-                    placeholder={t('modelPlaceholder')}
-                    data={aiModelOptions}
-                    value={selectedAiModelOption}
-                    disabled={aiModelOptions.length === 0 || aiModelsLoading}
-                    variant="unstyled"
-                    onChange={value => {
-                      if (!value) {
-                        setSelectedAiModelOption(null);
-                        setAiProvider(null);
-                        setAiModel(null);
-                        return;
-                      }
-
-                      const selected = aiModelOptions.find(option => option.value === value);
-                      if (!selected) {
-                        return;
-                      }
-
-                      setSelectedAiModelOption(selected.value);
-                      setAiProvider(selected.provider);
-                      setAiModel(selected.model);
-                      writeStoredModelSelection(
-                        modelSelectionServerId,
-                        activeChatId,
-                        selected.provider,
-                        selected.model
-                      );
-                    }}
-                    rightSection={aiModelsLoading ? <Loader size={12} /> : <IconChevronDown size={14} />}
-                    rightSectionWidth={18}
-                    styles={{
-                      input: {
-                        border: 'none',
-                        background: 'transparent',
-                        paddingLeft: 0,
-                        paddingRight: 18,
-                        color: 'var(--mantine-color-dimmed)',
-                        fontSize: 13,
-                        fontWeight: 500,
-                        minHeight: 24,
-                        height: 24,
-                      },
-                      section: {
-                        pointerEvents: 'none',
-                      },
-                    }}
-                    w={220}
-                  />
-
-                  <Button
-                    size="xs"
-                    rightSection={<IconSend size={14} />}
-                    onClick={() => void handleSend()}
-                    loading={sending}
-                    disabled={!draft.trim()}
-                  >
-                    {t('send')}
-                  </Button>
-                </Group>
-              </Paper>
-
-              {mentionQuery && (mentionItems.length > 0 || mentionLoading) && (
-                <Paper
-                  withBorder
-                  shadow="sm"
-                  p="xs"
-                  style={{
-                    position: 'absolute',
-                    left: 0,
-                    right: 0,
-                    bottom: 'calc(100% + 6px)',
-                    zIndex: 20,
-                    maxHeight: 220,
-                    overflow: 'auto',
-                  }}
-                >
-                  <Stack gap={4}>
-                    {mentionItems.map(item => (
-                      <Button
-                        key={`${item.type}-${item.id}`}
-                        variant="subtle"
-                        justify="start"
-                        size="xs"
-                        onClick={() => handleInsertMention(item)}
+                  if (message.role === 'assistant') {
+                    return (
+                      <Box
+                        key={`message-${message.id}`}
+                        className="agent-message-group"
+                        style={{ position: 'relative' }}
+                        mb={32}
                       >
-                        <Group justify="space-between" style={{ width: '100%' }}>
-                          <Text size="sm">@{item.label}</Text>
-                          <Text size="xs" c="dimmed">
-                            {item.type}
-                          </Text>
-                        </Group>
-                      </Button>
-                    ))}
+                        <Box
+                          py={2}
+                          className="agent-markdown"
+                          dangerouslySetInnerHTML={{ __html: renderMarkdown(message.content) }}
+                          style={{ fontSize: 14, lineHeight: 1.6 }}
+                        />
+                        <Box
+                          className="agent-message-copy-btn"
+                          style={{
+                            position: 'absolute',
+                            bottom: -24,
+                            right: 0,
+                            opacity: 0,
+                            transition: 'opacity 0.2s',
+                          }}
+                        >
+                          <CopyButton value={message.content} timeout={2000}>
+                            {({ copied, copy }) => (
+                              <Tooltip
+                                label={copied ? t('copied') : t('copy')}
+                                withArrow
+                                position="top"
+                              >
+                                <ActionIcon
+                                  color={copied ? 'teal' : 'gray'}
+                                  variant="subtle"
+                                  onClick={copy}
+                                  size="sm"
+                                >
+                                  {copied ? (
+                                    <IconCheck style={{ width: 14 }} />
+                                  ) : (
+                                    <IconCopy style={{ width: 14 }} />
+                                  )}
+                                </ActionIcon>
+                              </Tooltip>
+                            )}
+                          </CopyButton>
+                        </Box>
+                      </Box>
+                    );
+                  }
 
-                    {mentionLoading && (
-                      <Group justify="center" py={4}>
-                        <Loader size="xs" />
-                      </Group>
-                    )}
-
-                    {mentionHasMore && !mentionLoading && mentionQuery && (
-                      <Button size="xs" variant="light" onClick={() => void loadMentions(mentionQuery, false)}>
-                        {t('loadMoreMentions')}
-                      </Button>
-                    )}
-                  </Stack>
-                </Paper>
-              )}
-            </Box>
-
-            <Group justify="space-between" align="flex-start">
-              <Text size="xs" c="dimmed">
-                {t('mentionsHint')}
-              </Text>
-
-              <Group gap="xs" justify="flex-end" wrap="wrap">
-                {activeRuns
-                  .filter(run => ACTIVE_RUN_STATUSES.has(run.status))
-                  .map(run => (
-                    <Button
-                      key={run.id}
-                      variant="subtle"
-                      color="red"
-                      size="xs"
-                      leftSection={<IconPlayerStop size={14} />}
-                      onClick={() => void handleCancelRun(run.id)}
+                  return (
+                    <Group
+                      key={`message-${message.id}`}
+                      justify="flex-end"
+                      className="agent-message-group"
+                      style={{ position: 'relative' }}
+                      mb={32}
                     >
-                      {t('cancelRun', { id: run.id })}
-                    </Button>
-                  ))}
-              </Group>
-            </Group>
+                      <Paper
+                        p="sm"
+                        withBorder={false}
+                        shadow="none"
+                        style={{
+                          maxWidth: '72%',
+                          width: 'fit-content',
+                          backgroundColor: 'var(--mantine-color-gray-light)',
+                        }}
+                      >
+                        <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>
+                          {message.content}
+                        </Text>
+                      </Paper>
+
+                      <Box
+                        className="agent-message-copy-btn"
+                        style={{
+                          position: 'absolute',
+                          bottom: -28,
+                          right: 0,
+                          opacity: 0,
+                          transition: 'opacity 0.2s',
+                          zIndex: 10,
+                        }}
+                      >
+                        <CopyButton value={message.content} timeout={2000}>
+                          {({ copied, copy }) => (
+                            <Tooltip
+                              label={copied ? t('copied') : t('copy')}
+                              withArrow
+                              position="top"
+                            >
+                              <ActionIcon
+                                color={copied ? 'teal' : 'gray'}
+                                variant="subtle"
+                                onClick={copy}
+                                size="sm"
+                              >
+                                {copied ? (
+                                  <IconCheck style={{ width: 14 }} />
+                                ) : (
+                                  <IconCopy style={{ width: 14 }} />
+                                )}
+                              </ActionIcon>
+                            </Tooltip>
+                          )}
+                        </CopyButton>
+                      </Box>
+                    </Group>
+                  );
+                })}
+              </>
+            )}
           </Stack>
         </Box>
-      )}
+
+        <Stack
+          gap="xs"
+          style={{
+            position: 'sticky',
+            bottom: 0,
+            background: 'var(--mantine-color-body)',
+            paddingTop: 'var(--mantine-spacing-xs)',
+          }}
+        >
+          {pendingConfirmation?.pendingStep ? (
+            <Paper withBorder p="md" radius="md">
+              <Stack gap="sm">
+                <Text size="sm" fw={600}>
+                  {t('confirmationRequired')}
+                </Text>
+                <Text size="sm" c="dimmed">
+                  {pendingConfirmation.pendingStep.summary || t('confirmationDescription')}
+                </Text>
+                <Group gap="xs" justify="flex-end">
+                  <Button
+                    size="xs"
+                    variant="default"
+                    onClick={() => void handleConfirmPendingStep(false)}
+                  >
+                    {t('reject')}
+                  </Button>
+                  <Button
+                    size="xs"
+                    color="green"
+                    onClick={() => void handleConfirmPendingStep(true)}
+                  >
+                    {t('confirm')}
+                  </Button>
+                </Group>
+              </Stack>
+            </Paper>
+          ) : (
+            <>
+              {!!selectedMentions.length && (
+                <Group gap="xs">
+                  {selectedMentions.map(item => (
+                    <Badge key={`${item.type}-${item.id}`} variant="light">
+                      @{item.label}
+                    </Badge>
+                  ))}
+                </Group>
+              )}
+
+              <Box style={{ position: 'relative' }}>
+                <Paper withBorder p="sm" radius="md">
+                  <Textarea
+                    ref={textAreaRef}
+                    minRows={3}
+                    maxRows={8}
+                    value={draft}
+                    onChange={event => handleDraftChange(event.currentTarget.value)}
+                    onSelect={event => {
+                      caretRef.current = event.currentTarget.selectionStart || 0;
+                    }}
+                    onKeyDown={event => {
+                      if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        if (draft.trim()) {
+                          void handleSend();
+                        }
+                      }
+                    }}
+                    placeholder={t('composerPlaceholder')}
+                    autosize
+                    variant="unstyled"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    styles={{
+                      input: {
+                        padding: 0,
+                      },
+                    }}
+                  />
+
+                  <Group justify="space-between" align="center" mt="xs" wrap="nowrap">
+                    <Select
+                      size="xs"
+                      placeholder={t('modelPlaceholder')}
+                      data={aiModelOptions}
+                      value={selectedAiModelOption}
+                      disabled={aiModelOptions.length === 0 || aiModelsLoading}
+                      variant="unstyled"
+                      onChange={value => {
+                        if (!value) {
+                          setSelectedAiModelOption(null);
+                          setAiProvider(null);
+                          setAiModel(null);
+                          return;
+                        }
+
+                        const selected = aiModelOptions.find(option => option.value === value);
+                        if (!selected) {
+                          return;
+                        }
+
+                        setSelectedAiModelOption(selected.value);
+                        setAiProvider(selected.provider);
+                        setAiModel(selected.model);
+                        writeStoredModelSelection(
+                          modelSelectionServerId,
+                          activeChatId,
+                          selected.provider,
+                          selected.model
+                        );
+                      }}
+                      rightSection={
+                        aiModelsLoading ? <Loader size={12} /> : <IconChevronDown size={14} />
+                      }
+                      rightSectionWidth={18}
+                      styles={{
+                        input: {
+                          border: 'none',
+                          background: 'transparent',
+                          paddingLeft: 0,
+                          paddingRight: 18,
+                          color: 'var(--mantine-color-dimmed)',
+                          fontSize: 13,
+                          fontWeight: 500,
+                          minHeight: 24,
+                          height: 24,
+                        },
+                        section: {
+                          pointerEvents: 'none',
+                        },
+                      }}
+                      w={220}
+                    />
+
+                    {hasActiveRuns ? (
+                      <ActionIcon
+                        size={32}
+                        radius="xl"
+                        variant="filled"
+                        color="red"
+                        onClick={() => {
+                          const runToCancel = activeRuns.find(r =>
+                            ACTIVE_RUN_STATUSES.has(r.status)
+                          );
+                          if (runToCancel) void handleCancelRun(runToCancel.id);
+                        }}
+                      >
+                        <IconPlayerStop size={16} />
+                      </ActionIcon>
+                    ) : (
+                      <ActionIcon
+                        size={32}
+                        radius="xl"
+                        variant="filled"
+                        color="dark"
+                        onClick={() => void handleSend()}
+                        loading={sending}
+                        disabled={!draft.trim()}
+                      >
+                        <IconArrowUp size={18} />
+                      </ActionIcon>
+                    )}
+                  </Group>
+                </Paper>
+
+                {mentionQuery && (mentionItems.length > 0 || mentionLoading) && (
+                  <Paper
+                    withBorder
+                    shadow="sm"
+                    p="xs"
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      right: 0,
+                      bottom: 'calc(100% + 6px)',
+                      zIndex: 20,
+                      maxHeight: 220,
+                      overflow: 'auto',
+                    }}
+                  >
+                    <Stack gap={4}>
+                      {mentionItems.map(item => (
+                        <Button
+                          key={`${item.type}-${item.id}`}
+                          variant="subtle"
+                          justify="start"
+                          size="xs"
+                          onClick={() => handleInsertMention(item)}
+                        >
+                          <Group justify="space-between" style={{ width: '100%' }}>
+                            <Text size="sm">@{item.label}</Text>
+                            <Text size="xs" c="dimmed">
+                              {item.type}
+                            </Text>
+                          </Group>
+                        </Button>
+                      ))}
+
+                      {mentionLoading && (
+                        <Group justify="center" py={4}>
+                          <Loader size="xs" />
+                        </Group>
+                      )}
+
+                      {mentionHasMore && !mentionLoading && mentionQuery && (
+                        <Button
+                          size="xs"
+                          variant="light"
+                          onClick={() => void loadMentions(mentionQuery, false)}
+                        >
+                          {t('loadMoreMentions')}
+                        </Button>
+                      )}
+                    </Stack>
+                  </Paper>
+                )}
+              </Box>
+            </>
+          )}
+        </Stack>
+      </Box>
     </Box>
   );
 }

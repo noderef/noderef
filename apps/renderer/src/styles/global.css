@@ -108,3 +108,8 @@ code {
   background-color: var(--mantine-color-dark-4) !important;
   color: var(--mantine-color-gray-0) !important;
 }
+
+/* Agent Chat - Hover Copy Button */
+.agent-message-group:hover .agent-message-copy-btn {
+  opacity: 1 !important;
+}

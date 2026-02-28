@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-import { ActionIcon, Box, Collapse, Group, Text, Tooltip, UnstyledButton } from '@mantine/core';
-import { IconChevronRight } from '@tabler/icons-react';
-import { useDisclosure } from '@mantine/hooks';
-import { useEffect, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { MenuItem as MenuItemType, MenuSection as MenuSectionType } from '@/types/menu';
+import { ActionIcon, Box, Collapse, Group, Text, Tooltip, UnstyledButton } from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
+import { IconChevronRight } from '@tabler/icons-react';
+import { useEffect, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { MenuItem } from './MenuItem';
 import { getIconComponent } from './iconUtils';
 
@@ -30,6 +31,7 @@ interface MenuSectionProps {
   onItemRename?: (item: MenuItemType) => void;
   onSectionAction?: (section: MenuSectionType, actionId: string) => void;
   onOpenedChange?: (opened: boolean) => void;
+  maxInitialItems?: number;
 }
 
 export function MenuSection({
@@ -40,7 +42,9 @@ export function MenuSection({
   onItemRename,
   onSectionAction,
   onOpenedChange,
+  maxInitialItems,
 }: MenuSectionProps) {
+  const { t } = useTranslation(['submenu']);
   // Use initiallyOpened if provided, otherwise default to opened if section has items
   const defaultOpened =
     section.initiallyOpened !== undefined
@@ -48,6 +52,7 @@ export function MenuSection({
       : section.collapsible !== false && section.items.length > 0;
   const [opened, { toggle }] = useDisclosure(defaultOpened);
   const [hovered, setHovered] = useState(false);
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     onOpenedChange?.(opened);
@@ -215,23 +220,41 @@ export function MenuSection({
                 </Text>
               ) : null
             ) : (
-              section.items.map(item => {
-                const itemIcon = item.icon ? getIconComponent(item.icon) : null;
-                const supportsContextActions =
-                  item.id.startsWith('saved-search-') || item.id.startsWith('agent-chat-');
-                return (
-                  <MenuItem
-                    key={item.id}
-                    item={item}
-                    active={activeItemId === item.id}
-                    onSelect={onItemSelect}
-                    isNested={true}
-                    icon={itemIcon}
-                    onDelete={supportsContextActions ? onItemDelete : undefined}
-                    onRename={item.id.startsWith('saved-search-') ? onItemRename : undefined}
-                  />
-                );
-              })
+              <>
+                {(maxInitialItems && !showAll
+                  ? section.items.slice(0, maxInitialItems)
+                  : section.items
+                ).map(item => {
+                  const itemIcon = item.icon ? getIconComponent(item.icon) : null;
+                  const supportsContextActions =
+                    item.id.startsWith('saved-search-') || item.id.startsWith('agent-chat-');
+                  return (
+                    <MenuItem
+                      key={item.id}
+                      item={item}
+                      active={activeItemId === item.id}
+                      onSelect={onItemSelect}
+                      isNested={true}
+                      icon={itemIcon}
+                      onDelete={supportsContextActions ? onItemDelete : undefined}
+                      onRename={item.id.startsWith('saved-search-') ? onItemRename : undefined}
+                    />
+                  );
+                })}
+                {maxInitialItems && section.items.length > maxInitialItems && (
+                  <Text
+                    size="xs"
+                    c="dimmed"
+                    py={4}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => setShowAll(prev => !prev)}
+                  >
+                    {showAll
+                      ? t('submenu:showLess')
+                      : t('submenu:showMore', { count: section.items.length - maxInitialItems })}
+                  </Text>
+                )}
+              </>
             )}
           </Box>
         </Box>

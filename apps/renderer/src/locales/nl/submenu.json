@@ -87,5 +87,7 @@
   "thumbnailCleared": "Miniatuur verwijderd",
   "thumbnailUpdateError": "Miniatuur bijwerken mislukt",
   "thumbnailReadError": "Afbeelding kan niet worden gelezen",
-  "usersAndGroups": "Gebruikers en groepen"
+  "usersAndGroups": "Gebruikers en groepen",
+  "showMore": "Meer tonen ({{count}})",
+  "showLess": "Minder tonen"
 }

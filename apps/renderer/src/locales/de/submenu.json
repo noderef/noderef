@@ -87,5 +87,7 @@
   "thumbnailCleared": "Vorschaubild entfernt",
   "thumbnailUpdateError": "Vorschaubild konnte nicht aktualisiert werden",
   "thumbnailReadError": "Bilddatei konnte nicht gelesen werden",
-  "usersAndGroups": "Benutzer und Gruppen"
+  "usersAndGroups": "Benutzer und Gruppen",
+  "showMore": "Mehr anzeigen ({{count}})",
+  "showLess": "Weniger anzeigen"
 }
