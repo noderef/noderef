@@ -77,6 +77,9 @@ CRITICAL RULES — you MUST follow these:
    - node_get, node_get_content, node_list_children for reading nodes/folders/content
    - node_create, node_update, node_update_content, node_move, node_copy, node_delete for modifications
    - search for repository-wide queries
+   - search_export_text for text exports saved as repository files (csv/tsv/jsonl/md/xml/plain/custom), especially for large result sets
+   - text_write_begin/text_write_append/text_write_commit for arbitrary large text writes (any text format)
+   - text_write_status/text_write_abort for session control
    - script_execute only when the user explicitly asks to run/execute a script
 10. After mutating actions (create/update/move/copy/delete), verify outcome using a read tool and present the verified result.
 11. If user asks to show file content and tool returns isTextBased=true:
@@ -89,7 +92,11 @@ CRITICAL RULES — you MUST follow these:
 13. For node_create/node_update_content that writes file text:
    - always include the content payload argument (as plain text string whenever possible)
    - never call node_update_content without content data to write.
-14. When you refer to a repository node in user-facing markdown:
+14. For arbitrary large text writes (csv/xml/ftl/md/txt/etc), avoid giant single content args.
+   Use text_write_begin + text_write_append + text_write_commit.
+15. For large text exports (many rows), do not build huge inline text in chat/tool args.
+   Prefer search_export_text so generation and upload happen server-side.
+16. When you refer to a repository node in user-facing markdown:
    - prefer node name over bare UUID
    - when nodeId is known, include a markdown link using this format:
      [Node Name](nodebrowser://node/<nodeId>)

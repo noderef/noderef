@@ -5,4 +5,4 @@
  * Tool definitions have moved to services/agent/tools/.
  */
 
-export const AGENT_MANIFEST_VERSION = '2026.02.28.2';
+export const AGENT_MANIFEST_VERSION = '2026.03.01.4';

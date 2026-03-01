@@ -13,11 +13,12 @@ import {
   buildContentRequestPreview,
   extractContentCandidate,
   normalizeContentArg,
-} from './contentNormalization.js';
+} from '../helpers/contentNormalization.js';
+import {
+  buildNodeMetadataQuery,
+  toNodeSummary,
+} from '../helpers/nodeResultHelpers.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
-
-const normalizeNodePath = (p: string | undefined): string | null =>
-  p?.trim().length ? p.trim() : null;
 
 const MAX_TRACE_CONTENT_CHARS = 4000;
 
@@ -90,8 +91,7 @@ export const nodeCreateTool: ToolDefinition = {
       };
       const requestQuery = {
         autoRename,
-        fields: ['id', 'name', 'nodeType', 'isFolder', 'isFile', 'path', 'content', 'properties'],
-        include: ['path', 'properties'],
+        ...buildNodeMetadataQuery(),
       };
 
       const nodesApi = new NodesApi(ctx.api);
@@ -101,6 +101,7 @@ export const nodeCreateTool: ToolDefinition = {
       let finalEntry = createdEntry;
       let updateContentResult: unknown = null;
       let readBackResult: unknown = null;
+      const readBackQuery = buildNodeMetadataQuery();
 
       const createdId = typeof createdEntry?.id === 'string' ? createdEntry.id.trim() : '';
       if (contentProvided) {
@@ -108,10 +109,6 @@ export const nodeCreateTool: ToolDefinition = {
           return { ok: false, error: 'Node was created but no id was returned; cannot update content' };
         }
 
-        const readBackQuery = {
-          fields: ['id', 'name', 'nodeType', 'isFolder', 'isFile', 'path', 'content', 'properties'],
-          include: ['path', 'properties'],
-        };
         try {
           updateContentResult = await (nodesApi as any).updateNodeContent(createdId, content ?? '');
           readBackResult = await nodesApi.getNode(createdId, readBackQuery);
@@ -153,12 +150,7 @@ export const nodeCreateTool: ToolDefinition = {
                   {
                     method: 'GET',
                     path: getAlfrescoNodePath(createdId || '{nodeId}'),
-                    request: {
-                      query: {
-                        fields: ['id', 'name', 'nodeType', 'isFolder', 'isFile', 'path', 'content', 'properties'],
-                        include: ['path', 'properties'],
-                      },
-                    },
+                    request: { query: readBackQuery },
                     responseBody: readBackResult,
                   },
                 ],
@@ -180,16 +172,7 @@ export const nodeCreateTool: ToolDefinition = {
                 request: { body: requestBody, query: requestQuery },
                 responseBody: createResult,
               },
-          created: {
-            id: finalEntry?.id,
-            name: finalEntry?.name,
-            nodeType: finalEntry?.nodeType,
-            isFolder: finalEntry?.isFolder,
-            isFile: finalEntry?.isFile,
-            path: normalizeNodePath(finalEntry?.path?.name),
-            mimeType: finalEntry?.content?.mimeType ?? null,
-            properties: finalEntry?.properties ?? null,
-          },
+          created: toNodeSummary(finalEntry),
           parentId,
           autoRename,
           contentUpdated: contentProvided,

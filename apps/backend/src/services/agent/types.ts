@@ -10,6 +10,12 @@ import type { AgentMention } from '@app/contracts';
 export type ActionKind = 'read' | 'write';
 export type OperationName =
   | 'search'
+  | 'search_export_text'
+  | 'text_write_begin'
+  | 'text_write_append'
+  | 'text_write_status'
+  | 'text_write_abort'
+  | 'text_write_commit'
   | 'node_get'
   | 'node_get_content'
   | 'node_list_children'

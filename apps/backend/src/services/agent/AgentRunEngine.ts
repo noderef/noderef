@@ -181,6 +181,43 @@ const buildFallbackStepSummary = (
       if (query) return `Search for "${truncateText(query, 80)}"`;
       return 'Search the repository';
     }
+    case 'search_export_text': {
+      const query = toNonEmptyString(args.query);
+      const fileName = toNonEmptyString(args.fileName);
+      if (query && fileName)
+        return `Export text file "${fileName}" from search "${truncateText(query, 60)}"`;
+      if (query) return `Export text from search "${truncateText(query, 80)}"`;
+      if (fileName) return `Export search results to text file "${fileName}"`;
+      return 'Export search results to text file';
+    }
+    case 'text_write_begin': {
+      const nodeId = toNonEmptyString(args.nodeId);
+      const parentId = toNonEmptyString(args.parentId);
+      const fileName = toNonEmptyString(args.fileName);
+      if (nodeId) return `Begin large text write to node ${nodeId}`;
+      if (parentId && fileName) return `Begin large text write for "${fileName}" in folder ${parentId}`;
+      return 'Begin large text write session';
+    }
+    case 'text_write_append': {
+      const sessionId = toNonEmptyString(args.sessionId);
+      if (sessionId) return `Append chunk to write session ${sessionId}`;
+      return 'Append chunk to write session';
+    }
+    case 'text_write_status': {
+      const sessionId = toNonEmptyString(args.sessionId);
+      if (sessionId) return `Check write session ${sessionId} status`;
+      return 'Check write session status';
+    }
+    case 'text_write_abort': {
+      const sessionId = toNonEmptyString(args.sessionId);
+      if (sessionId) return `Abort write session ${sessionId}`;
+      return 'Abort write session';
+    }
+    case 'text_write_commit': {
+      const sessionId = toNonEmptyString(args.sessionId);
+      if (sessionId) return `Commit write session ${sessionId} to Alfresco`;
+      return 'Commit write session to Alfresco';
+    }
     default:
       return `Run ${formatOperationLabel(operation)}`;
   }

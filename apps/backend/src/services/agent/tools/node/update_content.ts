@@ -9,11 +9,12 @@ import {
   buildContentRequestPreview,
   extractContentCandidate,
   normalizeContentArg,
-} from './contentNormalization.js';
+} from '../helpers/contentNormalization.js';
+import {
+  buildNodeMetadataQuery,
+  toNodeSummary,
+} from '../helpers/nodeResultHelpers.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
-
-const normalizeNodePath = (p: string | undefined): string | null =>
-  p?.trim().length ? p.trim() : null;
 
 const MAX_TRACE_CONTENT_CHARS = 4000;
 
@@ -56,7 +57,10 @@ export const nodeUpdateContentTool: ToolDefinition = {
         ? normalizeContentArg(candidate.value, candidate.sourceType)
         : null;
       if (!normalizedContent) {
-        return { ok: false, error: 'content is required (or provide text/value/body/data)' };
+        return {
+          ok: false,
+          error: 'content is required and must be string/array/object (or provide text/value/body/data)',
+        };
       }
 
       const content = normalizedContent.content;
@@ -74,10 +78,7 @@ export const nodeUpdateContentTool: ToolDefinition = {
           ? await (nodesApi as any).updateNodeContent(nodeId, content, requestQuery)
           : await (nodesApi as any).updateNodeContent(nodeId, content);
 
-      const readBackQuery = {
-        fields: ['id', 'name', 'nodeType', 'isFolder', 'isFile', 'path', 'content', 'properties'],
-        include: ['path', 'properties'],
-      };
+      const readBackQuery = buildNodeMetadataQuery();
       const readBackResult = await nodesApi.getNode(nodeId, readBackQuery);
       const entry = (readBackResult as any)?.entry ?? readBackResult;
 
@@ -99,16 +100,7 @@ export const nodeUpdateContentTool: ToolDefinition = {
               responseBody: readBackResult,
             },
           },
-          updated: {
-            id: entry?.id,
-            name: entry?.name,
-            nodeType: entry?.nodeType,
-            isFolder: entry?.isFolder,
-            isFile: entry?.isFile,
-            path: normalizeNodePath(entry?.path?.name),
-            mimeType: entry?.content?.mimeType ?? null,
-            properties: entry?.properties ?? null,
-          },
+          updated: toNodeSummary(entry),
           nodeId,
           contentChars: content.length,
           contentEmpty: content.length === 0,

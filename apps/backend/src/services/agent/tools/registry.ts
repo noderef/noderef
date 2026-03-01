@@ -15,8 +15,14 @@ import { nodeListChildrenTool } from './node/list_children.js';
 import { nodeMoveTool } from './node/move.js';
 import { nodeUpdateTool } from './node/update.js';
 import { nodeUpdateContentTool } from './node/update_content.js';
+import { searchExportTextTool } from './search/export_text.js';
 import { searchTool } from './search/query.js';
 import { scriptExecuteTool } from './script/execute.js';
+import { textWriteAbortTool } from './text/write_abort.js';
+import { textWriteAppendTool } from './text/write_append.js';
+import { textWriteBeginTool } from './text/write_begin.js';
+import { textWriteCommitTool } from './text/write_commit.js';
+import { textWriteStatusTool } from './text/write_status.js';
 import type { ToolDefinition } from './types.js';
 import { toAnthropicSchema } from './types.js';
 
@@ -25,6 +31,12 @@ export type { ToolDefinition };
 /** All tools available to the agent, in the order they are presented to the LLM */
 export const ALL_TOOLS: ToolDefinition[] = [
   searchTool,
+  searchExportTextTool,
+  textWriteBeginTool,
+  textWriteAppendTool,
+  textWriteStatusTool,
+  textWriteAbortTool,
+  textWriteCommitTool,
   nodeGetTool,
   nodeGetContentTool,
   nodeListChildrenTool,
@@ -48,6 +60,10 @@ const TOOL_NAME_ALIASES: Record<string, string> = {
   copy_node: 'node_copy',
   delete_nodes: 'node_delete',
   execute_script: 'script_execute',
+  export_csv: 'search_export_text',
+  search_export_csv: 'search_export_text',
+  text_write_start: 'text_write_begin',
+  text_write_finish: 'text_write_commit',
   delete: 'node_delete',
 };
 

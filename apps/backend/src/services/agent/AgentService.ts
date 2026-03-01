@@ -795,6 +795,18 @@ export class AgentService {
       const id = (output.copied as { id?: unknown } | undefined)?.id;
       return typeof id === 'string' && id.trim() ? id.trim() : null;
     }
+    if (operation === 'search_export_text') {
+      const id = (output.created as { id?: unknown } | undefined)?.id;
+      return typeof id === 'string' && id.trim() ? id.trim() : null;
+    }
+    if (operation === 'text_write_commit') {
+      const updatedId = (output.updated as { id?: unknown } | undefined)?.id;
+      if (typeof updatedId === 'string' && updatedId.trim()) {
+        return updatedId.trim();
+      }
+      const createdId = (output.created as { id?: unknown } | undefined)?.id;
+      return typeof createdId === 'string' && createdId.trim() ? createdId.trim() : null;
+    }
     return null;
   }
 
@@ -861,6 +873,12 @@ export class AgentService {
       node_get: { title: 'Read node failed', action: 'read the node' },
       node_list_children: { title: 'List children failed', action: 'list child nodes' },
       search: { title: 'Search failed', action: 'run the search' },
+      search_export_text: { title: 'Text export failed', action: 'export the text report' },
+      text_write_begin: { title: 'Text write begin failed', action: 'start the text write session' },
+      text_write_append: { title: 'Text write append failed', action: 'append text to the session' },
+      text_write_status: { title: 'Text write status failed', action: 'read write session status' },
+      text_write_abort: { title: 'Text write abort failed', action: 'abort the text write session' },
+      text_write_commit: { title: 'Text write commit failed', action: 'commit text to Alfresco' },
       script_execute: { title: 'Script execution failed', action: 'execute the script' },
     };
     const operationLabel = operationLabelMap[operation] ?? {
@@ -925,6 +943,12 @@ export class AgentService {
       node_get: 'Node retrieved',
       node_list_children: 'Children listed',
       search: 'Search completed',
+      search_export_text: 'Text export completed',
+      text_write_begin: 'Text write session started',
+      text_write_append: 'Text chunk appended',
+      text_write_status: 'Text write status retrieved',
+      text_write_abort: 'Text write session aborted',
+      text_write_commit: 'Text write committed',
       script_execute: 'Script executed',
     };
     const verification = isRecord(output.postActionVerification)
@@ -1035,6 +1059,93 @@ export class AgentService {
         ].join('\n');
       }
       return ['### Node deleted', '', 'The delete operation completed successfully.'].join('\n');
+    }
+
+    if (operation === 'search_export_text') {
+      const created = isRecord(output.created) ? output.created : null;
+      const exportInfo = isRecord(output.export) ? output.export : null;
+      const nodeId = typeof created?.id === 'string' ? created.id : '';
+      const nodeName = typeof created?.name === 'string' ? created.name : 'report.txt';
+      const nodePath = typeof created?.path === 'string' ? created.path.trim() : '';
+      const format = typeof exportInfo?.format === 'string' ? exportInfo.format : null;
+      const totalRows =
+        typeof exportInfo?.totalRows === 'number' && Number.isFinite(exportInfo.totalRows)
+          ? exportInfo.totalRows
+          : null;
+      const repositoryTotal =
+        typeof exportInfo?.repositoryTotal === 'number' && Number.isFinite(exportInfo.repositoryTotal)
+          ? exportInfo.repositoryTotal
+          : null;
+      const pagesFetched =
+        typeof exportInfo?.pagesFetched === 'number' && Number.isFinite(exportInfo.pagesFetched)
+          ? exportInfo.pagesFetched
+          : null;
+      const hitLimit = exportInfo?.hitLimit === true;
+
+      const lines = [
+        '### Text export completed',
+        '',
+        '- **File:** ' + buildNodeBrowserMarkdownLink(nodeId, nodeName),
+      ];
+      if (nodePath) {
+        lines.push('- **Location:** ' + inlineCode(nodePath));
+      }
+      if (format) {
+        lines.push(`- **Format:** ${inlineCode(format)}`);
+      }
+      if (totalRows !== null) {
+        lines.push(`- **Rows exported:** **${totalRows}**`);
+      }
+      if (repositoryTotal !== null) {
+        lines.push(`- **Repository matches:** **${repositoryTotal}**`);
+      }
+      if (pagesFetched !== null) {
+        lines.push(`- **Pages fetched:** ${pagesFetched}`);
+      }
+      if (hitLimit) {
+        lines.push('- **Note:** Export reached the configured maximum row limit.');
+      }
+      return lines.join('\n');
+    }
+
+    if (operation === 'text_write_commit') {
+      const node = isRecord(output.updated)
+        ? output.updated
+        : isRecord(output.created)
+          ? output.created
+          : null;
+      const write = isRecord(output.write) ? output.write : null;
+      const nodeId = typeof node?.id === 'string' ? node.id : '';
+      const nodeName = typeof node?.name === 'string' ? node.name : 'text-file';
+      const nodePath = typeof node?.path === 'string' ? node.path.trim() : '';
+      const totalBytes =
+        typeof write?.totalBytes === 'number' && Number.isFinite(write.totalBytes)
+          ? write.totalBytes
+          : null;
+      const chunksReceived =
+        typeof write?.chunksReceived === 'number' && Number.isFinite(write.chunksReceived)
+          ? write.chunksReceived
+          : null;
+      const sessionId = typeof write?.sessionId === 'string' ? write.sessionId : '';
+
+      const lines = [
+        '### Text write committed',
+        '',
+        '- **File:** ' + buildNodeBrowserMarkdownLink(nodeId, nodeName),
+      ];
+      if (nodePath) {
+        lines.push('- **Location:** ' + inlineCode(nodePath));
+      }
+      if (chunksReceived !== null) {
+        lines.push(`- **Chunks received:** ${chunksReceived}`);
+      }
+      if (totalBytes !== null) {
+        lines.push(`- **Total bytes:** ${totalBytes}`);
+      }
+      if (sessionId) {
+        lines.push(`- **Session ID:** ${inlineCode(sessionId)}`);
+      }
+      return lines.join('\n');
     }
 
     const resultNode = verifiedNode || createdNode || updatedNode || movedNode || copiedNode || directNodeLike;
