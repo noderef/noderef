@@ -59,7 +59,7 @@ export function MenuSection({
   }, [opened, onOpenedChange]);
 
   // Hide truly empty sections unless explicitly configured to stay visible.
-  if (section.items.length === 0 && !section.showWhenEmpty && !section.action) {
+  if (section.items.length === 0 && !section.showWhenEmpty && !section.action && !section.actions) {
     return null;
   }
 

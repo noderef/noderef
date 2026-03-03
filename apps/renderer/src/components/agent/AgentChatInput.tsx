@@ -22,21 +22,26 @@ import { RichTextEditor } from '@mantine/tiptap';
 import Placeholder from '@tiptap/extension-placeholder';
 import { ReactRenderer, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import Suggestion from '@tiptap/suggestion';
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import tippy from 'tippy.js';
 import './AgentChatInput.css';
-import {
-  ConstraintList,
-  NodeMentionList,
-  type ConstraintListRef,
-  type MentionListRef,
-} from './AgentChatSuggestionLists';
-import { ConstraintHighlighter } from './ConstraintHighlighter';
+import { NodeMentionList, type MentionListRef } from './AgentChatSuggestionLists';
 import { NodeIdentifierMention } from './NodeIdentifierMention';
 
 import { Extension } from '@tiptap/core';
+
+const MIN_MENTION_POPUP_WIDTH = 320;
+const POPUP_VIEWPORT_GUTTER = 12;
+const POPUP_CONTAINER_WIDTH_FACTOR = 0.94;
 
 export interface AgentChatInputRef {
   submit: () => void;
@@ -56,18 +61,20 @@ export interface AgentChatInputProps {
   onLoadMoreMentions: () => void;
 }
 
-const CONSTRAINT_ITEMS = ['type', 'aspect', 'prop', 'site', 'path'];
-
 const ChatSubmitExtension = Extension.create({
   name: 'chatSubmit',
   addOptions() {
     return {
+      shouldSubmit: (_editor: any) => true,
       onSubmit: (_editor: any) => {},
     };
   },
   addKeyboardShortcuts() {
     return {
       Enter: () => {
+        if (!this.options.shouldSubmit(this.editor)) {
+          return false;
+        }
         this.options.onSubmit(this.editor);
         return true;
       },
@@ -95,7 +102,6 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
   ) => {
     const { t } = useTranslation('agent');
 
-    // Refs to always access latest props in tiptap suggestion callbacks
     const onSendRef = useRef(onSend);
     const onMentionQueryChangeRef = useRef(onMentionQueryChange);
     const disabledRef = useRef(disabled);
@@ -104,6 +110,7 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
       hasMore: mentionHasMore,
       loading: mentionLoading,
       onLoadMore: onLoadMoreMentions,
+      popupWidth: MIN_MENTION_POPUP_WIDTH,
     });
 
     const mentionRendererRef = useRef<ReactRenderer<MentionListRef> | null>(null);
@@ -125,6 +132,7 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
       }),
       [isDesktopMode]
     );
+    const [mentionPopupWidth, setMentionPopupWidth] = useState<number>(MIN_MENTION_POPUP_WIDTH);
 
     useEffect(() => {
       onSendRef.current = onSend;
@@ -138,12 +146,32 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
       disabledRef.current = disabled;
     }, [disabled]);
 
+    const getMentionReferenceClientRect = useCallback((clientRectFn?: () => DOMRect) => {
+      const caretRect = clientRectFn?.();
+      const containerRect = containerRef.current?.getBoundingClientRect();
+
+      if (containerRect) {
+        const top = caretRect?.top ?? containerRect.top;
+        const bottom = caretRect?.bottom ?? top + Math.max(caretRect?.height ?? 18, 18);
+        const width = Math.max(1, containerRect.width);
+        const height = Math.max(1, bottom - top);
+        return new DOMRect(containerRect.left, top, width, height);
+      }
+
+      if (caretRect) {
+        return caretRect;
+      }
+
+      return new DOMRect(0, 0, 1, 1);
+    }, []);
+
     useEffect(() => {
       mentionPropsRef.current = {
         items: mentionItems,
         hasMore: mentionHasMore,
         loading: mentionLoading,
         onLoadMore: onLoadMoreMentions,
+        popupWidth: mentionPopupWidth,
       };
 
       if (mentionRendererRef.current) {
@@ -151,7 +179,56 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
           ...mentionPropsRef.current,
         });
       }
-    }, [mentionItems, mentionHasMore, mentionLoading, onLoadMoreMentions]);
+
+      const popup = mentionPopupRef.current?.[0];
+      if (popup && !popup.state.isDestroyed) {
+        const shouldShow = mentionLoading || mentionItems.length > 0;
+        if (shouldShow && !popup.state.isVisible) {
+          popup.show();
+        }
+        if (!shouldShow && popup.state.isVisible) {
+          popup.hide();
+        }
+      }
+    }, [mentionItems, mentionHasMore, mentionLoading, onLoadMoreMentions, mentionPopupWidth]);
+
+    const calculateMentionPopupWidth = useCallback((): number => {
+      const viewportWidth =
+        typeof window !== 'undefined' ? window.innerWidth : MIN_MENTION_POPUP_WIDTH;
+      const maxByViewport = Math.max(
+        MIN_MENTION_POPUP_WIDTH,
+        viewportWidth - POPUP_VIEWPORT_GUTTER
+      );
+      const containerWidth = containerRef.current?.getBoundingClientRect().width ?? maxByViewport;
+      const targetWidth = containerWidth * POPUP_CONTAINER_WIDTH_FACTOR;
+
+      return Math.round(Math.min(maxByViewport, Math.max(MIN_MENTION_POPUP_WIDTH, targetWidth)));
+    }, []);
+
+    useEffect(() => {
+      const syncMentionPopupWidth = () => {
+        setMentionPopupWidth(calculateMentionPopupWidth());
+      };
+
+      syncMentionPopupWidth();
+
+      const resizeObserver =
+        typeof ResizeObserver !== 'undefined'
+          ? new ResizeObserver(() => {
+              syncMentionPopupWidth();
+            })
+          : null;
+      if (resizeObserver && containerRef.current) {
+        resizeObserver.observe(containerRef.current);
+      }
+
+      window.addEventListener('resize', syncMentionPopupWidth);
+
+      return () => {
+        window.removeEventListener('resize', syncMentionPopupWidth);
+        resizeObserver?.disconnect();
+      };
+    }, [calculateMentionPopupWidth]);
 
     const handleSend = (currentEditor: any) => {
       if (!currentEditor || disabledRef.current) {
@@ -180,7 +257,6 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
         json.content.forEach(traverse);
       }
 
-      // Deduplicate by id+type
       const uniqueMap = new Map();
       for (const m of mentions) {
         uniqueMap.set(`${m.type}-${m.id}`, m);
@@ -206,7 +282,6 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
     const editor = useEditor({
       extensions: [
         StarterKit.configure({
-          // Disable features we don't need for a simple chat input
           heading: false,
           horizontalRule: false,
           bulletList: false,
@@ -217,7 +292,6 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
         Placeholder.configure({
           placeholder: t('composerPlaceholder'),
         }),
-        ConstraintHighlighter,
         NodeIdentifierMention.configure({
           suggestion: {
             char: '@',
@@ -239,13 +313,24 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
                   }
 
                   mentionPopupRef.current = tippy('body', {
-                    getReferenceClientRect: props.clientRect as () => DOMRect,
+                    getReferenceClientRect: () =>
+                      getMentionReferenceClientRect(props.clientRect as () => DOMRect),
                     appendTo: () => document.body,
                     content: mentionRendererRef.current.element,
                     showOnCreate: true,
                     interactive: true,
                     trigger: 'manual',
                     placement: 'top-start',
+                    maxWidth: 'none',
+                    popperOptions: {
+                      modifiers: [
+                        { name: 'flip', enabled: false },
+                        {
+                          name: 'preventOverflow',
+                          options: { altAxis: false, padding: 8 },
+                        },
+                      ],
+                    },
                   });
                 },
 
@@ -261,7 +346,8 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
                   }
 
                   mentionPopupRef.current?.[0]?.setProps({
-                    getReferenceClientRect: props.clientRect as () => DOMRect,
+                    getReferenceClientRect: () =>
+                      getMentionReferenceClientRect(props.clientRect as () => DOMRect),
                   });
                 },
 
@@ -272,7 +358,7 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
                   }
 
                   if (mentionPopupRef.current?.[0] && !mentionPopupRef.current[0].state.isVisible) {
-                    return false; // let the editor handle it if the popup is hidden
+                    return false;
                   }
 
                   return mentionRendererRef.current?.ref?.onKeyDown(props) ?? false;
@@ -294,87 +380,14 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
             },
           },
         }),
-        Extension.create({
-          name: 'constraintSuggestion',
-          addProseMirrorPlugins() {
-            return [
-              Suggestion({
-                editor: this.editor,
-                char: ':',
-                allowSpaces: false,
-                items: ({ query }: { query: string }) => {
-                  return CONSTRAINT_ITEMS.filter(item =>
-                    item.toLowerCase().startsWith(query.toLowerCase())
-                  );
-                },
-                command: ({ editor, range, props }: { editor: any; range: any; props: any }) => {
-                  // Insert the constraint text
-                  editor.chain().focus().insertContentAt(range, `${props.id}:`).run();
-                },
-                render: () => {
-                  let component: ReactRenderer<ConstraintListRef>;
-                  let popup: any;
-
-                  return {
-                    onStart: (props: any) => {
-                      component = new ReactRenderer(ConstraintList, {
-                        props,
-                        editor: props.editor,
-                      });
-
-                      if (!props.clientRect) {
-                        return;
-                      }
-
-                      popup = tippy('body', {
-                        getReferenceClientRect: props.clientRect as () => DOMRect,
-                        appendTo: () => document.body,
-                        content: component.element,
-                        showOnCreate: true,
-                        interactive: true,
-                        trigger: 'manual',
-                        placement: 'top-start',
-                      });
-                    },
-
-                    onUpdate(props: any) {
-                      component?.updateProps(props);
-
-                      if (!props.clientRect) {
-                        return;
-                      }
-
-                      popup?.[0]?.setProps({
-                        getReferenceClientRect: props.clientRect as () => DOMRect,
-                      });
-                    },
-
-                    onKeyDown(props: any) {
-                      if (props.event.key === 'Escape') {
-                        popup?.[0]?.hide();
-                        return true;
-                      }
-
-                      if (popup?.[0] && !popup[0].state.isVisible) {
-                        return false; // let the editor handle it if the popup is hidden
-                      }
-
-                      return component?.ref?.onKeyDown(props) ?? false;
-                    },
-
-                    onExit() {
-                      if (popup?.[0] && !popup[0].state.isDestroyed) {
-                        popup[0].destroy();
-                      }
-                      component?.destroy();
-                    },
-                  };
-                },
-              }),
-            ];
-          },
-        }),
         ChatSubmitExtension.configure({
+          shouldSubmit: () => {
+            const mentionPopup = mentionPopupRef.current?.[0];
+            if (mentionPopup && !mentionPopup.state.isDestroyed && mentionPopup.state.isVisible) {
+              return false;
+            }
+            return true;
+          },
           onSubmit: (e: any) => {
             handleSend(e);
           },
@@ -390,11 +403,8 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
       },
     });
 
-    // Sync external value changes (e.g. when cleared after sending)
-    // We only sync if the editor text differs to avoid cursor jumps
     useEffect(() => {
       if (editor && value !== editor.getText()) {
-        // Small timeout to prevent state update loops during rapid typing
         const t = setTimeout(() => {
           if (editor.getText() !== value) {
             editor.commands.setContent(value);
@@ -476,8 +486,8 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
               padding: 0,
               fontSize: 'var(--mantine-font-size-sm)',
               '> div': {
-                minHeight: 64, // Matches standard textarea minHeight roughly
-                maxHeight: 300, // Matches maxRows=8
+                minHeight: 64,
+                maxHeight: 300,
                 overflowY: 'auto',
               },
             },

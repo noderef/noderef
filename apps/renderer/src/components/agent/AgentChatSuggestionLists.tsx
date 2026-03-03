@@ -15,9 +15,21 @@
  */
 
 import type { AgentMentionSuggestion } from '@/core/ipc/backend';
-import { Button, Group, Loader, Paper, Stack, Text } from '@mantine/core';
+import { getFileIconByMimeType } from '@/components/submenu/fileIconUtils';
+import { Button, Group, Loader, Paper, Stack, Text, Tooltip } from '@mantine/core';
+import { IconFolder, IconUser, IconUsersGroup } from '@tabler/icons-react';
 import { SuggestionProps } from '@tiptap/suggestion';
-import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import {
+  type CSSProperties,
+  type ComponentType,
+  type ReactNode,
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react';
+import { useTranslation } from 'react-i18next';
 
 export interface MentionListRef {
   onKeyDown: (props: { event: KeyboardEvent }) => boolean;
@@ -28,47 +40,179 @@ export interface NodeMentionSuggestionProps extends SuggestionProps {
   hasMore: boolean;
   loading: boolean;
   onLoadMore?: () => void;
+  popupWidth?: number;
+}
+
+const singleLineTextStyle: CSSProperties = {
+  minWidth: 0,
+  overflow: 'hidden',
+  whiteSpace: 'nowrap',
+  textOverflow: 'ellipsis',
+};
+
+function cleanText(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+}
+
+function compactDisplayPath(path: string | null | undefined): string | null {
+  const cleaned = cleanText(path);
+  if (!cleaned) {
+    return null;
+  }
+
+  const compacted = cleaned.replace(/^\/?Company Home(?=\/|$)/i, '');
+  if (!compacted.length) {
+    return '/';
+  }
+
+  return compacted.startsWith('/') ? compacted : `/${compacted}`;
+}
+
+function getMentionMeta(item: AgentMentionSuggestion): string | null {
+  if (item.type === 'node') {
+    return compactDisplayPath(item.displayPath ?? item.path ?? null) ?? item.subtitle ?? null;
+  }
+  return item.subtitle ?? null;
+}
+
+function buildMentionTooltip(item: AgentMentionSuggestion): ReactNode {
+  const name = cleanText(item.label);
+  const title = cleanText(item.title);
+  const description = cleanText(item.description);
+  const path = cleanText(item.displayPath ?? item.path ?? null);
+
+  const rows: Array<{ key: string; label: string; value: string }> = [];
+  if (name) rows.push({ key: 'name', label: 'Name', value: name });
+  if (title) rows.push({ key: 'title', label: 'Title', value: title });
+  if (description) rows.push({ key: 'description', label: 'Description', value: description });
+  if (path) rows.push({ key: 'path', label: 'Path', value: path });
+
+  if (!rows.length) {
+    return '';
+  }
+
+  return (
+    <Stack gap={2}>
+      {rows.map(row => (
+        <Text key={row.key} size="xs" style={{ lineHeight: 1.25 }}>
+          <Text span fw={600}>
+            {row.label}
+          </Text>
+          <Text span>{`: ${row.value}`}</Text>
+        </Text>
+      ))}
+    </Stack>
+  );
+}
+
+function getMentionIcon(item: AgentMentionSuggestion): {
+  Icon: ComponentType<any>;
+  color: string;
+} {
+  if (item.type === 'person') {
+    return { Icon: IconUser, color: 'var(--mantine-color-blue-6)' };
+  }
+  if (item.type === 'group') {
+    return { Icon: IconUsersGroup, color: 'var(--mantine-color-violet-6)' };
+  }
+  if (item.isContainer) {
+    return { Icon: IconFolder, color: 'var(--mantine-color-blue-6)' };
+  }
+
+  return {
+    Icon: getFileIconByMimeType(item.mimeType ?? undefined),
+    color: 'var(--mantine-color-dimmed)',
+  };
 }
 
 export const NodeMentionList = forwardRef<MentionListRef, NodeMentionSuggestionProps>(
   (props, ref) => {
+    const { t } = useTranslation('agent');
     const [selectedIndex, setSelectedIndex] = useState(0);
+    const listRef = useRef<HTMLDivElement | null>(null);
+    const autoLoadRequestedForCountRef = useRef<number | null>(null);
+    const selectableCount = props.items.length;
+    const popupWidth = Math.max(320, Math.round(props.popupWidth ?? 560));
+    const popupWidthStyle: CSSProperties = {
+      width: `${popupWidth}px`,
+      maxWidth: 'calc(100vw - 12px)',
+    };
 
     const selectItem = (index: number) => {
-      if (index === props.items.length) {
-        if (props.hasMore && !props.loading && props.onLoadMore) {
-          props.onLoadMore();
-        }
-        return;
-      }
       const item = props.items[index];
       if (item) {
-        // Insert into editor
         props.command({
           id: item.id,
           label: item.label,
           type: item.type,
-          path: item.path,
+          path: item.path ?? item.displayPath ?? null,
         });
       }
     };
 
     const upHandler = () => {
-      setSelectedIndex(
-        (selectedIndex + props.items.length + (props.hasMore ? 1 : 0)) %
-          (props.items.length + (props.hasMore ? 1 : 0) + 1)
-      );
+      if (!selectableCount) {
+        return;
+      }
+      setSelectedIndex(current => (current - 1 + selectableCount) % selectableCount);
     };
 
     const downHandler = () => {
-      setSelectedIndex((selectedIndex + 1) % (props.items.length + (props.hasMore ? 1 : 0) + 1));
+      if (!selectableCount) {
+        return;
+      }
+      setSelectedIndex(current => (current + 1) % selectableCount);
     };
 
     const enterHandler = () => {
       selectItem(selectedIndex);
     };
 
-    useEffect(() => setSelectedIndex(0), [props.items]);
+    useEffect(() => {
+      if (!selectableCount) {
+        setSelectedIndex(0);
+        return;
+      }
+      setSelectedIndex(current => Math.min(current, selectableCount - 1));
+    }, [selectableCount]);
+
+    useEffect(() => {
+      if (!props.hasMore) {
+        autoLoadRequestedForCountRef.current = null;
+        return;
+      }
+
+      if (!props.onLoadMore || props.loading || props.items.length === 0) {
+        return;
+      }
+
+      const thresholdIndex = Math.max(0, props.items.length - 2);
+      if (selectedIndex < thresholdIndex) {
+        return;
+      }
+
+      if (autoLoadRequestedForCountRef.current === props.items.length) {
+        return;
+      }
+
+      autoLoadRequestedForCountRef.current = props.items.length;
+      props.onLoadMore();
+    }, [props.hasMore, props.items.length, props.loading, props.onLoadMore, selectedIndex]);
+
+    useEffect(() => {
+      const listElement = listRef.current;
+      if (!listElement) {
+        return;
+      }
+      const selectedElement = listElement.querySelector<HTMLElement>(
+        `[data-mention-index="${selectedIndex}"]`
+      );
+      selectedElement?.scrollIntoView({ block: 'nearest' });
+    }, [selectedIndex]);
 
     useImperativeHandle(ref, () => ({
       onKeyDown: ({ event }) => {
@@ -83,7 +227,7 @@ export const NodeMentionList = forwardRef<MentionListRef, NodeMentionSuggestionP
         }
 
         if (event.key === 'Enter') {
-          if (!props.items.length && !props.loading) {
+          if (!selectableCount && !props.loading) {
             return false;
           }
           enterHandler();
@@ -98,153 +242,114 @@ export const NodeMentionList = forwardRef<MentionListRef, NodeMentionSuggestionP
       return null;
     }
 
+    if (props.loading && !props.items.length) {
+      return (
+        <Stack gap={4} style={popupWidthStyle}>
+          <Paper
+            withBorder
+            shadow="md"
+            style={{
+              minHeight: 96,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 'var(--mantine-spacing-sm)',
+            }}
+          >
+            <Group justify="center" gap={6} style={{ pointerEvents: 'none' }}>
+              <Loader size="xs" style={{ opacity: 0.7 }} />
+              <Text size="sm" c="dimmed" fw={400} style={{ opacity: 0.72, fontFamily: 'inherit' }}>
+                {t('loadingMoreResults')}
+              </Text>
+            </Group>
+          </Paper>
+        </Stack>
+      );
+    }
+
     return (
-      <Paper
-        withBorder
-        shadow="md"
-        p="xs"
-        style={{ maxHeight: 250, overflow: 'auto', minWidth: 280, maxWidth: 350 }}
-      >
-        <Stack gap={4}>
-          {props.items.map((item, index) => (
-            <Button
-              key={`${item.type}-${item.id}`}
-              variant={index === selectedIndex ? 'light' : 'subtle'}
-              justify="start"
-              size="sm"
-              onClick={() => selectItem(index)}
-              onMouseEnter={() => setSelectedIndex(index)}
-              styles={{
-                root: { width: '100%', paddingLeft: 8, paddingRight: 8 },
-                inner: { width: '100%', justifyContent: 'flex-start' },
-                label: { width: '100%' },
-              }}
-            >
-              <Group
-                justify="space-between"
-                wrap="nowrap"
-                style={{ width: '100%', overflow: 'hidden' }}
-                gap="xs"
-              >
-                <Text size="sm" truncate="end" style={{ flex: 1, textAlign: 'left' }}>
-                  @{item.label}
-                </Text>
-                <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  {item.type}
-                </Text>
-              </Group>
-            </Button>
-          ))}
+      <Stack gap={4} style={popupWidthStyle}>
+        <Paper
+          withBorder
+          shadow="md"
+          style={{
+            overflow: 'hidden',
+            paddingBottom: 'var(--mantine-spacing-sm)',
+          }}
+        >
+          <div
+            ref={listRef}
+            style={{
+              maxHeight: 300,
+              overflow: 'auto',
+              padding: 'var(--mantine-spacing-xs)',
+            }}
+          >
+            <Stack gap={4}>
+              {props.items.map((item, index) => (
+                <Button
+                  key={`${item.type}-${item.id}`}
+                  data-mention-index={index}
+                  variant={index === selectedIndex ? 'light' : 'subtle'}
+                  justify="start"
+                  size="sm"
+                  onClick={() => selectItem(index)}
+                  onMouseEnter={() => setSelectedIndex(index)}
+                  styles={{
+                    root: { width: '100%', paddingLeft: 8, paddingRight: 8, minHeight: 44 },
+                    inner: { width: '100%', justifyContent: 'flex-start', alignItems: 'center' },
+                    label: { width: '100%' },
+                  }}
+                >
+                  {(() => {
+                    const { Icon, color } = getMentionIcon(item);
+                    const meta = getMentionMeta(item);
+                    return (
+                      <Group
+                        wrap="nowrap"
+                        style={{ width: '100%', overflow: 'hidden', alignItems: 'center' }}
+                        gap="xs"
+                      >
+                        <Icon size={16} stroke={1.8} style={{ flexShrink: 0, color }} aria-hidden />
+                        <Tooltip
+                          disabled={item.type !== 'node'}
+                          label={buildMentionTooltip(item)}
+                          withArrow
+                          withinPortal
+                          zIndex={40000}
+                          openDelay={250}
+                          multiline
+                          maw={900}
+                        >
+                          <Text size="sm" style={{ ...singleLineTextStyle, flex: 1 }} ta="left">
+                            <Text span inherit>
+                              {item.label}
+                            </Text>
+                            {meta && (
+                              <Text span inherit c="dimmed" style={{ opacity: 0.58 }}>
+                                {` · ${meta}`}
+                              </Text>
+                            )}
+                          </Text>
+                        </Tooltip>
+                      </Group>
+                    );
+                  })()}
+                </Button>
+              ))}
+            </Stack>
+          </div>
           {props.loading && (
-            <Group justify="center" py={4}>
-              <Loader size="xs" />
+            <Group justify="center" mt="xs" pt="sm" pb="sm" gap={6} style={{ pointerEvents: 'none' }}>
+              <Loader size="xs" style={{ opacity: 0.7 }} />
+              <Text size="sm" c="dimmed" fw={400} style={{ opacity: 0.72, fontFamily: 'inherit' }}>
+                {t('loadingMoreResults')}
+              </Text>
             </Group>
           )}
-          {props.hasMore && !props.loading && (
-            <Button
-              size="xs"
-              variant={selectedIndex === props.items.length ? 'light' : 'subtle'}
-              onClick={() => selectItem(props.items.length)}
-              onMouseEnter={() => setSelectedIndex(props.items.length)}
-            >
-              Load more
-            </Button>
-          )}
-        </Stack>
-      </Paper>
+        </Paper>
+      </Stack>
     );
   }
 );
 NodeMentionList.displayName = 'NodeMentionList';
-
-export interface ConstraintListRef {
-  onKeyDown: (props: { event: KeyboardEvent }) => boolean;
-}
-
-export interface ConstraintSuggestionProps extends SuggestionProps {
-  items: string[];
-}
-
-export const ConstraintList = forwardRef<ConstraintListRef, ConstraintSuggestionProps>(
-  (props, ref) => {
-    const [selectedIndex, setSelectedIndex] = useState(0);
-
-    const selectItem = (index: number) => {
-      const item = props.items[index];
-      if (item) {
-        // We aren't inserting a custom node here, just plain text with the trigger char
-        props.command({ id: item });
-      }
-    };
-
-    const upHandler = () => {
-      setSelectedIndex((selectedIndex + props.items.length - 1) % props.items.length);
-    };
-
-    const downHandler = () => {
-      setSelectedIndex((selectedIndex + 1) % props.items.length);
-    };
-
-    const enterHandler = () => {
-      selectItem(selectedIndex);
-    };
-
-    useEffect(() => setSelectedIndex(0), [props.items]);
-
-    useImperativeHandle(ref, () => ({
-      onKeyDown: ({ event }) => {
-        if (event.key === 'ArrowUp') {
-          upHandler();
-          return true;
-        }
-
-        if (event.key === 'ArrowDown') {
-          downHandler();
-          return true;
-        }
-
-        if (event.key === 'Enter') {
-          if (!props.items.length) {
-            return false;
-          }
-          enterHandler();
-          return true;
-        }
-
-        return false;
-      },
-    }));
-
-    if (!props.items.length) {
-      return null;
-    }
-
-    return (
-      <Paper
-        withBorder
-        shadow="md"
-        p="xs"
-        style={{ maxHeight: 200, overflow: 'auto', minWidth: 150 }}
-      >
-        <Stack gap={4}>
-          <Text size="xs" fw={500} c="dimmed" mb={4}>
-            Insert filter
-          </Text>
-          {props.items.map((item, index) => (
-            <Button
-              key={index}
-              variant={index === selectedIndex ? 'light' : 'subtle'}
-              justify="start"
-              size="xs"
-              onClick={() => selectItem(index)}
-              onMouseEnter={() => setSelectedIndex(index)}
-            >
-              {item}:
-            </Button>
-          ))}
-        </Stack>
-      </Paper>
-    );
-  }
-);
-ConstraintList.displayName = 'ConstraintList';

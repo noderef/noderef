@@ -828,9 +828,13 @@ export function AgentPage() {
   const [draft, setDraft] = useState('');
 
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
-  const [debouncedMentionQuery] = useDebouncedValue(mentionQuery, 300);
+  const [mentionQuerySession, setMentionQuerySession] = useState(0);
+  const mentionDebounceInput = useMemo(
+    () => ({ query: mentionQuery, session: mentionQuerySession }),
+    [mentionQuery, mentionQuerySession]
+  );
+  const [debouncedMentionInput] = useDebouncedValue(mentionDebounceInput, 300);
   const [mentionItems, setMentionItems] = useState<AgentMentionSuggestion[]>([]);
-  const [mentionSkipCount, setMentionSkipCount] = useState(0);
   const [mentionHasMore, setMentionHasMore] = useState(false);
   const [mentionLoading, setMentionLoading] = useState(false);
 
@@ -850,6 +854,11 @@ export function AgentPage() {
   const chatInputRef = useRef<AgentChatInputRef>(null);
   const conversationViewportRef = useRef<HTMLDivElement | null>(null);
   const loadChatsRequestIdRef = useRef(0);
+  const mentionRequestIdRef = useRef(0);
+  const mentionSkipCountRef = useRef(0);
+  const mentionActiveQueryRef = useRef('');
+  const mentionHasMoreRef = useRef(false);
+  const mentionLoadingRef = useRef(false);
 
   const activeChat = useMemo(
     () => chats.find(chat => chat.id === activeChatId) || null,
@@ -1136,34 +1145,76 @@ export function AgentPage() {
     }
   }, []);
 
+  const resetMentionSuggestions = useCallback(() => {
+    mentionRequestIdRef.current += 1;
+    mentionSkipCountRef.current = 0;
+    mentionActiveQueryRef.current = '';
+    mentionHasMoreRef.current = false;
+    mentionLoadingRef.current = false;
+    setMentionItems([]);
+    setMentionHasMore(false);
+    setMentionLoading(false);
+  }, []);
+
   const loadMentions = useCallback(
     async (query: string, reset: boolean) => {
-      const serverId = activeChat?.serverId || activeServerId || servers[0]?.id;
-      if (!serverId) {
-        setMentionItems([]);
-        setMentionHasMore(false);
+      const normalizedQuery = query.trim();
+      if (!normalizedQuery) {
+        resetMentionSuggestions();
         return;
       }
 
-      const skipCount = reset ? 0 : mentionSkipCount;
+      const serverId = activeChat?.serverId || activeServerId || servers[0]?.id;
+      if (!serverId) {
+        resetMentionSuggestions();
+        return;
+      }
+
+      if (reset) {
+        mentionActiveQueryRef.current = normalizedQuery;
+        mentionSkipCountRef.current = 0;
+        mentionHasMoreRef.current = true;
+      } else {
+        if (normalizedQuery !== mentionActiveQueryRef.current) {
+          return;
+        }
+        if (!mentionHasMoreRef.current || mentionLoadingRef.current) {
+          return;
+        }
+      }
+
+      const skipCount = mentionSkipCountRef.current;
+      const requestId = ++mentionRequestIdRef.current;
+      mentionLoadingRef.current = true;
       setMentionLoading(true);
 
       try {
         const result = await backendRpc.agent.searchMentions({
           serverId,
-          query,
+          query: normalizedQuery,
           skipCount,
           maxItems: 10,
         });
 
+        if (requestId !== mentionRequestIdRef.current) {
+          return;
+        }
+        if (normalizedQuery !== mentionActiveQueryRef.current) {
+          return;
+        }
+
         setMentionItems(prev => (reset ? result.items : [...prev, ...result.items]));
-        setMentionSkipCount(skipCount + result.items.length);
+        mentionSkipCountRef.current = skipCount + result.items.length;
+        mentionHasMoreRef.current = result.pagination.hasMoreItems;
         setMentionHasMore(result.pagination.hasMoreItems);
       } finally {
-        setMentionLoading(false);
+        if (requestId === mentionRequestIdRef.current) {
+          mentionLoadingRef.current = false;
+          setMentionLoading(false);
+        }
       }
     },
-    [activeChat?.serverId, activeServerId, mentionSkipCount, servers]
+    [activeChat?.serverId, activeServerId, resetMentionSuggestions, servers]
   );
 
   useEffect(() => {
@@ -1282,10 +1333,8 @@ export function AgentPage() {
   useEffect(() => {
     setDraft('');
     setMentionQuery(null);
-    setMentionItems([]);
-    setMentionSkipCount(0);
-    setMentionHasMore(false);
-  }, [activeChatId]);
+    resetMentionSuggestions();
+  }, [activeChatId, resetMentionSuggestions]);
 
   useEffect(() => {
     if (!activeChatId) {
@@ -1367,16 +1416,31 @@ export function AgentPage() {
   }, [recentlySentMessage, hasActiveRuns]);
 
   useEffect(() => {
-    if (!debouncedMentionQuery) {
-      setMentionItems([]);
-      setMentionSkipCount(0);
-      setMentionHasMore(false);
+    const normalizedQuery = (mentionQuery || '').trim();
+    if (!normalizedQuery) {
+      setMentionQuerySession(current => current + 1);
+      resetMentionSuggestions();
       return;
     }
 
-    setMentionSkipCount(0);
-    void loadMentions(debouncedMentionQuery, true);
-  }, [debouncedMentionQuery, loadMentions]);
+    mentionRequestIdRef.current += 1;
+    mentionActiveQueryRef.current = normalizedQuery;
+    mentionSkipCountRef.current = 0;
+    mentionHasMoreRef.current = true;
+    mentionLoadingRef.current = true;
+    setMentionItems([]);
+    setMentionHasMore(false);
+    setMentionLoading(true);
+  }, [mentionQuery, resetMentionSuggestions]);
+
+  useEffect(() => {
+    const normalizedQuery = (debouncedMentionInput.query || '').trim();
+    if (!normalizedQuery) {
+      return;
+    }
+
+    void loadMentions(normalizedQuery, true);
+  }, [debouncedMentionInput.query, debouncedMentionInput.session, loadMentions]);
 
   useEffect(() => {
     const viewport = conversationViewportRef.current;
@@ -1445,9 +1509,7 @@ export function AgentPage() {
 
       setDraft('');
       setMentionQuery(null);
-      setMentionItems([]);
-      setMentionSkipCount(0);
-      setMentionHasMore(false);
+      resetMentionSuggestions();
       setRecentlySentMessage(true);
 
       await pollActiveChat();
@@ -1875,7 +1937,7 @@ export function AgentPage() {
                     mentionItems={mentionItems}
                     mentionHasMore={mentionHasMore}
                     mentionLoading={mentionLoading}
-                    onLoadMoreMentions={() => void loadMentions(mentionQuery ?? '', false)}
+                    onLoadMoreMentions={() => void loadMentions(mentionActiveQueryRef.current, false)}
                   />
 
                   <Group justify="space-between" align="center" mt="xs" wrap="nowrap">

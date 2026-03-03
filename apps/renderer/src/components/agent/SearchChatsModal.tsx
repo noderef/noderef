@@ -74,6 +74,10 @@ export function SearchChatsModal() {
         placeholder={t('agent:searchChatsPlaceholder', 'Search all chats...')}
         value={query}
         onChange={e => setQuery(e.currentTarget.value)}
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="off"
+        spellCheck={false}
         leftSection={<IconSearch size={16} />}
         mb="md"
         data-autofocus

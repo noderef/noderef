@@ -835,6 +835,12 @@ export interface AgentMentionSuggestion {
   type: 'node' | 'person' | 'group';
   label: string;
   path?: string | null;
+  displayPath?: string | null;
+  isContainer?: boolean;
+  isFile?: boolean;
+  mimeType?: string | null;
+  title?: string | null;
+  description?: string | null;
   subtitle?: string | null;
 }
 

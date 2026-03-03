@@ -20,7 +20,6 @@
   "greetingEvening_name": "Good evening, {{name}}",
   "howCanIHelp": "How can I help you?",
   "composerPlaceholder": "Ask the agent… Use @ to mention files, folders, users, or groups.",
-
   "loadMoreMentions": "Load more mentions",
   "thinking": "Thinking...",
   "searching": "Gathering context...",
@@ -68,5 +67,6 @@
     "sendMessageTitle": "Failed to send message",
     "cancelRunTitle": "Failed to cancel run",
     "confirmationTitle": "Failed to confirm operation"
-  }
+  },
+  "loadingMoreResults": "Loading more results..."
 }

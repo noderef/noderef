@@ -29,7 +29,54 @@ interface MentionItem {
   type: 'node' | 'person' | 'group';
   label: string;
   path?: string | null;
+  displayPath?: string | null;
+  isContainer?: boolean;
+  isFile?: boolean;
+  mimeType?: string | null;
+  title?: string | null;
+  description?: string | null;
   subtitle?: string | null;
+}
+
+function normalizeDisplayPath(pathValue: unknown): string | null {
+  if (typeof pathValue === 'string') {
+    const trimmed = pathValue.trim();
+    return trimmed.length ? trimmed : null;
+  }
+
+  if (
+    pathValue &&
+    typeof pathValue === 'object' &&
+    'name' in pathValue &&
+    typeof (pathValue as { name?: unknown }).name === 'string'
+  ) {
+    const namedPath = (pathValue as { name: string }).name.trim();
+    if (namedPath.length) {
+      return namedPath;
+    }
+  }
+
+  if (
+    pathValue &&
+    typeof pathValue === 'object' &&
+    'elements' in pathValue &&
+    Array.isArray((pathValue as { elements?: unknown[] }).elements)
+  ) {
+    const parts = ((pathValue as { elements: Array<{ name?: unknown }> }).elements || [])
+      .map(element => (typeof element?.name === 'string' ? element.name.trim() : ''))
+      .filter(Boolean);
+    return parts.length ? `/${parts.join('/')}` : null;
+  }
+
+  return null;
+}
+
+function normalizeOptionalText(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
 }
 
 export async function searchMentions(
@@ -57,13 +104,19 @@ export async function searchMentions(
 
   if (!types || types.has('node')) {
     const escaped = query.replace(/"/g, '\\"').replace(/\\/g, '\\\\');
+    const nodeAftsQuery = [
+      `cm:name:"*${escaped}*"`,
+      `@cm:title:"*${escaped}*"`,
+      `@cm:description:"*${escaped}*"`,
+      `TEXT:"${escaped}*"`,
+    ].join(' OR ');
     const nodeResult = await searchApi.search({
       query: {
-        query: `(cm:name:"*${escaped}*" OR TEXT:"${escaped}*") AND (TYPE:"cm:content" OR TYPE:"cm:folder")`,
+        query: `(${nodeAftsQuery}) AND (TYPE:"cm:content" OR TYPE:"cm:folder")`,
         language: 'afts',
       },
-      fields: ['id', 'name', 'nodeType', 'isFolder', 'isFile', 'path', 'content'],
-      include: ['path'],
+      fields: ['id', 'name', 'nodeType', 'isFolder', 'isFile', 'path', 'content', 'properties'],
+      include: ['path', 'properties'],
       paging: { maxItems: 30, skipCount: 0 },
     } as any);
 
@@ -72,12 +125,27 @@ export async function searchMentions(
       if (!node?.id || !node?.name) {
         continue;
       }
+
+      const displayPath = normalizeDisplayPath(node.path);
+      const mimeType =
+        typeof node.content?.mimeType === 'string' && node.content.mimeType.trim().length
+          ? node.content.mimeType
+          : null;
+      const title = normalizeOptionalText(node.properties?.['cm:title']);
+      const description = normalizeOptionalText(node.properties?.['cm:description']);
+
       items.push({
         id: node.id,
         type: 'node',
         label: node.name,
-        path: node.path?.name || null,
-        subtitle: node.nodeType || null,
+        path: displayPath,
+        displayPath,
+        isContainer: Boolean(node.isFolder),
+        isFile: Boolean(node.isFile),
+        mimeType,
+        title,
+        description,
+        subtitle: displayPath ?? node.nodeType ?? null,
       });
     }
   }

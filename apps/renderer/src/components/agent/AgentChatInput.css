@@ -38,11 +38,3 @@
 .agent-chat-input .ProseMirror p {
   margin: 0;
 }
-
-.agent-constraint-pill {
-  background-color: var(--mantine-color-blue-light);
-  color: var(--mantine-color-blue-filled);
-  border-radius: var(--mantine-radius-sm);
-  padding: 0 4px;
-  font-weight: 500;
-}
