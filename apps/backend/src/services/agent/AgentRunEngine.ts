@@ -26,7 +26,7 @@ import {
 } from '../../ai/anthropic.js';
 import { createLogger } from '../../lib/logger.js';
 import type { AgentRepository } from '../../repositories/agentRepository.js';
-import { emitRunEvent, formatConversationHistory } from './agentUtils.js';
+import { emitRunEvent, formatConversationHistory, stripHorizontalRules } from './agentUtils.js';
 import { buildDescriptionNote, type ProgressNote } from './progressMessages.js';
 import { buildSystemPrompt } from './systemPrompt.js';
 import { getAllToolSchemas, getToolByName, resolveToolName } from './tools/registry.js';
@@ -673,11 +673,12 @@ export class AgentRunEngine {
 
       // ── Final text answer ──────────────────────────────────────────────────
       if (response.type === 'text') {
+        const sanitizedText = stripHorizontalRules(response.text);
         await this.repository.createMessage({
           chatId: input.chatId,
           userId: input.userId,
           role: 'assistant',
-          content: response.text,
+          content: sanitizedText,
           mentions: [],
         });
         return;

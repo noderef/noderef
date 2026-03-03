@@ -45,6 +45,21 @@ export function registerAgentHandlers(routes: Routes, ctx: RpcContext): void {
     },
   };
 
+  routes['backend.agent.searchChats'] = {
+    schema: z.object({
+      query: z.string().min(1),
+      serverId: z.number().optional(),
+      maxItems: z.number().int().min(1).max(50).optional(),
+    }),
+    handler: async params => {
+      const userId = await getCurrentUserId();
+      return agentService.searchChats(
+        userId,
+        params as { query: string; serverId?: number; maxItems?: number }
+      );
+    },
+  };
+
   routes['backend.agent.createChat'] = {
     schema: z.object({
       serverId: z.number().int().positive(),

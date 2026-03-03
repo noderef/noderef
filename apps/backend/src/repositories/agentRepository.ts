@@ -15,6 +15,12 @@
  */
 
 import type {
+  AgentMention,
+  AgentMessageRole,
+  AgentRunStatus,
+  AgentRunStepStatus,
+} from '@app/contracts';
+import type {
   AgentChat as PrismaAgentChat,
   AgentMessage as PrismaAgentMessage,
   AgentOperationAudit as PrismaAgentOperationAudit,
@@ -23,12 +29,6 @@ import type {
   AgentRunStep as PrismaAgentRunStep,
   PrismaClient,
 } from '@prisma/client';
-import type {
-  AgentMention,
-  AgentMessageRole,
-  AgentRunStatus,
-  AgentRunStepStatus,
-} from '@app/contracts';
 
 export interface AgentChatSummary {
   id: number;
@@ -322,6 +322,55 @@ export class AgentRepository {
     };
   }
 
+  async searchChats(
+    userId: number,
+    options: { query: string; serverId?: number; maxItems?: number }
+  ): Promise<AgentChatSummary[]> {
+    const maxItems = Math.max(1, Math.min(options.maxItems ?? 10, 50));
+
+    const rows = await this.prisma.agentChat.findMany({
+      where: {
+        userId,
+        ...(options.serverId ? { serverId: options.serverId } : {}),
+        messages: {
+          some: {
+            content: {
+              contains: options.query,
+            },
+          },
+        },
+      },
+      orderBy: [{ lastMessageAt: 'desc' }, { updatedAt: 'desc' }, { id: 'desc' }],
+      take: maxItems,
+    });
+
+    let activeChatIds = new Set<number>();
+    let waitingConfirmationChatIds = new Set<number>();
+    if (rows.length > 0) {
+      const activeRunGroups = await this.prisma.agentRun.groupBy({
+        by: ['chatId', 'status'],
+        where: {
+          userId,
+          chatId: { in: rows.map(row => row.id) },
+          status: { in: ['queued', 'running', 'waiting_confirmation'] },
+        },
+      });
+      activeChatIds = new Set(activeRunGroups.map(group => group.chatId));
+      waitingConfirmationChatIds = new Set(
+        activeRunGroups
+          .filter(group => group.status === 'waiting_confirmation')
+          .map(group => group.chatId)
+      );
+    }
+
+    return rows.map(row =>
+      this.toChatDTO(row, {
+        hasActiveRun: activeChatIds.has(row.id),
+        hasWaitingConfirmation: waitingConfirmationChatIds.has(row.id),
+      })
+    );
+  }
+
   async findChatById(userId: number, chatId: number): Promise<AgentChatSummary | null> {
     const chat = await this.prisma.agentChat.findFirst({ where: { id: chatId, userId } });
     return chat ? this.toChatDTO(chat) : null;
@@ -339,7 +388,11 @@ export class AgentRepository {
     return this.toChatDTO(chat);
   }
 
-  async updateChatTitle(userId: number, chatId: number, title: string): Promise<AgentChatSummary | null> {
+  async updateChatTitle(
+    userId: number,
+    chatId: number,
+    title: string
+  ): Promise<AgentChatSummary | null> {
     const existing = await this.prisma.agentChat.findFirst({ where: { id: chatId, userId } });
     if (!existing) {
       return null;
@@ -423,7 +476,8 @@ export class AgentRepository {
     mentions?: AgentMention[];
   }): Promise<AgentMessage> {
     const now = new Date();
-    const mentionsJson = data.mentions && data.mentions.length ? JSON.stringify(data.mentions) : null;
+    const mentionsJson =
+      data.mentions && data.mentions.length ? JSON.stringify(data.mentions) : null;
 
     const message = await this.prisma.$transaction(async tx => {
       const created = await tx.agentMessage.create({
@@ -482,7 +536,10 @@ export class AgentRepository {
     userId: number,
     chatId: number,
     options: ListOptions = {}
-  ): Promise<{ items: Array<AgentRun & { pendingStep: AgentRunStep | null }>; totalItems: number }> {
+  ): Promise<{
+    items: Array<AgentRun & { pendingStep: AgentRunStep | null }>;
+    totalItems: number;
+  }> {
     const maxItems = Math.max(1, Math.min(options.maxItems ?? 50, 100));
     const skipCount = Math.max(0, options.skipCount ?? 0);
 
@@ -534,7 +591,9 @@ export class AgentRepository {
       where: { id: runId },
       data: {
         ...(data.status ? { status: data.status } : {}),
-        ...(data.plan !== undefined ? { planJson: data.plan ? JSON.stringify(data.plan) : null } : {}),
+        ...(data.plan !== undefined
+          ? { planJson: data.plan ? JSON.stringify(data.plan) : null }
+          : {}),
         ...(data.error !== undefined ? { error: data.error } : {}),
         ...(data.startedAt !== undefined ? { startedAt: data.startedAt } : {}),
         ...(data.finishedAt !== undefined ? { finishedAt: data.finishedAt } : {}),
@@ -631,11 +690,15 @@ export class AgentRepository {
       data: {
         ...(data.status ? { status: data.status } : {}),
         ...(data.summary !== undefined ? { summary: data.summary } : {}),
-        ...(data.input !== undefined ? { inputJson: data.input ? JSON.stringify(data.input) : null } : {}),
+        ...(data.input !== undefined
+          ? { inputJson: data.input ? JSON.stringify(data.input) : null }
+          : {}),
         ...(data.output !== undefined
           ? { outputJson: data.output ? JSON.stringify(data.output) : null }
           : {}),
-        ...(data.confirmationToken !== undefined ? { confirmationToken: data.confirmationToken } : {}),
+        ...(data.confirmationToken !== undefined
+          ? { confirmationToken: data.confirmationToken }
+          : {}),
         ...(data.confirmedAt !== undefined ? { confirmedAt: data.confirmedAt } : {}),
         ...(data.startedAt !== undefined ? { startedAt: data.startedAt } : {}),
         ...(data.completedAt !== undefined ? { completedAt: data.completedAt } : {}),

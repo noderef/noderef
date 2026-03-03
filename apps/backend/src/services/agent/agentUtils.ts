@@ -215,6 +215,23 @@ export function formatConversationHistory(
   return turns.length ? turns.join('\n') : '';
 }
 
+/**
+ * Remove markdown/HTML horizontal rules from assistant output.
+ * This is a safety net in case the model ignores prompt formatting constraints.
+ */
+export function stripHorizontalRules(value: string): string {
+  if (!value) {
+    return value;
+  }
+  const withoutHtmlHr = value.replace(/<hr\s*\/?>/gi, '');
+  return withoutHtmlHr
+    .split(/\r?\n/)
+    .filter(line => !/^\s*(?:-{3,}|\*{3,}|_{3,}|(?:-\s+){2,}-?|(?:\*\s+){2,}\*?|(?:_\s+){2,}_?)\s*$/.test(line))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 export function buildPaginatedResponse<T>(
   items: T[],
   totalItems: number,

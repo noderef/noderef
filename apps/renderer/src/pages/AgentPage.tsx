@@ -59,6 +59,7 @@ import { marked } from 'marked';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AgentChatInput, AgentChatInputRef } from '../components/agent/AgentChatInput';
+import { AgentEmptyState } from '../components/agent/AgentEmptyState';
 
 const ACTIVE_RUN_STATUSES = new Set(['queued', 'running', 'waiting_confirmation']);
 const THREAD_AUTO_CONFIRM_ACCEPT_PATTERN = /^\s*(i accept|ik accepteer)\s*[.!]*\s*$/i;
@@ -68,7 +69,10 @@ const NODE_BROWSER_LINK_HOST = 'node';
 const parseNodeBrowserLink = (href: string): { nodeId: string; nodeName: string | null } | null => {
   try {
     const parsed = new URL(href);
-    if (parsed.protocol !== NODE_BROWSER_LINK_PROTOCOL || parsed.hostname !== NODE_BROWSER_LINK_HOST) {
+    if (
+      parsed.protocol !== NODE_BROWSER_LINK_PROTOCOL ||
+      parsed.hostname !== NODE_BROWSER_LINK_HOST
+    ) {
       return null;
     }
 
@@ -533,10 +537,7 @@ interface RunActivityItem {
 }
 
 const humanizeOperation = (operation: string): string =>
-  operation
-    .replace(/_/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  operation.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
 
 const EXECUTION_EVENT_KEYS: Record<string, string> = {
   'step.completed': 'stepCompleted',
@@ -631,7 +632,9 @@ const buildContextWindowSnapshot = (
     asString(payload.contextWindowSource) === 'known' ? 'known' : 'default';
 
   const promptTokensRaw = asNumber(payload.promptTokens);
-  const estimatedPromptTokens = asNumber((payload.estimated as Record<string, unknown> | undefined)?.promptTokens);
+  const estimatedPromptTokens = asNumber(
+    (payload.estimated as Record<string, unknown> | undefined)?.promptTokens
+  );
   const promptTokens = promptTokensRaw ?? estimatedPromptTokens ?? 0;
 
   const outputTokens = asNumber(payload.outputTokens);
@@ -740,10 +743,7 @@ const formatEventDetail = (event: AgentRunEvent): string | null => {
           ? humanizeOperation(payload.operation)
           : null;
     return buildMarkdownDetail(
-      [
-        '**Status:** awaiting confirmation',
-        `**Action:** ${summary || 'unknown'}`,
-      ],
+      ['**Status:** awaiting confirmation', `**Action:** ${summary || 'unknown'}`],
       args ? [{ title: 'Arguments', value: args }] : []
     );
   }
@@ -751,12 +751,20 @@ const formatEventDetail = (event: AgentRunEvent): string | null => {
   if (event.type === 'run.failed') {
     return buildMarkdownDetail(
       ['**Status:** failed'],
-      [{ title: 'Error', value: { error: payload.error ? String(payload.error) : 'Unknown run failure' } }]
+      [
+        {
+          title: 'Error',
+          value: { error: payload.error ? String(payload.error) : 'Unknown run failure' },
+        },
+      ]
     );
   }
 
   if (payload.error) {
-    return buildMarkdownDetail(['**Status:** error'], [{ title: 'Error', value: { error: String(payload.error) } }]);
+    return buildMarkdownDetail(
+      ['**Status:** error'],
+      [{ title: 'Error', value: { error: String(payload.error) } }]
+    );
   }
 
   return null;
@@ -1415,7 +1423,8 @@ export function AgentPage() {
       }
 
       const isThreadAutoConfirmCommand = THREAD_AUTO_CONFIRM_ACCEPT_PATTERN.test(text.trim());
-      const enableAutoConfirmForThisSend = Boolean(autoConfirmByChat[chatId]) || isThreadAutoConfirmCommand;
+      const enableAutoConfirmForThisSend =
+        Boolean(autoConfirmByChat[chatId]) || isThreadAutoConfirmCommand;
 
       if (isThreadAutoConfirmCommand) {
         setChatAutoConfirm(chatId, true);
@@ -1575,7 +1584,14 @@ export function AgentPage() {
             flexDirection: 'column',
           }}
         >
-          <Stack gap="xs" pr="sm" style={{ marginTop: 'auto' }}>
+          <Stack
+            gap="xs"
+            pr="sm"
+            style={{
+              marginTop: conversationTimeline.length === 0 ? 0 : 'auto',
+              flex: conversationTimeline.length === 0 ? 1 : undefined,
+            }}
+          >
             {loadingConversation && (
               <Group justify="center" py={2}>
                 <Loader size="xs" />
@@ -1583,9 +1599,7 @@ export function AgentPage() {
             )}
 
             {conversationTimeline.length === 0 ? (
-              <Text size="sm" c="dimmed">
-                {t('noMessages')}
-              </Text>
+              <AgentEmptyState />
             ) : (
               <>
                 {conversationTimeline.map(item => {
@@ -1622,9 +1636,7 @@ export function AgentPage() {
                                   key={idx}
                                   label={translatedLabel}
                                   color={
-                                    step.level === 'error'
-                                      ? 'red'
-                                      : 'var(--mantine-color-text)'
+                                    step.level === 'error' ? 'red' : 'var(--mantine-color-text)'
                                   }
                                   detail={step.detail}
                                 />

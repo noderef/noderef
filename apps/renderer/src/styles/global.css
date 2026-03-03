@@ -124,6 +124,18 @@ code {
   --agent-code-tag: #be123c;
 }
 
+.agent-markdown a,
+.agent-markdown a:visited {
+  color: var(--mantine-color-anchor, var(--mantine-primary-color-filled));
+  text-decoration: none;
+}
+
+.agent-markdown a:hover,
+.agent-markdown a:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
 .agent-markdown table {
   border-collapse: collapse;
   width: 100%;

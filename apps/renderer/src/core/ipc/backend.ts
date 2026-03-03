@@ -23,8 +23,8 @@
  */
 
 import type {
-  CreateServer,
   LocalFile as ContractsLocalFile,
+  CreateServer,
   NodeHistoryActivitySummary,
   PublicServer,
   UpdateServer,
@@ -321,6 +321,14 @@ export const backendRpc = {
       return rpc('backend.agent.deleteChat', { id });
     },
 
+    async searchChats(params: {
+      query: string;
+      serverId?: number;
+      maxItems?: number;
+    }): Promise<AgentChatSummary[]> {
+      return rpc('backend.agent.searchChats', params);
+    },
+
     async listMessages(params: {
       chatId: number;
       beforeId?: number;
@@ -329,11 +337,7 @@ export const backendRpc = {
       return rpc('backend.agent.listMessages', params);
     },
 
-    async listRuns(params: {
-      chatId: number;
-      skipCount?: number;
-      maxItems?: number;
-    }): Promise<{
+    async listRuns(params: { chatId: number; skipCount?: number; maxItems?: number }): Promise<{
       items: AgentRunSummary[];
       pagination: {
         totalItems: number;

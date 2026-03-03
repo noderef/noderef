@@ -305,6 +305,13 @@ export class AgentService {
     return buildPaginatedResponse(page.items, page.totalItems, params);
   }
 
+  async searchChats(
+    userId: number,
+    params: { query: string; serverId?: number; maxItems?: number }
+  ) {
+    return this.repository.searchChats(userId, params);
+  }
+
   async createChat(userId: number, serverId: number, title?: string) {
     const server = await this.serverService.findById(userId, serverId);
     if (!server) {
@@ -710,14 +717,10 @@ export class AgentService {
       );
 
       setImmediate(() => {
-        void this.executeRun(
-          userId,
-          run.id,
-          preferredModel,
-          preferredLanguage,
-          false,
-          { completedAction, completedOutput: output }
-        ).catch(error => {
+        void this.executeRun(userId, run.id, preferredModel, preferredLanguage, false, {
+          completedAction,
+          completedOutput: output,
+        }).catch(error => {
           log.error(
             { err: error, runId: run.id, stepId: step.id },
             'Continuation after confirmation failed'
@@ -810,9 +813,7 @@ export class AgentService {
     return null;
   }
 
-  private parseStructuredError(
-    rawMessage: string
-  ): {
+  private parseStructuredError(rawMessage: string): {
     statusCode?: number;
     errorKey?: string;
     briefSummary?: string;
@@ -874,10 +875,19 @@ export class AgentService {
       node_list_children: { title: 'List children failed', action: 'list child nodes' },
       search: { title: 'Search failed', action: 'run the search' },
       search_export_text: { title: 'Text export failed', action: 'export the text report' },
-      text_write_begin: { title: 'Text write begin failed', action: 'start the text write session' },
-      text_write_append: { title: 'Text write append failed', action: 'append text to the session' },
+      text_write_begin: {
+        title: 'Text write begin failed',
+        action: 'start the text write session',
+      },
+      text_write_append: {
+        title: 'Text write append failed',
+        action: 'append text to the session',
+      },
       text_write_status: { title: 'Text write status failed', action: 'read write session status' },
-      text_write_abort: { title: 'Text write abort failed', action: 'abort the text write session' },
+      text_write_abort: {
+        title: 'Text write abort failed',
+        action: 'abort the text write session',
+      },
       text_write_commit: { title: 'Text write commit failed', action: 'commit text to Alfresco' },
       script_execute: { title: 'Script execution failed', action: 'execute the script' },
     };
@@ -962,7 +972,9 @@ export class AgentService {
     const movedNode = isRecord(output.moved) ? output.moved : null;
     const copiedNode = isRecord(output.copied) ? output.copied : null;
     const directNodeLike =
-      typeof output.id === 'string' || typeof output.name === 'string' || isRecord(output.properties)
+      typeof output.id === 'string' ||
+      typeof output.name === 'string' ||
+      isRecord(output.properties)
         ? output
         : null;
 
@@ -1003,10 +1015,7 @@ export class AgentService {
         lines.push('- **Type:** ' + inlineCode(nodeType));
       }
       if (isFolder !== null || isFile !== null) {
-        lines.push(
-          '- **Kind:** ' +
-            inlineCode(isFolder ? 'folder' : isFile ? 'file' : 'node')
-        );
+        lines.push('- **Kind:** ' + inlineCode(isFolder ? 'folder' : isFile ? 'file' : 'node'));
       }
       if (mimeType) {
         lines.push('- **MIME type:** ' + inlineCode(mimeType));
@@ -1050,7 +1059,11 @@ export class AgentService {
 
     if (operation === 'node_delete') {
       const totalDeleted =
-        typeof output.totalDeleted === 'number' ? output.totalDeleted : Array.isArray(output.deleted) ? output.deleted.length : null;
+        typeof output.totalDeleted === 'number'
+          ? output.totalDeleted
+          : Array.isArray(output.deleted)
+            ? output.deleted.length
+            : null;
       if (totalDeleted !== null) {
         return [
           '### Node deleted',
@@ -1073,7 +1086,8 @@ export class AgentService {
           ? exportInfo.totalRows
           : null;
       const repositoryTotal =
-        typeof exportInfo?.repositoryTotal === 'number' && Number.isFinite(exportInfo.repositoryTotal)
+        typeof exportInfo?.repositoryTotal === 'number' &&
+        Number.isFinite(exportInfo.repositoryTotal)
           ? exportInfo.repositoryTotal
           : null;
       const pagesFetched =
@@ -1148,7 +1162,8 @@ export class AgentService {
       return lines.join('\n');
     }
 
-    const resultNode = verifiedNode || createdNode || updatedNode || movedNode || copiedNode || directNodeLike;
+    const resultNode =
+      verifiedNode || createdNode || updatedNode || movedNode || copiedNode || directNodeLike;
     if (resultNode) {
       const name = typeof resultNode.name === 'string' ? resultNode.name : 'unknown';
       const id = typeof resultNode.id === 'string' ? resultNode.id : '';
@@ -1341,7 +1356,9 @@ export class AgentService {
         ? "I couldn't finish the final response because the model timed out."
         : "I couldn't finish the response because the run failed."
     );
-    lines.push(`- **Reason:** ${inlineCode(truncateText(normalizedError || 'Unknown error', 300))}`);
+    lines.push(
+      `- **Reason:** ${inlineCode(truncateText(normalizedError || 'Unknown error', 300))}`
+    );
 
     if (completedSteps.length > 0) {
       lines.push(`- **Completed steps before failure:** ${completedSteps.length}`);
@@ -1407,9 +1424,7 @@ export class AgentService {
       ...(remainingTaskHints.length
         ? ['', 'Remaining tasks to complete now:', ...remainingTaskHints.map(task => `- ${task}`)]
         : []),
-      ...(outputPreview
-        ? ['', `Result from completed action (JSON): ${outputPreview}`]
-        : []),
+      ...(outputPreview ? ['', `Result from completed action (JSON): ${outputPreview}`] : []),
     ].join('\n');
   }
 
@@ -1526,8 +1541,9 @@ export class AgentService {
       }
 
       if (!cancelled) {
-        const failureContent = await this.buildRunFailureMessage(runId, message).catch(() =>
-          `I couldn't complete the request.\n- **Reason:** ${inlineCode(truncateText(message, 300))}`
+        const failureContent = await this.buildRunFailureMessage(runId, message).catch(
+          () =>
+            `I couldn't complete the request.\n- **Reason:** ${inlineCode(truncateText(message, 300))}`
         );
         await this.repository
           .createMessage({

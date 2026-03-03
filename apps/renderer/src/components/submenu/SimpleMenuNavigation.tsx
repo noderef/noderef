@@ -26,11 +26,12 @@ import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { SearchChatsModal } from '../agent/SearchChatsModal';
+import { getIconComponent } from './iconUtils';
 import { MenuItem } from './MenuItem';
 import { MenuSection } from './MenuSection';
 import { RepositorySection } from './RepositorySection';
 import { SystemTreeSection } from './SystemTreeSection';
-import { getIconComponent } from './iconUtils';
 
 const SUBMENU_SECTION_STATE_KEY = 'noderef-submenu-open-state';
 
@@ -117,7 +118,7 @@ const formatElapsedCompact = (date: Date | string | null | undefined): string =>
 };
 
 export function SimpleMenuNavigation() {
-  const { t } = useTranslation(['submenu', 'addServer']);
+  const { t } = useTranslation(['submenu', 'addServer', 'agent']);
   const { activeServerId, activePage, navigate, setActiveServer } = useNavigation();
   const getServerById = useServersStore(state => state.getServerById);
 
@@ -486,11 +487,23 @@ export function SimpleMenuNavigation() {
         initiallyOpened: shouldOpen,
         showWhenEmpty: true,
         emptyLabel: t('agent:noChatSelected'),
-        action: {
-          id: 'create-chat',
-          icon: 'edit',
-          label: t('agent:newChat'),
-        },
+        actions: [
+          ...(chatItems.length > 0
+            ? [
+                {
+                  id: 'search-chats',
+                  icon: 'search',
+                  label: t('agent:searchChats', 'Search chats'),
+                  showOnHover: true,
+                },
+              ]
+            : []),
+          {
+            id: 'create-chat',
+            icon: 'edit',
+            label: t('agent:newChat'),
+          },
+        ],
         items: chatItems,
       },
     ];
@@ -627,8 +640,16 @@ export function SimpleMenuNavigation() {
           }
           onItemRename={isSearchSection ? handleRenameSavedSearch : undefined}
           onSectionAction={(sectionData, actionId) => {
-            if (sectionData.id === 'agent-main' && actionId === 'create-chat') {
-              void handleCreateAgentChat();
+            if (sectionData.id === 'agent-main') {
+              if (actionId === 'create-chat') {
+                void handleCreateAgentChat();
+              } else if (actionId === 'search-chats') {
+                modals.open({
+                  title: t('agent:searchChats', 'Search chats'),
+                  size: 'lg',
+                  children: <SearchChatsModal />,
+                });
+              }
             }
           }}
           onOpenedChange={opened => {

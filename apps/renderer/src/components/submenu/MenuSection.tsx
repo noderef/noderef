@@ -66,13 +66,14 @@ export function MenuSection({
   const sectionIcon = section.icon ? getIconComponent(section.icon) : null;
   const actionIcon = section.action?.icon ? getIconComponent(section.action.icon) : null;
 
-  const handleSectionActionClick = (event: MouseEvent<HTMLButtonElement>) => {
+  const handleSectionActionClick = (event: MouseEvent<HTMLButtonElement>, actionId?: string) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!section.action) {
+    const id = actionId || section.action?.id;
+    if (!id) {
       return;
     }
-    onSectionAction?.(section, section.action.id);
+    onSectionAction?.(section, id);
   };
 
   const handleSectionHeaderKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -129,19 +130,36 @@ export function MenuSection({
                   {section.label}
                 </Text>
                 <Group gap={4} wrap="nowrap">
-                  {section.action && (
+                  {section.actions ? (
+                    section.actions.map(
+                      action =>
+                        (!action.showOnHover || hovered) && (
+                          <Tooltip key={action.id} label={action.label}>
+                            <ActionIcon
+                              aria-label={action.label}
+                              variant="subtle"
+                              color="gray"
+                              size="sm"
+                              onClick={e => handleSectionActionClick(e, action.id)}
+                            >
+                              {getIconComponent(action.icon || '')}
+                            </ActionIcon>
+                          </Tooltip>
+                        )
+                    )
+                  ) : section.action && (!section.action.showOnHover || hovered) ? (
                     <Tooltip label={section.action.label}>
                       <ActionIcon
                         aria-label={section.action.label}
                         variant="subtle"
                         color="gray"
                         size="sm"
-                        onClick={handleSectionActionClick}
+                        onClick={e => handleSectionActionClick(e)}
                       >
                         {actionIcon}
                       </ActionIcon>
                     </Tooltip>
-                  )}
+                  ) : null}
                   <IconChevronRight
                     size={16}
                     style={{
@@ -178,19 +196,38 @@ export function MenuSection({
               {section.label}
             </Text>
           </Group>
-          {section.action && (
+          {section.actions ? (
+            <Group gap={4} wrap="nowrap">
+              {section.actions.map(
+                action =>
+                  (!action.showOnHover || hovered) && (
+                    <Tooltip key={action.id} label={action.label}>
+                      <ActionIcon
+                        aria-label={action.label}
+                        variant="subtle"
+                        color="gray"
+                        size="sm"
+                        onClick={e => handleSectionActionClick(e, action.id)}
+                      >
+                        {getIconComponent(action.icon || '')}
+                      </ActionIcon>
+                    </Tooltip>
+                  )
+              )}
+            </Group>
+          ) : section.action && (!section.action.showOnHover || hovered) ? (
             <Tooltip label={section.action.label}>
               <ActionIcon
                 aria-label={section.action.label}
                 variant="subtle"
                 color="gray"
                 size="sm"
-                onClick={handleSectionActionClick}
+                onClick={e => handleSectionActionClick(e)}
               >
                 {actionIcon}
               </ActionIcon>
             </Tooltip>
-          )}
+          ) : null}
         </Group>
       )}
       <Collapse in={opened}>

@@ -43,7 +43,14 @@ export interface MenuSection {
     id: string;
     icon?: string;
     label: string;
+    showOnHover?: boolean;
   };
+  actions?: Array<{
+    id: string;
+    icon?: string;
+    label: string;
+    showOnHover?: boolean;
+  }>;
 }
 
 export interface TreeNode extends TreeNodeData {
