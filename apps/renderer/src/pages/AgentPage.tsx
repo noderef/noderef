@@ -28,6 +28,8 @@ import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
 import { useServersStore } from '@/core/store/servers';
 import { useUIStore } from '@/core/store/ui';
 import { useNavigation } from '@/hooks/useNavigation';
+import { useQNameSuggestions } from '@/hooks/useQNameSuggestions';
+import { useSearchDictionary } from '@/hooks/useSearchDictionary';
 import {
   Accordion,
   ActionIcon,
@@ -865,6 +867,13 @@ export function AgentPage() {
     [chats, activeChatId]
   );
   const modelSelectionServerId = activeChat?.serverId || activeServerId || null;
+
+  const [qnameQuery, setQnameQuery] = useState<string | null>(null);
+
+  // Load the search dictionary for the active server
+  const dictionaryServerId = activeChat?.serverId || activeServerId || servers[0]?.id || null;
+  const { dictionary } = useSearchDictionary(dictionaryServerId);
+  const qnameSuggestions = useQNameSuggestions(dictionary, qnameQuery);
 
   const activeMessages = useMemo(
     () => (activeChatId ? messagesByChat[activeChatId] || [] : []),
@@ -1937,7 +1946,11 @@ export function AgentPage() {
                     mentionItems={mentionItems}
                     mentionHasMore={mentionHasMore}
                     mentionLoading={mentionLoading}
-                    onLoadMoreMentions={() => void loadMentions(mentionActiveQueryRef.current, false)}
+                    onLoadMoreMentions={() =>
+                      void loadMentions(mentionActiveQueryRef.current, false)
+                    }
+                    qnameSuggestions={qnameSuggestions}
+                    onQNameQueryChange={setQnameQuery}
                   />
 
                   <Group justify="space-between" align="center" mt="xs" wrap="nowrap">

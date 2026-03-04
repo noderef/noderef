@@ -19,7 +19,7 @@
   "greetingEvening": "Goedenavond",
   "greetingEvening_name": "Goedenavond, {{name}}",
   "howCanIHelp": "Hoe kan ik je helpen?",
-  "composerPlaceholder": "Ask the agent… Use @ to mention files, folders, users, or groups.",
+  "composerPlaceholder": "Vraag wat je wilt, @ om bestanden, mappen of gebruikers te vermelden",
   "loadMoreMentions": "Load more mentions",
   "thinking": "Nadenken...",
   "searching": "Context verzamelen...",
@@ -68,5 +68,8 @@
     "cancelRunTitle": "Failed to cancel run",
     "confirmationTitle": "Failed to confirm operation"
   },
-  "loadingMoreResults": "Meer resultaten laden..."
+  "loadingMoreResults": "Meer resultaten laden...",
+  "qnameGroupTypes": "Types",
+  "qnameGroupAspects": "Aspecten",
+  "qnameGroupProperties": "Eigenschappen"
 }

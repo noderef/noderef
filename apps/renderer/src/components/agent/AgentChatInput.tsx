@@ -17,6 +17,7 @@
 import { AgentMentionSuggestion } from '@/core/ipc/backend';
 import { isNeutralinoMode } from '@/core/ipc/neutralino';
 import { useDesktopClipboardHandlers } from '@/hooks/useDesktopClipboardHandlers';
+import type { QNameGroupedSuggestions } from '@/hooks/useQNameSuggestions';
 import { Box } from '@mantine/core';
 import { RichTextEditor } from '@mantine/tiptap';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -30,12 +31,16 @@ import {
   useMemo,
   useRef,
   useState,
+  type ComponentType,
+  type MutableRefObject,
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import tippy from 'tippy.js';
 import './AgentChatInput.css';
 import { NodeMentionList, type MentionListRef } from './AgentChatSuggestionLists';
 import { NodeIdentifierMention } from './NodeIdentifierMention';
+import { QNameMention, findQNameSuggestionMatch } from './QNameMention';
+import { QNameSuggestionList, type QNameListRef } from './QNameSuggestionList';
 
 import { Extension } from '@tiptap/core';
 
@@ -59,6 +64,10 @@ export interface AgentChatInputProps {
   mentionHasMore: boolean;
   mentionLoading: boolean;
   onLoadMoreMentions: () => void;
+
+  // QName (colon) mention props
+  qnameSuggestions: QNameGroupedSuggestions;
+  onQNameQueryChange: (query: string | null) => void;
 }
 
 const ChatSubmitExtension = Extension.create({
@@ -85,6 +94,97 @@ const ChatSubmitExtension = Extension.create({
   },
 });
 
+/**
+ * Shared factory for suggestion popup lifecycle (tippy + ReactRenderer).
+ * Used by both @ mentions and : (QName) mentions to avoid duplicated popup code.
+ */
+function createSuggestionPopupRenderer(config: {
+  rendererRef: MutableRefObject<ReactRenderer<any> | null>;
+  popupRef: MutableRefObject<any>;
+  propsRef: MutableRefObject<Record<string, any>>;
+  queryChangeRef: MutableRefObject<(query: string | null) => void>;
+  Component: ComponentType<any>;
+  getMentionReferenceClientRect: (clientRectFn?: () => DOMRect) => DOMRect;
+  onStartExtra?: () => void;
+}) {
+  const {
+    rendererRef,
+    popupRef,
+    propsRef,
+    queryChangeRef,
+    Component,
+    getMentionReferenceClientRect,
+    onStartExtra,
+  } = config;
+
+  return {
+    onStart(props: any) {
+      queryChangeRef.current(props.query);
+      rendererRef.current = new ReactRenderer(Component, {
+        props: { ...props, ...propsRef.current },
+        editor: props.editor,
+      });
+
+      if (!props.clientRect) return;
+
+      popupRef.current = tippy('body', {
+        getReferenceClientRect: () =>
+          getMentionReferenceClientRect(props.clientRect as () => DOMRect),
+        appendTo: () => document.body,
+        content: rendererRef.current.element,
+        showOnCreate: true,
+        interactive: true,
+        trigger: 'manual',
+        placement: 'top-start',
+        maxWidth: 'none',
+        popperOptions: {
+          modifiers: [
+            { name: 'flip', enabled: false },
+            { name: 'preventOverflow', options: { altAxis: false, padding: 8 } },
+          ],
+        },
+      });
+
+      onStartExtra?.();
+    },
+
+    onUpdate(props: any) {
+      queryChangeRef.current(props.query);
+      rendererRef.current?.updateProps({ ...props, ...propsRef.current });
+
+      if (!props.clientRect) return;
+
+      popupRef.current?.[0]?.setProps({
+        getReferenceClientRect: () =>
+          getMentionReferenceClientRect(props.clientRect as () => DOMRect),
+      });
+    },
+
+    onKeyDown(props: any) {
+      if (props.event.key === 'Escape') {
+        popupRef.current?.[0]?.hide();
+        return true;
+      }
+
+      if (popupRef.current?.[0] && !popupRef.current[0].state.isVisible) {
+        return false;
+      }
+
+      return rendererRef.current?.ref?.onKeyDown(props) ?? false;
+    },
+
+    onExit() {
+      queryChangeRef.current(null);
+      if (popupRef.current?.[0] && !popupRef.current[0].state.isDestroyed) {
+        popupRef.current[0].destroy();
+      }
+      rendererRef.current?.destroy();
+      rendererRef.current = null;
+      popupRef.current = null;
+    },
+  };
+}
+
 export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>(
   (
     {
@@ -97,6 +197,8 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
       mentionHasMore,
       mentionLoading,
       onLoadMoreMentions,
+      qnameSuggestions,
+      onQNameQueryChange,
     },
     ref
   ) => {
@@ -104,6 +206,7 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
 
     const onSendRef = useRef(onSend);
     const onMentionQueryChangeRef = useRef(onMentionQueryChange);
+    const onQNameQueryChangeRef = useRef(onQNameQueryChange);
     const disabledRef = useRef(disabled);
     const mentionPropsRef = useRef({
       items: mentionItems,
@@ -112,9 +215,15 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
       onLoadMore: onLoadMoreMentions,
       popupWidth: MIN_MENTION_POPUP_WIDTH,
     });
+    const qnamePropsRef = useRef({
+      suggestions: qnameSuggestions,
+      popupWidth: MIN_MENTION_POPUP_WIDTH,
+    });
 
     const mentionRendererRef = useRef<ReactRenderer<MentionListRef> | null>(null);
     const mentionPopupRef = useRef<any>(null);
+    const qnameRendererRef = useRef<ReactRenderer<QNameListRef> | null>(null);
+    const qnamePopupRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const isDesktopMode = useMemo(
       () => typeof window !== 'undefined' && isNeutralinoMode() && !!(window as any).Neutralino,
@@ -141,6 +250,10 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
     useEffect(() => {
       onMentionQueryChangeRef.current = onMentionQueryChange;
     }, [onMentionQueryChange]);
+
+    useEffect(() => {
+      onQNameQueryChangeRef.current = onQNameQueryChange;
+    }, [onQNameQueryChange]);
 
     useEffect(() => {
       disabledRef.current = disabled;
@@ -191,6 +304,34 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
         }
       }
     }, [mentionItems, mentionHasMore, mentionLoading, onLoadMoreMentions, mentionPopupWidth]);
+
+    // Sync QName suggestion props + popup visibility
+    useEffect(() => {
+      qnamePropsRef.current = {
+        suggestions: qnameSuggestions,
+        popupWidth: mentionPopupWidth,
+      };
+
+      if (qnameRendererRef.current) {
+        qnameRendererRef.current.updateProps({
+          ...qnamePropsRef.current,
+        });
+      }
+
+      const popup = qnamePopupRef.current?.[0];
+      if (popup && !popup.state.isDestroyed) {
+        const hasItems =
+          qnameSuggestions.types.length > 0 ||
+          qnameSuggestions.aspects.length > 0 ||
+          qnameSuggestions.properties.length > 0;
+        if (hasItems && !popup.state.isVisible) {
+          popup.show();
+        }
+        if (!hasItems && popup.state.isVisible) {
+          popup.hide();
+        }
+      }
+    }, [qnameSuggestions, mentionPopupWidth]);
 
     const calculateMentionPopupWidth = useCallback((): number => {
       const viewportWidth =
@@ -248,6 +389,13 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
             path: node.attrs.path,
           });
         }
+        if (node.type === 'qnameMention' && node.attrs) {
+          mentions.push({
+            id: node.attrs.id,
+            label: node.attrs.label,
+            type: node.attrs.type || 'qname',
+          });
+        }
         if (node.content) {
           node.content.forEach(traverse);
         }
@@ -296,94 +444,50 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
           suggestion: {
             char: '@',
             allowSpaces: true,
-            render: () => {
-              return {
-                onStart: (props: any) => {
-                  onMentionQueryChangeRef.current(props.query);
-                  mentionRendererRef.current = new ReactRenderer(NodeMentionList, {
-                    props: {
-                      ...props,
-                      ...mentionPropsRef.current,
-                    },
-                    editor: props.editor,
-                  });
-
-                  if (!props.clientRect) {
-                    return;
+            render: () =>
+              createSuggestionPopupRenderer({
+                rendererRef: mentionRendererRef,
+                popupRef: mentionPopupRef,
+                propsRef: mentionPropsRef,
+                queryChangeRef: onMentionQueryChangeRef,
+                Component: NodeMentionList,
+                getMentionReferenceClientRect,
+              }),
+          },
+        }),
+        QNameMention.configure({
+          suggestion: {
+            char: ':',
+            findSuggestionMatch: findQNameSuggestionMatch,
+            render: () =>
+              createSuggestionPopupRenderer({
+                rendererRef: qnameRendererRef,
+                popupRef: qnamePopupRef,
+                propsRef: qnamePropsRef,
+                queryChangeRef: onQNameQueryChangeRef,
+                Component: QNameSuggestionList,
+                getMentionReferenceClientRect,
+                onStartExtra: () => {
+                  const s = qnamePropsRef.current as any;
+                  const hasItems =
+                    s.suggestions?.types?.length > 0 ||
+                    s.suggestions?.aspects?.length > 0 ||
+                    s.suggestions?.properties?.length > 0;
+                  if (!hasItems) {
+                    qnamePopupRef.current?.[0]?.hide();
                   }
-
-                  mentionPopupRef.current = tippy('body', {
-                    getReferenceClientRect: () =>
-                      getMentionReferenceClientRect(props.clientRect as () => DOMRect),
-                    appendTo: () => document.body,
-                    content: mentionRendererRef.current.element,
-                    showOnCreate: true,
-                    interactive: true,
-                    trigger: 'manual',
-                    placement: 'top-start',
-                    maxWidth: 'none',
-                    popperOptions: {
-                      modifiers: [
-                        { name: 'flip', enabled: false },
-                        {
-                          name: 'preventOverflow',
-                          options: { altAxis: false, padding: 8 },
-                        },
-                      ],
-                    },
-                  });
                 },
-
-                onUpdate(props: any) {
-                  onMentionQueryChangeRef.current(props.query);
-                  mentionRendererRef.current?.updateProps({
-                    ...props,
-                    ...mentionPropsRef.current,
-                  });
-
-                  if (!props.clientRect) {
-                    return;
-                  }
-
-                  mentionPopupRef.current?.[0]?.setProps({
-                    getReferenceClientRect: () =>
-                      getMentionReferenceClientRect(props.clientRect as () => DOMRect),
-                  });
-                },
-
-                onKeyDown(props: any) {
-                  if (props.event.key === 'Escape') {
-                    mentionPopupRef.current?.[0]?.hide();
-                    return true;
-                  }
-
-                  if (mentionPopupRef.current?.[0] && !mentionPopupRef.current[0].state.isVisible) {
-                    return false;
-                  }
-
-                  return mentionRendererRef.current?.ref?.onKeyDown(props) ?? false;
-                },
-
-                onExit() {
-                  onMentionQueryChangeRef.current(null);
-                  if (
-                    mentionPopupRef.current?.[0] &&
-                    !mentionPopupRef.current[0].state.isDestroyed
-                  ) {
-                    mentionPopupRef.current[0].destroy();
-                  }
-                  mentionRendererRef.current?.destroy();
-                  mentionRendererRef.current = null;
-                  mentionPopupRef.current = null;
-                },
-              };
-            },
+              }),
           },
         }),
         ChatSubmitExtension.configure({
           shouldSubmit: () => {
             const mentionPopup = mentionPopupRef.current?.[0];
             if (mentionPopup && !mentionPopup.state.isDestroyed && mentionPopup.state.isVisible) {
+              return false;
+            }
+            const qnamePopup = qnamePopupRef.current?.[0];
+            if (qnamePopup && !qnamePopup.state.isDestroyed && qnamePopup.state.isVisible) {
               return false;
             }
             return true;

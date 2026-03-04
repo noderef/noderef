@@ -19,7 +19,7 @@
   "greetingEvening": "Guten Abend",
   "greetingEvening_name": "Guten Abend, {{name}}",
   "howCanIHelp": "Wie kann ich dir helfen?",
-  "composerPlaceholder": "Ask the agent… Use @ to mention files, folders, users, or groups.",
+  "composerPlaceholder": "Frag was du willst, @ um Dateien, Ordner oder Benutzer zu erwähnen",
   "loadMoreMentions": "Load more mentions",
   "thinking": "Denke nach...",
   "searching": "Kontext sammeln...",
@@ -68,5 +68,8 @@
     "cancelRunTitle": "Failed to cancel run",
     "confirmationTitle": "Failed to confirm operation"
   },
-  "loadingMoreResults": "Weitere Ergebnisse laden..."
+  "loadingMoreResults": "Weitere Ergebnisse laden...",
+  "qnameGroupTypes": "Typen",
+  "qnameGroupAspects": "Aspekte",
+  "qnameGroupProperties": "Eigenschaften"
 }
