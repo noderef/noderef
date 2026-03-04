@@ -24,9 +24,11 @@ import {
   type AgentRunSummary,
 } from '@/core/ipc/backend';
 import { useAgentStore } from '@/core/store/agent';
+import { MODAL_KEYS } from '@/core/store/keys';
 import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
 import { useServersStore } from '@/core/store/servers';
 import { useUIStore } from '@/core/store/ui';
+import { useModal } from '@/hooks/useModal';
 import { useNavigation } from '@/hooks/useNavigation';
 import { useQNameSuggestions } from '@/hooks/useQNameSuggestions';
 import { useSearchDictionary } from '@/hooks/useSearchDictionary';
@@ -805,6 +807,7 @@ const buildRunActivity = (events: AgentRunEvent[]): RunActivityItem[] => {
 export function AgentPage() {
   const { t } = useTranslation('agent');
   const { activePage, activeServerId, navigate } = useNavigation();
+  const { open: openSettings, isOpen: isSettingsOpen } = useModal(MODAL_KEYS.SETTINGS);
   const servers = useServersStore(state => state.servers);
   const appLanguage = useUIStore(state => state.language);
   const openNodeTab = useNodeBrowserTabsStore(state => state.openTab);
@@ -844,6 +847,7 @@ export function AgentPage() {
   const [selectedAiModelOption, setSelectedAiModelOption] = useState<string | null>(null);
   const [aiProvider, setAiProvider] = useState<string | null>(null);
   const [aiModel, setAiModel] = useState<string | null>(null);
+  const [aiAssistantEnabled, setAiAssistantEnabled] = useState(false);
   const [defaultAiSelection, setDefaultAiSelection] = useState<{
     provider: string | null;
     model: string | null;
@@ -852,6 +856,13 @@ export function AgentPage() {
     model: null,
   });
   const [aiModelsLoading, setAiModelsLoading] = useState(false);
+  const [aiConfigInitialized, setAiConfigInitialized] = useState(false);
+  const canSendMessages = Boolean(
+    aiAssistantEnabled && aiProvider && aiModel && aiModelOptions.length > 0
+  );
+  const aiSelectionResolved =
+    !aiAssistantEnabled || aiModelOptions.length === 0 || Boolean(aiProvider && aiModel);
+  const showAiUnavailableState = aiConfigInitialized && aiSelectionResolved && !canSendMessages;
 
   const chatInputRef = useRef<AgentChatInputRef>(null);
   const conversationViewportRef = useRef<HTMLDivElement | null>(null);
@@ -1231,6 +1242,10 @@ export function AgentPage() {
   }, [loadChats]);
 
   useEffect(() => {
+    if (isSettingsOpen) {
+      return;
+    }
+
     let cancelled = false;
 
     const loadAiOptions = async () => {
@@ -1244,6 +1259,8 @@ export function AgentPage() {
         if (cancelled) {
           return;
         }
+
+        setAiAssistantEnabled(Boolean(currentSettings.enabled));
 
         const configuredProviders: AiProviderOption[] = (providerCatalog.providers || [])
           .filter(provider => provider.hasToken)
@@ -1298,6 +1315,7 @@ export function AgentPage() {
       } finally {
         if (!cancelled) {
           setAiModelsLoading(false);
+          setAiConfigInitialized(true);
         }
       }
     };
@@ -1307,7 +1325,7 @@ export function AgentPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isSettingsOpen]);
 
   useEffect(() => {
     if (!aiModelOptions.length) {
@@ -1353,7 +1371,12 @@ export function AgentPage() {
   }, [activeChatId, loadConversation]);
 
   useEffect(() => {
-    if (activePage !== 'agentPage' || pendingConfirmation?.pendingStep || sending) {
+    if (
+      activePage !== 'agentPage' ||
+      pendingConfirmation?.pendingStep ||
+      sending ||
+      !canSendMessages
+    ) {
       return;
     }
 
@@ -1387,7 +1410,7 @@ export function AgentPage() {
         window.clearTimeout(timeout);
       }
     };
-  }, [activePage, activeChatId, pendingConfirmation?.pendingStep, sending]);
+  }, [activePage, activeChatId, pendingConfirmation?.pendingStep, sending, canSendMessages]);
 
   const hasActiveRuns = activeRuns.some(run => ACTIVE_RUN_STATUSES.has(run.status));
   const [recentlySentMessage, setRecentlySentMessage] = useState(false);
@@ -1463,6 +1486,14 @@ export function AgentPage() {
     if (!text.trim()) {
       return;
     }
+    if (!canSendMessages) {
+      notifications.show({
+        title: t('errors.sendMessageTitle'),
+        message: t('errors.aiNotConfiguredMessage'),
+        color: 'red',
+      });
+      return;
+    }
 
     setSending(true);
     try {
@@ -1480,9 +1511,7 @@ export function AgentPage() {
           return;
         }
 
-        // Use first 80 chars of user message as initial title
-        const title = text.trim().substring(0, 80);
-        const chat = await backendRpc.agent.createChat({ serverId, title });
+        const chat = await backendRpc.agent.createChat({ serverId });
         upsertChat(chat);
         setActiveChatId(chat.id);
         chatId = chat.id;
@@ -1670,7 +1699,11 @@ export function AgentPage() {
             )}
 
             {conversationTimeline.length === 0 ? (
-              <AgentEmptyState />
+              <AgentEmptyState
+                chatId={activeChat?.id}
+                aiUnavailable={showAiUnavailableState}
+                onOpenSettings={openSettings}
+              />
             ) : (
               <>
                 {conversationTimeline.map(item => {
@@ -1941,7 +1974,7 @@ export function AgentPage() {
                     value={draft}
                     onChange={setDraft}
                     onSend={handleSend}
-                    disabled={sending}
+                    disabled={sending || !canSendMessages}
                     onMentionQueryChange={setMentionQuery}
                     mentionItems={mentionItems}
                     mentionHasMore={mentionHasMore}
@@ -2056,9 +2089,13 @@ export function AgentPage() {
                         radius="xl"
                         variant="filled"
                         color="dark"
-                        onClick={() => chatInputRef.current?.submit()}
+                        onClick={() => {
+                          if (canSendMessages) {
+                            chatInputRef.current?.submit();
+                          }
+                        }}
                         loading={sending}
-                        disabled={!draft.trim()}
+                        disabled={!draft.trim() || !canSendMessages}
                       >
                         <IconArrowUp size={18} />
                       </ActionIcon>

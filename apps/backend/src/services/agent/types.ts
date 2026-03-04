@@ -66,6 +66,7 @@ export interface RunInput {
   content: string;
   mentions: AgentMention[];
   chatTitle: string;
+  chatIcon: string;
   triggerMessageId: number;
   preferredLanguage?: string;
   autoApproveConfirmations?: boolean;

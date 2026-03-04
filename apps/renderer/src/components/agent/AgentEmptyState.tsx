@@ -1,15 +1,29 @@
 import { backendRpc } from '@/core/ipc/backend';
-import { Box, Text } from '@mantine/core';
-import { useEffect, useState } from 'react';
+import { Box, Button, Text } from '@mantine/core';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BrandLogo } from '../BrandLogo';
 
-export function AgentEmptyState() {
+interface AgentEmptyStateProps {
+  chatId?: number | null;
+  aiUnavailable?: boolean;
+  onOpenSettings?: () => void;
+}
+
+export function AgentEmptyState({
+  chatId,
+  aiUnavailable = false,
+  onOpenSettings,
+}: AgentEmptyStateProps) {
   const { t } = useTranslation('agent');
   const [currentUser, setCurrentUser] = useState<{
     fullName: string | null;
     username: string;
   } | null>(null);
+  const welcomeVariant = useMemo(() => {
+    const seed = typeof chatId === 'number' ? Math.abs(chatId) : 0;
+    return (seed % 3) + 1;
+  }, [chatId]);
 
   useEffect(() => {
     backendRpc.user.get().then(setCurrentUser).catch(console.error);
@@ -25,10 +39,13 @@ export function AgentEmptyState() {
     }
 
     const name = currentUser?.fullName || currentUser?.username;
-    if (name && name.toLowerCase() !== 'system') {
-      return t(`greeting${timeOfDay}_name` as any, { name });
-    }
-    return t(`greeting${timeOfDay}` as any);
+    const hasName = Boolean(name && name.toLowerCase() !== 'system');
+    const greeting = hasName
+      ? t(`greeting${timeOfDay}_name` as any, { name })
+      : t(`greeting${timeOfDay}` as any);
+    const variantKey = `welcomeVariant${welcomeVariant}${hasName ? '_name' : ''}`;
+
+    return t(variantKey as any, { greeting });
   };
 
   return (
@@ -44,12 +61,28 @@ export function AgentEmptyState() {
       }}
     >
       <BrandLogo size={42} color="var(--mantine-color-text)" />
-      <Text size="xl" fw={600} mt="md" mb={4}>
-        {getGreetingData()}
-      </Text>
-      <Text size="md" c="dimmed">
-        {t('howCanIHelp')}
-      </Text>
+      {aiUnavailable ? (
+        <Box mt="md" style={{ textAlign: 'center' }}>
+          <Text size="xl" fw={600} mb={4}>
+            {t('aiUnavailableTitle')}
+          </Text>
+          <Text size="md" c="dimmed" maw={560}>
+            {t('aiUnavailableSubtitle')}
+          </Text>
+          <Button mt="md" variant="light" onClick={onOpenSettings}>
+            {t('openSettings')}
+          </Button>
+        </Box>
+      ) : (
+        <>
+          <Text size="xl" fw={600} mt="md" mb={4}>
+            {getGreetingData()}
+          </Text>
+          <Text size="md" c="dimmed">
+            {t('howCanIHelp')}
+          </Text>
+        </>
+      )}
     </Box>
   );
 }

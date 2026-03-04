@@ -145,12 +145,14 @@ CREATE TABLE IF NOT EXISTS "agent_chat" (
     "userId" INTEGER NOT NULL,
     "serverId" INTEGER NOT NULL,
     "title" TEXT NOT NULL,
+    "chatIcon" TEXT NOT NULL DEFAULT 'hash',
     "lastMessageAt" DATETIME,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
     CONSTRAINT "agent_chat_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "agent_chat_serverId_fkey" FOREIGN KEY ("serverId") REFERENCES "server" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
+ALTER TABLE "agent_chat" ADD COLUMN "chatIcon" TEXT NOT NULL DEFAULT 'hash';
 CREATE TABLE IF NOT EXISTS "agent_message" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "chatId" INTEGER NOT NULL,
@@ -254,13 +256,33 @@ CREATE INDEX IF NOT EXISTS "agent_operation_audit_userId_createdAt_idx" ON "agen
 CREATE INDEX IF NOT EXISTS "agent_operation_audit_operation_createdAt_idx" ON "agent_operation_audit"("operation", "createdAt");
 `;
 
+function isIgnorableEmbeddedSchemaError(statement: string, error: unknown): boolean {
+  const normalizedStatement = statement.toLowerCase().replace(/\s+/g, ' ').trim();
+  const message = String((error as any)?.message || '').toLowerCase();
+
+  const isAddColumn =
+    normalizedStatement.startsWith('alter table') && normalizedStatement.includes(' add column ');
+  if (isAddColumn && message.includes('duplicate column name')) {
+    return true;
+  }
+
+  return false;
+}
+
 async function applyEmbeddedSchema(client: PrismaClient) {
   const statements = EMBEDDED_SCHEMA_SQL.split(';')
     .map(stmt => stmt.trim())
     .filter(stmt => stmt.length > 0);
 
   for (const stmt of statements) {
-    await client.$executeRawUnsafe(`${stmt};`);
+    try {
+      await client.$executeRawUnsafe(`${stmt};`);
+    } catch (error) {
+      if (isIgnorableEmbeddedSchemaError(stmt, error)) {
+        continue;
+      }
+      throw error;
+    }
   }
 }
 

@@ -468,7 +468,7 @@ export function SimpleMenuNavigation() {
     const chatItems: MenuItemType[] = sortedChats.map(chat => ({
       id: `agent-chat-${chat.id}`,
       label: chat.title,
-      icon: chat.hasActiveRun ? 'loading' : 'hash',
+      icon: chat.hasActiveRun ? 'loading' : chat.chatIcon || 'hash',
       viewMode: 'monaco' as const,
       badgeLabel: chat.hasWaitingConfirmation ? t('submenu:waitingApproval') : undefined,
       badgeColor: 'green',

@@ -849,6 +849,7 @@ export interface AgentChatSummary {
   userId: number;
   serverId: number;
   title: string;
+  chatIcon: string;
   hasActiveRun: boolean;
   hasWaitingConfirmation: boolean;
   lastMessageAt: Date | null;

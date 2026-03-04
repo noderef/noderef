@@ -1443,7 +1443,7 @@ export class AgentService {
       where: { id: runId, userId },
       include: {
         triggerMessage: true,
-        chat: { select: { id: true, title: true } },
+        chat: { select: { id: true, title: true, chatIcon: true } },
       },
     });
 
@@ -1495,6 +1495,7 @@ export class AgentService {
         content,
         mentions,
         chatTitle: runRow.chat.title,
+        chatIcon: runRow.chat.chatIcon,
         triggerMessageId: runRow.triggerMessage.id,
         preferredLanguage,
         autoApproveConfirmations,

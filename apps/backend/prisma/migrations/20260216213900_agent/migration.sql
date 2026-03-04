@@ -4,6 +4,7 @@ CREATE TABLE "agent_chat" (
     "userId" INTEGER NOT NULL,
     "serverId" INTEGER NOT NULL,
     "title" TEXT NOT NULL,
+    "chatIcon" TEXT NOT NULL DEFAULT 'hash',
     "lastMessageAt" DATETIME,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,

@@ -35,6 +35,7 @@ export interface AgentChatSummary {
   userId: number;
   serverId: number;
   title: string;
+  chatIcon: string;
   hasActiveRun: boolean;
   hasWaitingConfirmation: boolean;
   lastMessageAt: Date | null;
@@ -183,6 +184,7 @@ export class AgentRepository {
       userId: chat.userId,
       serverId: chat.serverId,
       title: chat.title,
+      chatIcon: chat.chatIcon,
       hasActiveRun: Boolean(flags?.hasActiveRun),
       hasWaitingConfirmation: Boolean(flags?.hasWaitingConfirmation),
       lastMessageAt: chat.lastMessageAt,
@@ -376,31 +378,48 @@ export class AgentRepository {
     return chat ? this.toChatDTO(chat) : null;
   }
 
-  async createChat(userId: number, serverId: number, title: string): Promise<AgentChatSummary> {
+  async createChat(
+    userId: number,
+    serverId: number,
+    title: string,
+    chatIcon = 'hash'
+  ): Promise<AgentChatSummary> {
     const chat = await this.prisma.agentChat.create({
       data: {
         userId,
         serverId,
         title,
+        chatIcon,
       },
     });
 
     return this.toChatDTO(chat);
   }
 
-  async updateChatTitle(
+  async updateChatPresentation(
     userId: number,
     chatId: number,
-    title: string
+    data: { title?: string; chatIcon?: string }
   ): Promise<AgentChatSummary | null> {
     const existing = await this.prisma.agentChat.findFirst({ where: { id: chatId, userId } });
     if (!existing) {
       return null;
     }
 
+    const updates: Record<string, unknown> = {};
+    if (typeof data.title === 'string' && data.title.trim()) {
+      updates.title = data.title.trim();
+    }
+    if (typeof data.chatIcon === 'string' && data.chatIcon.trim()) {
+      updates.chatIcon = data.chatIcon.trim();
+    }
+    if (!Object.keys(updates).length) {
+      return this.toChatDTO(existing);
+    }
+
     const updated = await this.prisma.agentChat.update({
       where: { id: chatId },
-      data: { title },
+      data: updates,
     });
 
     return this.toChatDTO(updated);
