@@ -53,10 +53,15 @@ export function findQNameSuggestionMatch(config: {
 }): SuggestionMatch {
   const { $position } = config;
 
-  // Get text from start of current text block up to the cursor.
-  // Use textBetween instead of textContent.slice so that inline nodes (badges)
-  // are represented as single characters, keeping length aligned with ProseMirror offsets.
-  const textBefore = $position.parent.textBetween(0, $position.parentOffset, undefined, '\ufffc');
+  // TipTap's native suggestion matching looks only at the contiguous text node
+  // immediately preceding the cursor. This perfectly avoids offset calculation
+  // issues caused by inline nodes (e.g. badges).
+  const nodeBefore = $position.nodeBefore;
+  const textBefore = nodeBefore?.isText && nodeBefore.text ? nodeBefore.text : '';
+
+  if (!textBefore) {
+    return null;
+  }
 
   // Match a namespace:localname pattern at end of text
   // The namespace must start with a letter and contain only word chars + hyphens
@@ -68,12 +73,15 @@ export function findQNameSuggestionMatch(config: {
   }
 
   const fullMatch = match[1]; // e.g. "cm:content" or "cm:"
-  const matchStart = textBefore.length - fullMatch.length;
 
-  // Return the query as the full match (e.g. "cm:content")
-  // The range covers the entire matched text so it gets replaced on selection
-  const from = $position.start() + matchStart;
-  const to = $position.start() + textBefore.length;
+  // Calculate absolute document positions
+  // textFrom is the absolute start of this contiguous text node
+  const textFrom = $position.pos - textBefore.length;
+  // matchIndex is the start of the RegExp capture group within the text node
+  const matchIndex = textBefore.length - fullMatch.length;
+
+  const from = textFrom + matchIndex;
+  const to = $position.pos;
 
   return {
     range: { from, to } as Range,
