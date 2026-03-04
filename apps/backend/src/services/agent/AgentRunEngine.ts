@@ -26,6 +26,8 @@ import {
 } from '../../ai/anthropic.js';
 import { createLogger } from '../../lib/logger.js';
 import type { AgentRepository } from '../../repositories/agentRepository.js';
+import { maskPayload, maskString, type LlmMaskingConfig } from '../ai/maskingEngine.js';
+import { getMaskingSettings } from '../ai/maskingSettings.js';
 import { emitRunEvent, formatConversationHistory, stripHorizontalRules } from './agentUtils.js';
 import { buildDescriptionNote, type ProgressNote } from './progressMessages.js';
 import { buildSystemPrompt } from './systemPrompt.js';
@@ -91,7 +93,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const toErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : typeof error === 'string' ? error : String(error);
 
-const toTokenEstimate = (text: string): number => Math.ceil(Math.max(text.length, 1) / AVG_CHARS_PER_TOKEN);
+const toTokenEstimate = (text: string): number =>
+  Math.ceil(Math.max(text.length, 1) / AVG_CHARS_PER_TOKEN);
 
 const truncateText = (text: string, maxChars: number): string => {
   if (text.length <= maxChars) {
@@ -115,15 +118,9 @@ const toNonEmptyString = (value: unknown): string | null => {
 };
 
 const formatOperationLabel = (operation: string): string =>
-  operation
-    .replace(/_/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  operation.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
 
-const buildFallbackStepSummary = (
-  operation: string,
-  args: Record<string, unknown>
-): string => {
+const buildFallbackStepSummary = (operation: string, args: Record<string, unknown>): string => {
   switch (operation) {
     case 'node_create': {
       const name = toNonEmptyString(args.name);
@@ -195,7 +192,8 @@ const buildFallbackStepSummary = (
       const parentId = toNonEmptyString(args.parentId);
       const fileName = toNonEmptyString(args.fileName);
       if (nodeId) return `Begin large text write to node ${nodeId}`;
-      if (parentId && fileName) return `Begin large text write for "${fileName}" in folder ${parentId}`;
+      if (parentId && fileName)
+        return `Begin large text write for "${fileName}" in folder ${parentId}`;
       return 'Begin large text write session';
     }
     case 'text_write_append': {
@@ -457,8 +455,13 @@ const compactToolDataForModel = (data: Record<string, unknown>): Record<string, 
     return data;
   }
 
-  if (isRecord(cloned.apiTrace) && Object.prototype.hasOwnProperty.call(cloned.apiTrace, 'responseBody')) {
-    cloned.apiTrace.responseBody = compactApiTraceResponseBodyForModel(cloned.apiTrace.responseBody);
+  if (
+    isRecord(cloned.apiTrace) &&
+    Object.prototype.hasOwnProperty.call(cloned.apiTrace, 'responseBody')
+  ) {
+    cloned.apiTrace.responseBody = compactApiTraceResponseBodyForModel(
+      cloned.apiTrace.responseBody
+    );
   }
   if (
     isRecord(cloned.alfrescoSearchApi) &&
@@ -488,7 +491,10 @@ const compactToolDataForModel = (data: Record<string, unknown>): Record<string, 
     cloned.projectedItemsTruncated = originalLength - MAX_SEARCH_PROJECTED_ITEMS_FOR_MODEL;
   }
 
-  if (Array.isArray(cloned.verifiedNames) && cloned.verifiedNames.length > MAX_SEARCH_NAMES_FOR_MODEL) {
+  if (
+    Array.isArray(cloned.verifiedNames) &&
+    cloned.verifiedNames.length > MAX_SEARCH_NAMES_FOR_MODEL
+  ) {
     const originalLength = cloned.verifiedNames.length;
     cloned.verifiedNames = cloned.verifiedNames.slice(0, MAX_SEARCH_NAMES_FOR_MODEL);
     cloned.verifiedNamesTruncated = originalLength - MAX_SEARCH_NAMES_FOR_MODEL;
@@ -555,6 +561,15 @@ export class AgentRunEngine {
     let stepOrdinal = await this.repository.getMaxRunStepOrdinal(input.runId);
     const contextWindow = resolveModelContextWindow(this.runtime.model);
 
+    // ── Load masking config once for the run ────────────────────────────────
+    let maskingConfig: LlmMaskingConfig | null = null;
+    try {
+      maskingConfig = await getMaskingSettings(input.userId);
+      if (!maskingConfig.enabled) maskingConfig = null;
+    } catch {
+      // Masking unavailable — proceed unmasked
+    }
+
     for (let iteration = 0; iteration < MAX_LOOP_STEPS; iteration++) {
       this.checkAborted();
 
@@ -595,13 +610,22 @@ export class AgentRunEngine {
 
       let response: AgentCallResult;
       try {
+        // ── Apply masking to outbound payload ──────────────────────────────
+        let maskedSystem = systemPrompt;
+        let maskedMessages = messages;
+        if (maskingConfig) {
+          maskedSystem = maskString(systemPrompt, maskingConfig).masked;
+          const { masked } = maskPayload(messages, maskingConfig);
+          maskedMessages = masked as AgentMessageParam[];
+        }
+
         response = await withTimeout(
           callWithTools({
             apiKey: this.runtime.apiKey,
             model: this.runtime.model,
             baseURL: this.runtime.baseURL,
-            system: systemPrompt,
-            messages,
+            system: maskedSystem,
+            messages: maskedMessages,
             tools,
             maxTokens: 2048,
             temperature: this.runtime.temperature,
@@ -734,7 +758,10 @@ export class AgentRunEngine {
             input: call.args,
             requiresConfirmation: tool.requiresConfirmation,
             completedAt: new Date(),
-            output: { error: blockedMessage, policy: 'script_execute_requires_explicit_user_request' },
+            output: {
+              error: blockedMessage,
+              policy: 'script_execute_requires_explicit_user_request',
+            },
           });
 
           await this.emitEvent(input.runId, 'step.failed', 'warn', {

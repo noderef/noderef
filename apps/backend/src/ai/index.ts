@@ -16,6 +16,8 @@
 
 import { Router, type Router as ExpressRouter, type Response } from 'express';
 import { log } from '../lib/logger.js';
+import { maskString } from '../services/ai/maskingEngine.js';
+import { getMaskingSettings } from '../services/ai/maskingSettings.js';
 import { resolveUserAiConfig } from '../services/ai/userSettingsService.js';
 import { getCurrentUserId } from '../services/userBootstrap.js';
 import { getAiAssistantEnabled } from '../services/userSettings.js';
@@ -94,10 +96,12 @@ router.post('/router', async (req, res) => {
 
     const { manifest } = loadLibs();
     const prompt = buildRouterPrompt(question, manifest);
+    const maskedPrompt = await maskPromptForUser(userId, prompt);
+
     const raw = await callProvider(aiConfig.provider, {
       apiKey: aiConfig.apiKey,
       model: aiConfig.model,
-      prompt,
+      prompt: maskedPrompt,
       maxTokens: 400,
       images,
     });
@@ -145,17 +149,19 @@ router.post('/execute', async (req, res) => {
       selection: selectionText,
       contextSnippet,
     });
+    const maskedPrompt = await maskPromptForUser(userId, prompt);
 
     const raw = await callProvider(aiConfig.provider, {
       apiKey: aiConfig.apiKey,
       model: aiConfig.model,
-      prompt,
+      prompt: maskedPrompt,
       maxTokens: 1200,
       images,
     });
 
     const parsed = await parseDslResponseWithRepair({
       raw,
+      userId,
       provider: aiConfig.provider,
       apiKey: aiConfig.apiKey,
       model: aiConfig.model,
@@ -202,6 +208,18 @@ async function ensureUserEnabled(userId: number) {
       status: 403,
     });
   }
+}
+
+async function maskPromptForUser(userId: number, prompt: string): Promise<string> {
+  try {
+    const maskConfig = await getMaskingSettings(userId);
+    if (maskConfig.enabled) {
+      return maskString(prompt, maskConfig).masked;
+    }
+  } catch {
+    // Masking unavailable — proceed unmasked.
+  }
+  return prompt;
 }
 
 async function callProvider(
@@ -405,6 +423,7 @@ function parseDslResponse(raw: string): DslResponse {
 
 async function parseDslResponseWithRepair(args: {
   raw: string;
+  userId: number;
   provider: string;
   apiKey: string;
   model: string;
@@ -417,10 +436,11 @@ async function parseDslResponseWithRepair(args: {
       throw err;
     }
 
+    const repairedPrompt = await maskPromptForUser(args.userId, buildDslRepairPrompt(args.raw));
     const repairedRaw = await callProvider(args.provider, {
       apiKey: args.apiKey,
       model: args.model,
-      prompt: buildDslRepairPrompt(args.raw),
+      prompt: repairedPrompt,
       maxTokens: Math.min(args.maxTokens ?? 1200, 900),
     });
 

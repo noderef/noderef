@@ -33,6 +33,11 @@ import {
 import type { AiListedModel } from '../../ai/types.js';
 import { AppErrors } from '../../lib/errors.js';
 import {
+  getMaskingSettings,
+  previewMasking,
+  saveMaskingSettings,
+} from '../../services/ai/maskingSettings.js';
+import {
   listUserAiSettings,
   resolveUserAiConfig,
   resolveUserAiConfigForProvider,
@@ -172,6 +177,38 @@ export function registerAiHandlers(routes: Routes): void {
 
       const models = await listModelsForProvider(resolvedProvider, resolvedToken);
       return { provider: resolvedProvider.id, models };
+    },
+  };
+
+  // ── Masking settings ────────────────────────────────────────────────────────
+
+  routes['backend.ai.getMaskingSettings'] = {
+    schema: z.object({}),
+    handler: async () => {
+      const userId = await getCurrentUserId();
+      return getMaskingSettings(userId);
+    },
+  };
+
+  routes['backend.ai.saveMaskingSettings'] = {
+    schema: z.object({
+      config: z.record(z.unknown()),
+    }),
+    handler: async (params: unknown) => {
+      const userId = await getCurrentUserId();
+      const { config } = params as { config: unknown };
+      return saveMaskingSettings(userId, config);
+    },
+  };
+
+  routes['backend.ai.previewMasking'] = {
+    schema: z.object({
+      config: z.record(z.unknown()),
+      input: z.string(),
+    }),
+    handler: async (params: unknown) => {
+      const { config, input } = params as { config: unknown; input: string };
+      return previewMasking(config, input);
     },
   };
 }

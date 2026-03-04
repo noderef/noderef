@@ -76,3 +76,47 @@ export interface AiProvidersResponse {
 export async function listAiProviders(): Promise<AiProvidersResponse> {
   return rpc<AiProvidersResponse>('backend.ai.listProviders', {});
 }
+
+// ── Masking Settings ──────────────────────────────────────────────────────────
+
+export interface TextRegexRule {
+  id: string;
+  pattern: string;
+  flags?: string;
+  replacement: string;
+}
+
+export interface LlmMaskingConfig {
+  enabled: boolean;
+  mode: 'tokenize' | 'redact';
+  propertyRules: {
+    exact: string[];
+    prefixes: string[];
+    regex: string[];
+  };
+  textRegexRules: TextRegexRule[];
+  preserveKeys: string[];
+}
+
+export interface PreviewMaskingResult {
+  output: unknown;
+  stats: {
+    maskedFields: number;
+    regexHits: number;
+  };
+}
+
+export async function getMaskingSettings(): Promise<LlmMaskingConfig> {
+  return rpc<LlmMaskingConfig>('backend.ai.getMaskingSettings', {});
+}
+
+export async function saveMaskingSettings(config: LlmMaskingConfig): Promise<{ success: boolean }> {
+  return rpc<{ success: boolean }>('backend.ai.saveMaskingSettings', { config });
+}
+
+export async function previewMasking(params: {
+  config: LlmMaskingConfig;
+  input: string;
+}): Promise<PreviewMaskingResult> {
+  return rpc<PreviewMaskingResult>('backend.ai.previewMasking', params);
+}

@@ -16,13 +16,19 @@
 
 import {
   getAiSettings,
+  getMaskingSettings,
   listAiModels,
   listAiProviders,
+  previewMasking,
   saveAiSettings,
+  saveMaskingSettings,
+  type LlmMaskingConfig,
+  type TextRegexRule,
 } from '@/core/ipc/aiSettings';
 import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
 import { MODAL_KEYS } from '@/core/store/keys';
 import { useUIStore } from '@/core/store/ui';
+import { getCurrentVersion, getDownloadUrl, useUpdateStore } from '@/core/store/updates';
 import { useDesktopClipboardHandlers } from '@/hooks/useDesktopClipboardHandlers';
 import { useModal } from '@/hooks/useModal';
 import {
@@ -40,7 +46,10 @@ import {
   SimpleGrid,
   Stack,
   Switch,
+  TagsInput,
   Text,
+  TextInput,
+  Textarea,
   Tooltip,
   UnstyledButton,
   useComputedColorScheme,
@@ -54,17 +63,18 @@ import {
   IconCheck,
   IconDeviceDesktop,
   IconEye,
+  IconEyeOff,
   IconInfoCircle,
   IconLanguage,
   IconSettings,
   IconSparkles,
+  IconTrash,
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getCurrentVersion, getDownloadUrl, useUpdateStore } from '@/core/store/updates';
 import classes from './SettingsModal.module.css';
 
-type SettingsSection = 'view' | 'language' | 'ai' | 'about';
+type SettingsSection = 'view' | 'language' | 'ai' | 'masking' | 'about';
 const DEFAULT_AI_PROVIDER = 'anthropic';
 const DEFAULT_AI_MODEL = 'claude-3-5-sonnet-20241022';
 
@@ -123,6 +133,21 @@ export function SettingsModal() {
   const [aiModelsLoading, setAiModelsLoading] = useState(false);
   const [aiTokenValid, setAiTokenValid] = useState(false);
   const [aiTokenError, setAiTokenError] = useState<string | null>(null);
+
+  // Masking state
+  const [maskingConfig, setMaskingConfig] = useState<LlmMaskingConfig | null>(null);
+  const [maskingLoading, setMaskingLoading] = useState(false);
+  const [maskingLoaded, setMaskingLoaded] = useState(false);
+  const [maskingSaving, setMaskingSaving] = useState(false);
+  const [maskingError, setMaskingError] = useState<string | null>(null);
+  const [maskingTestInput, setMaskingTestInput] = useState('');
+  const [maskingTestOutput, setMaskingTestOutput] = useState('');
+  const [maskingTestStats, setMaskingTestStats] = useState<{
+    maskedFields: number;
+    regexHits: number;
+  } | null>(null);
+  const [maskingTestRunning, setMaskingTestRunning] = useState(false);
+  const [testModalOpen, setTestModalOpen] = useState(false);
 
   const modalContentRef = useRef<HTMLDivElement | null>(null);
   const isDesktopMode = useMemo(
@@ -439,6 +464,117 @@ export function SettingsModal() {
     }
   }, [aiProvider, aiModel, aiTokenInput, aiEnabled, aiHasToken, fetchAiModels, t]);
 
+  // ── Masking callbacks ─────────────────────────────────────────────────────
+
+  const loadMaskingSection = useCallback(async () => {
+    setMaskingLoading(true);
+    setMaskingError(null);
+    try {
+      const config = await getMaskingSettings();
+      setMaskingConfig(config);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t('common:error');
+      setMaskingError(message);
+    } finally {
+      setMaskingLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    if (isOpen && activeSection === 'masking' && !maskingLoaded) {
+      void loadMaskingSection().finally(() => setMaskingLoaded(true));
+    }
+    if (!isOpen && maskingLoaded) {
+      setMaskingLoaded(false);
+      setMaskingConfig(null);
+      setMaskingTestInput('');
+      setMaskingTestOutput('');
+      setMaskingTestStats(null);
+    }
+  }, [isOpen, activeSection, maskingLoaded, loadMaskingSection]);
+
+  const updateMaskingConfig = useCallback((update: Partial<LlmMaskingConfig>) => {
+    setMaskingConfig(prev => (prev ? { ...prev, ...update } : prev));
+  }, []);
+
+  const handleMaskingSave = useCallback(async () => {
+    if (!maskingConfig) return;
+    setMaskingSaving(true);
+    try {
+      await saveMaskingSettings(maskingConfig);
+      notifications.show({
+        title: t('common:success'),
+        message: t('settings:maskingSaveSuccess'),
+        color: 'green',
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t('common:error');
+      notifications.show({
+        title: t('common:error'),
+        message,
+        color: 'red',
+      });
+    } finally {
+      setMaskingSaving(false);
+    }
+  }, [maskingConfig, t]);
+
+  const handleMaskingTestRun = useCallback(async () => {
+    if (!maskingConfig || !maskingTestInput.trim()) return;
+    setMaskingTestRunning(true);
+    try {
+      const result = await previewMasking({
+        config: maskingConfig,
+        input: maskingTestInput,
+      });
+      setMaskingTestOutput(
+        typeof result.output === 'string' ? result.output : JSON.stringify(result.output, null, 2)
+      );
+      setMaskingTestStats(result.stats);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t('common:error');
+      setMaskingTestOutput(`Error: ${message}`);
+      setMaskingTestStats(null);
+    } finally {
+      setMaskingTestRunning(false);
+    }
+  }, [maskingConfig, maskingTestInput, t]);
+
+  const addTextRegexRule = useCallback(() => {
+    setMaskingConfig(prev => {
+      if (!prev) return prev;
+      const newRule: TextRegexRule = {
+        id: `rule_${Date.now()}`,
+        pattern: '',
+        flags: 'gi',
+        replacement: '[REDACTED]',
+      };
+      return { ...prev, textRegexRules: [...prev.textRegexRules, newRule] };
+    });
+  }, []);
+
+  const updateTextRegexRule = useCallback((id: string, update: Partial<TextRegexRule>) => {
+    setMaskingConfig(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        textRegexRules: prev.textRegexRules.map(rule =>
+          rule.id === id ? { ...rule, ...update } : rule
+        ),
+      };
+    });
+  }, []);
+
+  const removeTextRegexRule = useCallback((id: string) => {
+    setMaskingConfig(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        textRegexRules: prev.textRegexRules.filter(rule => rule.id !== id),
+      };
+    });
+  }, []);
+
   const handleValidateToken = useCallback(async () => {
     const trimmed = aiTokenInput.trim();
     if (!trimmed && !aiHasToken) {
@@ -470,6 +606,12 @@ export function SettingsModal() {
       label: t('settings:ai'),
       icon: IconSparkles,
       description: t('settings:aiDescription'),
+    },
+    {
+      key: 'masking' as SettingsSection,
+      label: t('settings:masking'),
+      icon: IconEyeOff,
+      description: t('settings:maskingDescription'),
     },
   ];
 
@@ -906,6 +1048,290 @@ export function SettingsModal() {
                       )}
                     </Stack>
                   )}
+
+                  {activeSection === 'masking' && (
+                    <Stack gap="md" mt="md">
+                      {maskingError && (
+                        <Alert color="red" title={t('common:error')}>
+                          {maskingError}
+                        </Alert>
+                      )}
+                      {maskingLoading && !maskingLoaded ? (
+                        <Text size="sm">{t('common:loading')}</Text>
+                      ) : !maskingConfig ? (
+                        !maskingError && (
+                          <Text size="sm" c="dimmed">
+                            {t('settings:maskingNoProvider')}
+                          </Text>
+                        )
+                      ) : (
+                        <>
+                          <Switch
+                            label={t('settings:maskingToggleLabel')}
+                            description={t('settings:maskingToggleDescription')}
+                            checked={maskingConfig.enabled}
+                            onChange={event =>
+                              updateMaskingConfig({ enabled: event.currentTarget.checked })
+                            }
+                            disabled={maskingSaving}
+                          />
+
+                          <Select
+                            label={t('settings:maskingMode')}
+                            data={[
+                              { value: 'tokenize', label: t('settings:maskingModeTokenize') },
+                              { value: 'redact', label: t('settings:maskingModeRedact') },
+                            ]}
+                            value={maskingConfig.mode}
+                            onChange={value =>
+                              value && updateMaskingConfig({ mode: value as 'tokenize' | 'redact' })
+                            }
+                            disabled={maskingSaving}
+                            description={
+                              maskingConfig.mode === 'tokenize'
+                                ? t('settings:maskingModeTokenizeHint')
+                                : t('settings:maskingModeRedactHint')
+                            }
+                          />
+
+                          <TagsInput
+                            label={t('settings:maskingExactKeys')}
+                            description={t('settings:maskingExactKeysHint')}
+                            placeholder={
+                              maskingConfig.propertyRules.exact.length === 0
+                                ? t('settings:maskingExactKeysPlaceholder')
+                                : undefined
+                            }
+                            value={maskingConfig.propertyRules.exact}
+                            onChange={exact =>
+                              updateMaskingConfig({
+                                propertyRules: { ...maskingConfig.propertyRules, exact },
+                              })
+                            }
+                            disabled={maskingSaving}
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            spellCheck={false}
+                          />
+
+                          <TagsInput
+                            label={t('settings:maskingPrefixes')}
+                            description={t('settings:maskingPrefixesHint')}
+                            placeholder={
+                              maskingConfig.propertyRules.prefixes.length === 0
+                                ? t('settings:maskingPrefixesPlaceholder')
+                                : undefined
+                            }
+                            value={maskingConfig.propertyRules.prefixes}
+                            onChange={prefixes =>
+                              updateMaskingConfig({
+                                propertyRules: { ...maskingConfig.propertyRules, prefixes },
+                              })
+                            }
+                            disabled={maskingSaving}
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            spellCheck={false}
+                          />
+
+                          <TagsInput
+                            label={t('settings:maskingRegexKeys')}
+                            description={t('settings:maskingRegexKeysHint')}
+                            placeholder={
+                              maskingConfig.propertyRules.regex.length === 0
+                                ? t('settings:maskingRegexKeysPlaceholder')
+                                : undefined
+                            }
+                            value={maskingConfig.propertyRules.regex}
+                            onChange={regex =>
+                              updateMaskingConfig({
+                                propertyRules: { ...maskingConfig.propertyRules, regex },
+                              })
+                            }
+                            disabled={maskingSaving}
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            spellCheck={false}
+                          />
+
+                          <TagsInput
+                            label={t('settings:maskingPreserveKeys')}
+                            description={t('settings:maskingPreserveKeysHint')}
+                            placeholder={
+                              maskingConfig.preserveKeys.length === 0
+                                ? t('settings:maskingPreserveKeysPlaceholder')
+                                : undefined
+                            }
+                            value={maskingConfig.preserveKeys}
+                            onChange={preserveKeys => updateMaskingConfig({ preserveKeys })}
+                            disabled={maskingSaving}
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            spellCheck={false}
+                          />
+
+                          <div>
+                            <Group justify="space-between" mb="xs">
+                              <Text fw={500} size="sm">
+                                {t('settings:maskingTextRegex')}
+                              </Text>
+                              <Button
+                                variant="light"
+                                size="xs"
+                                onClick={addTextRegexRule}
+                                disabled={maskingSaving}
+                              >
+                                {t('settings:maskingAddRule')}
+                              </Button>
+                            </Group>
+                            <Text size="xs" c="dimmed" mb="sm">
+                              {t('settings:maskingTextRegexHint')}
+                            </Text>
+                            <Stack gap="xs">
+                              {maskingConfig.textRegexRules.map(rule => (
+                                <Group key={rule.id} gap="xs" align="flex-end">
+                                  <TextInput
+                                    label={t('settings:maskingPattern')}
+                                    size="xs"
+                                    style={{ flex: 3 }}
+                                    placeholder={t('settings:maskingPatternPlaceholder')}
+                                    value={rule.pattern}
+                                    onChange={e =>
+                                      updateTextRegexRule(rule.id, {
+                                        pattern: e.currentTarget.value,
+                                      })
+                                    }
+                                    disabled={maskingSaving}
+                                    autoComplete="off"
+                                    autoCorrect="off"
+                                    autoCapitalize="off"
+                                    spellCheck={false}
+                                  />
+                                  <TextInput
+                                    label={t('settings:maskingFlags')}
+                                    size="xs"
+                                    style={{ flex: 1 }}
+                                    value={rule.flags || ''}
+                                    onChange={e =>
+                                      updateTextRegexRule(rule.id, { flags: e.currentTarget.value })
+                                    }
+                                    disabled={maskingSaving}
+                                    autoComplete="off"
+                                    autoCorrect="off"
+                                    autoCapitalize="off"
+                                    spellCheck={false}
+                                  />
+                                  <TextInput
+                                    label={t('settings:maskingReplacement')}
+                                    size="xs"
+                                    style={{ flex: 2 }}
+                                    value={rule.replacement}
+                                    onChange={e =>
+                                      updateTextRegexRule(rule.id, {
+                                        replacement: e.currentTarget.value,
+                                      })
+                                    }
+                                    disabled={maskingSaving}
+                                    autoComplete="off"
+                                    autoCorrect="off"
+                                    autoCapitalize="off"
+                                    spellCheck={false}
+                                  />
+                                  <Tooltip label={t('settings:maskingRemove')} withArrow>
+                                    <ActionIcon
+                                      variant="subtle"
+                                      color="red"
+                                      size="sm"
+                                      onClick={() => removeTextRegexRule(rule.id)}
+                                      disabled={maskingSaving}
+                                    >
+                                      <IconTrash size={14} />
+                                    </ActionIcon>
+                                  </Tooltip>
+                                </Group>
+                              ))}
+                            </Stack>
+                          </div>
+
+                          <Group justify="space-between">
+                            <Button
+                              variant="light"
+                              onClick={() => setTestModalOpen(true)}
+                              disabled={maskingSaving}
+                            >
+                              {t('settings:maskingTestTitle')}
+                            </Button>
+                            <Group justify="flex-end">
+                              <Button variant="subtle" onClick={close} disabled={maskingSaving}>
+                                {t('common:cancel')}
+                              </Button>
+                              <Button onClick={handleMaskingSave} loading={maskingSaving}>
+                                {t('settings:maskingSave')}
+                              </Button>
+                            </Group>
+                          </Group>
+                        </>
+                      )}
+                    </Stack>
+                  )}
+
+                  {/* Test Masking Modal */}
+                  <Modal
+                    opened={testModalOpen}
+                    onClose={() => setTestModalOpen(false)}
+                    title={t('settings:maskingTestTitle')}
+                    size="xl"
+                    centered
+                  >
+                    <SimpleGrid cols={2} spacing="md">
+                      <Textarea
+                        label={t('settings:maskingTestInput')}
+                        value={maskingTestInput}
+                        onChange={e => setMaskingTestInput(e.currentTarget.value)}
+                        minRows={10}
+                        maxRows={20}
+                        autosize
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck={false}
+                      />
+                      <Textarea
+                        label={t('settings:maskingTestOutput')}
+                        value={maskingTestOutput}
+                        readOnly
+                        minRows={10}
+                        maxRows={20}
+                        autosize
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck={false}
+                      />
+                    </SimpleGrid>
+                    {maskingTestStats && (
+                      <Text size="xs" c="dimmed" mt="xs">
+                        {t('settings:maskingTestStats', {
+                          fields: maskingTestStats.maskedFields,
+                          regex: maskingTestStats.regexHits,
+                        })}
+                      </Text>
+                    )}
+                    <Group justify="flex-end" mt="md">
+                      <Button
+                        variant="light"
+                        onClick={handleMaskingTestRun}
+                        loading={maskingTestRunning}
+                        disabled={!maskingTestInput.trim()}
+                      >
+                        {t('settings:maskingTestRun')}
+                      </Button>
+                    </Group>
+                  </Modal>
 
                   {activeSection === 'about' && (
                     <Stack gap="md" mt="md" align="center">
