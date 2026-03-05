@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { AgentMentionSuggestion } from '@/core/ipc/backend';
+import { AgentMention, AgentMentionSuggestion } from '@/core/ipc/backend';
 import { isNeutralinoMode } from '@/core/ipc/neutralino';
 import { useDesktopClipboardHandlers } from '@/hooks/useDesktopClipboardHandlers';
 import type { QNameGroupedSuggestions } from '@/hooks/useQNameSuggestions';
@@ -47,6 +47,13 @@ import { Extension } from '@tiptap/core';
 const MIN_MENTION_POPUP_WIDTH = 320;
 const POPUP_VIEWPORT_GUTTER = 12;
 const POPUP_CONTAINER_WIDTH_FACTOR = 0.94;
+const VALID_MENTION_TYPES = new Set<AgentMention['type']>(['node', 'person', 'group', 'server']);
+
+function normalizeMentionType(value: unknown): AgentMention['type'] {
+  return typeof value === 'string' && VALID_MENTION_TYPES.has(value as AgentMention['type'])
+    ? (value as AgentMention['type'])
+    : 'node';
+}
 
 export interface AgentChatInputRef {
   submit: () => void;
@@ -56,7 +63,7 @@ export interface AgentChatInputRef {
 export interface AgentChatInputProps {
   value: string;
   onChange: (value: string) => void;
-  onSend: (text: string, mentions: AgentMentionSuggestion[]) => void;
+  onSend: (text: string, mentions: AgentMention[]) => void;
   disabled?: boolean;
 
   onMentionQueryChange: (query: string | null) => void;
@@ -378,22 +385,15 @@ export const AgentChatInput = forwardRef<AgentChatInputRef, AgentChatInputProps>
 
       const text = currentEditor.getText();
       const json = currentEditor.getJSON();
-      const mentions: AgentMentionSuggestion[] = [];
+      const mentions: AgentMention[] = [];
 
       const traverse = (node: any) => {
         if (node.type === 'nodeMention' && node.attrs) {
           mentions.push({
             id: node.attrs.id,
             label: node.attrs.label,
-            type: node.attrs.type || 'node',
+            type: normalizeMentionType(node.attrs.type),
             path: node.attrs.path,
-          });
-        }
-        if (node.type === 'qnameMention' && node.attrs) {
-          mentions.push({
-            id: node.attrs.id,
-            label: node.attrs.label,
-            type: node.attrs.type || 'qname',
           });
         }
         if (node.content) {

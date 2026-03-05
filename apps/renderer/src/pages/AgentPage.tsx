@@ -64,6 +64,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AgentChatInput, AgentChatInputRef } from '../components/agent/AgentChatInput';
 import { AgentEmptyState } from '../components/agent/AgentEmptyState';
+import { mentionChipBadgeProps, mentionChipStyle } from '../components/agent/mentionChip';
 
 const ACTIVE_RUN_STATUSES = new Set(['queued', 'running', 'waiting_confirmation']);
 const THREAD_AUTO_CONFIRM_ACCEPT_PATTERN = /^\s*(i accept|ik accepteer)\s*[.!]*\s*$/i;
@@ -301,34 +302,33 @@ const renderMarkdown = (md: string): string => {
   }
 };
 
-function renderUserMessageContent(content: string, mentions: AgentMention[]) {
-  if (!mentions || !mentions.length || !content) return content;
+const QNAME_TOKEN_PATTERN = '[a-zA-Z][a-zA-Z0-9_-]*:[a-zA-Z0-9_-]+';
+const QNAME_TOKEN_REGEX = new RegExp(`^${QNAME_TOKEN_PATTERN}$`);
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function buildMessageTokenRegex(mentionLabels: string[]): RegExp {
+  const mentionParts = mentionLabels.map(label => escapeRegExp(`@${label}`));
+  const splitPattern = mentionParts.length
+    ? `${mentionParts.join('|')}|${QNAME_TOKEN_PATTERN}`
+    : QNAME_TOKEN_PATTERN;
+  return new RegExp(`(${splitPattern})`, 'g');
+}
+
+function renderUserMessageContent(content: string, mentions: AgentMention[] = []) {
+  if (!content) return content;
 
   try {
     const sortedMentions = [...mentions].sort((a, b) => b.label.length - a.label.length);
-    const escapeRegExp = (string: string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regexStr = sortedMentions.map(m => escapeRegExp('@' + m.label)).join('|');
-    const regex = new RegExp(`(${regexStr})`, 'g');
+    const regex = buildMessageTokenRegex(sortedMentions.map(m => m.label));
+    const mentionTokenSet = new Set(sortedMentions.map(m => `@${m.label}`));
 
     const parts = content.split(regex);
 
     return parts.map((part, index) => {
-      const matchedMention = sortedMentions.find(m => '@' + m.label === part);
-      if (matchedMention) {
+      if (mentionTokenSet.has(part) || QNAME_TOKEN_REGEX.test(part)) {
         return (
-          <Badge
-            key={index}
-            component="span"
-            variant="default"
-            size="md"
-            style={{
-              textTransform: 'none',
-              verticalAlign: 'bottom',
-              margin: '0 2px',
-              backgroundColor: 'var(--mantine-color-gray-2)',
-              color: 'var(--mantine-color-dark-4)',
-            }}
-          >
+          <Badge key={index} {...mentionChipBadgeProps} style={mentionChipStyle}>
             {part}
           </Badge>
         );
@@ -1482,7 +1482,7 @@ export function AgentPage() {
 
     viewport.scrollTop = viewport.scrollHeight;
   }, [activeChatId, conversationTimeline.length, totalRunEventCount, thinkingRunIds.length]);
-  const handleSend = async (text: string, mentions: AgentMentionSuggestion[]) => {
+  const handleSend = async (text: string, mentions: AgentMention[]) => {
     if (!text.trim()) {
       return;
     }

@@ -18,21 +18,12 @@ import { Badge } from '@mantine/core';
 import { mergeAttributes } from '@tiptap/core';
 import Mention from '@tiptap/extension-mention';
 import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
+import { mentionChipBadgeProps, mentionChipStyle, mentionChipWrapperStyle } from './mentionChip';
 
 function NodeMentionView(props: any) {
   return (
-    <NodeViewWrapper
-      as="span"
-      style={{ display: 'inline-block', verticalAlign: 'middle', margin: '0 2px' }}
-    >
-      <Badge
-        component="span"
-        size="md"
-        variant="light"
-        color="blue"
-        style={{ display: 'inline-flex', verticalAlign: 'middle' }}
-        {...props.node.attrs}
-      >
+    <NodeViewWrapper as="span" style={mentionChipWrapperStyle}>
+      <Badge {...mentionChipBadgeProps} style={mentionChipStyle} {...props.node.attrs}>
         @{props.node.attrs.label}
       </Badge>
     </NodeViewWrapper>
