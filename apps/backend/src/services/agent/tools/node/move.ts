@@ -5,14 +5,13 @@
 import { NodesApi } from '@alfresco/js-api';
 import { getAlfrescoNodeMovePath } from '../../../../lib/alfresco-endpoints.js';
 import type { AgentExecutionContext } from '../../types.js';
+import { normalizeNodePath } from '../helpers/nodeResultHelpers.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
-
-const normalizeNodePath = (p: string | undefined): string | null =>
-  p?.trim().length ? p.trim() : null;
 
 export const nodeMoveTool: ToolDefinition = {
   name: 'node_move',
-  description: 'Move a node to a different parent folder. Requires explicit user confirmation.',
+  description: 'Move a node to a different parent folder.',
+  skill: { kind: 'local_md', path: '../skills/node_move.md', version: 1 },
   inputSchema: {
     type: 'object',
     properties: {
@@ -35,11 +34,7 @@ export const nodeMoveTool: ToolDefinition = {
       const nodesApi = new NodesApi(ctx.api);
       const requestBody = { targetParentId };
       const requestQuery = { fields: ['id', 'name', 'path'] };
-      const result = await nodesApi.moveNode(
-        sourceNodeId,
-        requestBody,
-        requestQuery
-      );
+      const result = await nodesApi.moveNode(sourceNodeId, requestBody, requestQuery);
       const e = (result as any)?.entry ?? result;
       return {
         ok: true,

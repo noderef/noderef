@@ -25,7 +25,8 @@ const MAX_TRACE_CONTENT_CHARS = 4000;
 export const nodeCreateTool: ToolDefinition = {
   name: 'node_create',
   description:
-    'Create a node under a parent folder. Supports nodeType, properties, and optional initial text content. If content is provided, this tool performs two API calls: create node first, then PUT node content. Requires explicit user confirmation.',
+    'Create a new node under a parent folder with optional metadata and initial text content. If content is provided, the tool creates the node first and then writes content.',
+  skill: { kind: 'local_md', path: '../skills/node_create.md', version: 1 },
   inputSchema: {
     type: 'object',
     properties: {

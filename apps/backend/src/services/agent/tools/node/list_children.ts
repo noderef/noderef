@@ -5,18 +5,13 @@
 import { NodesApi } from '@alfresco/js-api';
 import { getAlfrescoNodeChildrenPath } from '../../../../lib/alfresco-endpoints.js';
 import type { AgentExecutionContext } from '../../types.js';
+import { toNodeSummary } from '../helpers/nodeResultHelpers.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
-
-const normalizeNodePath = (p: string | undefined): string | null =>
-  p?.trim().length ? p.trim() : null;
 
 export const nodeListChildrenTool: ToolDefinition = {
   name: 'node_list_children',
-  description: [
-    'List the direct children of a folder node.',
-    'Returns pagination.totalCount (TRUE total children count) and a sample of child nodes.',
-    'Use this when the user asks "what is in folder X?" or "show me the contents of X".',
-  ].join(' '),
+  description: 'List direct children of a folder with pagination totals and a sampled result list.',
+  skill: { kind: 'local_md', path: '../skills/node_list_children.md', version: 1 },
   inputSchema: {
     type: 'object',
     properties: {
@@ -83,15 +78,7 @@ export const nodeListChildrenTool: ToolDefinition = {
             .sort((a, b) => b[1] - a[1])
             .slice(0, 10)
             .map(([ext, count]) => ({ ext, count })),
-          sample: entries.map((e: any) => ({
-            id: e.id,
-            name: e.name,
-            nodeType: e.nodeType,
-            isFolder: e.isFolder,
-            isFile: e.isFile,
-            path: normalizeNodePath(e.path?.name),
-            mimeType: e.content?.mimeType ?? null,
-          })),
+          sample: entries.map((e: any) => toNodeSummary(e)),
         },
       };
     } catch (err) {

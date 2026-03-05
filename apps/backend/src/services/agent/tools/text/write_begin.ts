@@ -20,7 +20,8 @@ const toSessionSummary = (record: Awaited<ReturnType<typeof beginTextWriteSessio
 export const textWriteBeginTool: ToolDefinition = {
   name: 'text_write_begin',
   description:
-    'Begin a buffered text write session for large text payloads. Provide nodeId to update an existing file, or parentId+fileName to create a new one at commit time.',
+    'Start a buffered session for writing large text safely in chunks. Target an existing file with nodeId or create a new file with parentId + fileName at commit.',
+  skill: { kind: 'local_md', path: '../skills/text_write_begin.md', version: 1 },
   inputSchema: {
     type: 'object',
     properties: {

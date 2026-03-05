@@ -4,7 +4,16 @@
 
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { appendFile, mkdir, readFile, readdir, rm, stat, unlink, writeFile } from 'node:fs/promises';
+import {
+  appendFile,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  stat,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -56,7 +65,7 @@ const ENCODING_DEFAULT = 'utf-8';
 const SESSION_ID_PATTERN = /^[a-f0-9-]{36}$/i;
 const FINISHED_SESSION_RETENTION_MS = 24 * 60 * 60 * 1000;
 
-const normalizeText = (value: unknown): string | null => {
+export const normalizeText = (value: unknown): string | null => {
   if (typeof value !== 'string') {
     return null;
   }
@@ -67,7 +76,8 @@ const normalizeText = (value: unknown): string | null => {
 const nowIso = (): string => new Date().toISOString();
 
 const getSessionDir = (sessionId: string): string => join(SESSIONS_ROOT_DIR, sessionId);
-const getMetadataPath = (sessionId: string): string => join(getSessionDir(sessionId), METADATA_FILE);
+const getMetadataPath = (sessionId: string): string =>
+  join(getSessionDir(sessionId), METADATA_FILE);
 const getContentPath = (sessionId: string): string => join(getSessionDir(sessionId), CONTENT_FILE);
 
 const parseIsoMillis = (value: string | null | undefined): number | null => {
@@ -249,9 +259,7 @@ export async function appendWriteSessionChunk(input: {
   }
   const chunkBytes = Buffer.byteLength(input.chunk, 'utf8');
   if (chunkBytes > record.state.options.maxChunkBytes) {
-    throw new Error(
-      `Chunk exceeds maxChunkBytes (${record.state.options.maxChunkBytes} bytes)`
-    );
+    throw new Error(`Chunk exceeds maxChunkBytes (${record.state.options.maxChunkBytes} bytes)`);
   }
 
   const requestedSeq =

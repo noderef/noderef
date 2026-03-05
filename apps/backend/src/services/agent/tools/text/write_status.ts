@@ -8,7 +8,8 @@ import { statusTextWriteSession } from './write_service.js';
 
 export const textWriteStatusTool: ToolDefinition = {
   name: 'text_write_status',
-  description: 'Get status and progress for a buffered text write session.',
+  description: 'Read state and progress details for a buffered text write session.',
+  skill: { kind: 'local_md', path: '../skills/text_write_status.md', version: 1 },
   inputSchema: {
     type: 'object',
     properties: {

@@ -742,7 +742,7 @@ export class AgentRunEngine {
     await this.maybeGenerateInitialChatPresentation(input, recentMessages.length > 0);
 
     // ── Build initial message list ─────────────────────────────────────────────
-    const systemPrompt = buildSystemPrompt(mentionContext, input.preferredLanguage);
+    const systemPrompt = await buildSystemPrompt(mentionContext, input.preferredLanguage);
     const allTools = getAllToolSchemas();
     const allowScriptExecution = isExplicitScriptExecutionRequested(input.content);
     const tools = allowScriptExecution

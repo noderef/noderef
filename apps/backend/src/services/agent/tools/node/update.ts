@@ -5,15 +5,13 @@
 import { NodesApi } from '@alfresco/js-api';
 import { getAlfrescoNodePath } from '../../../../lib/alfresco-endpoints.js';
 import type { AgentExecutionContext } from '../../types.js';
+import { buildNodeMetadataQuery, toNodeSummary } from '../helpers/nodeResultHelpers.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
-
-const normalizeNodePath = (p: string | undefined): string | null =>
-  p?.trim().length ? p.trim() : null;
 
 export const nodeUpdateTool: ToolDefinition = {
   name: 'node_update',
-  description:
-    'Update metadata for an existing node (name and/or properties). Requires explicit user confirmation.',
+  description: 'Update node metadata such as name and properties.',
+  skill: { kind: 'local_md', path: '../skills/node_update.md', version: 1 },
   inputSchema: {
     type: 'object',
     properties: {
@@ -50,10 +48,7 @@ export const nodeUpdateTool: ToolDefinition = {
         ...(name ? { name } : {}),
         ...(properties ? { properties } : {}),
       };
-      const requestQuery = {
-        fields: ['id', 'name', 'nodeType', 'isFolder', 'isFile', 'path', 'content', 'properties'],
-        include: ['path', 'properties'],
-      };
+      const requestQuery = buildNodeMetadataQuery();
 
       const nodesApi = new NodesApi(ctx.api);
       const result = await (nodesApi as any).updateNode(nodeId, requestBody, requestQuery);
@@ -68,16 +63,7 @@ export const nodeUpdateTool: ToolDefinition = {
             request: { body: requestBody, query: requestQuery },
             responseBody: result,
           },
-          updated: {
-            id: e?.id,
-            name: e?.name,
-            nodeType: e?.nodeType,
-            isFolder: e?.isFolder,
-            isFile: e?.isFile,
-            path: normalizeNodePath(e?.path?.name),
-            mimeType: e?.content?.mimeType ?? null,
-            properties: e?.properties ?? null,
-          },
+          updated: toNodeSummary(e),
           nodeId,
         },
       };

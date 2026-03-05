@@ -13,7 +13,8 @@ import {
 export const textWriteCommitTool: ToolDefinition = {
   name: 'text_write_commit',
   description:
-    'Commit a buffered text write session to Alfresco (create/update target file content). Use after all text_write_append calls.',
+    'Finalize a buffered text write session and write content to Alfresco. Call after all text_write_append chunks are uploaded.',
+  skill: { kind: 'local_md', path: '../skills/text_write_commit.md', version: 1 },
   inputSchema: {
     type: 'object',
     properties: {

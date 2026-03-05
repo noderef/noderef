@@ -10,9 +10,7 @@ import {
   getAlfrescoNodePath,
 } from '../../../../lib/alfresco-endpoints.js';
 import type { AgentExecutionContext } from '../../types.js';
-import {
-  buildNodeMetadataQuery,
-} from '../helpers/nodeResultHelpers.js';
+import { buildNodeMetadataQuery } from '../helpers/nodeResultHelpers.js';
 import {
   abortWriteSession,
   appendWriteSessionChunk,
@@ -21,6 +19,7 @@ import {
   hashWriteSessionContent,
   loadWriteSession,
   markWriteSessionCommitted,
+  normalizeText,
   removeWriteSessionContent,
   type WriteSessionRecord,
 } from './write_store.js';
@@ -31,14 +30,6 @@ const MAX_TTL_MINUTES = 24 * 60;
 const DEFAULT_MAX_CHUNK_BYTES = 32 * 1024;
 const MIN_MAX_CHUNK_BYTES = 1024;
 const MAX_MAX_CHUNK_BYTES = 256 * 1024;
-
-const normalizeText = (value: unknown): string | null => {
-  if (typeof value !== 'string') {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length ? trimmed : null;
-};
 
 const normalizeBool = (value: unknown): boolean | null =>
   typeof value === 'boolean' ? value : null;
@@ -194,7 +185,9 @@ export async function beginTextWriteSession(args: Record<string, unknown>): Prom
   return { record, cleanupRemoved };
 }
 
-export async function appendTextWriteSession(args: Record<string, unknown>): Promise<WriteSessionRecord> {
+export async function appendTextWriteSession(
+  args: Record<string, unknown>
+): Promise<WriteSessionRecord> {
   const sessionId = normalizeText(args.sessionId);
   if (!sessionId) {
     throw new Error('sessionId is required');
@@ -280,7 +273,9 @@ export async function commitTextWriteSession(
   return { record: committed, writeResult, contentHash };
 }
 
-export async function statusTextWriteSession(args: Record<string, unknown>): Promise<WriteSessionRecord> {
+export async function statusTextWriteSession(
+  args: Record<string, unknown>
+): Promise<WriteSessionRecord> {
   const sessionId = normalizeText(args.sessionId);
   if (!sessionId) {
     throw new Error('sessionId is required');
@@ -289,7 +284,9 @@ export async function statusTextWriteSession(args: Record<string, unknown>): Pro
   return loadWriteSession(sessionId);
 }
 
-export async function abortTextWriteSession(args: Record<string, unknown>): Promise<WriteSessionRecord> {
+export async function abortTextWriteSession(
+  args: Record<string, unknown>
+): Promise<WriteSessionRecord> {
   const sessionId = normalizeText(args.sessionId);
   if (!sessionId) {
     throw new Error('sessionId is required');
@@ -306,7 +303,10 @@ export function buildWriteApiTrace(params: { writeResult: WriteTextToNodeResult 
         getAlfrescoNodeContentPath(writeResult.destinationNodeId),
         getAlfrescoNodePath(writeResult.destinationNodeId),
       ]
-    : [getAlfrescoNodeContentPath(writeResult.destinationNodeId), getAlfrescoNodePath(writeResult.destinationNodeId)];
+    : [
+        getAlfrescoNodeContentPath(writeResult.destinationNodeId),
+        getAlfrescoNodePath(writeResult.destinationNodeId),
+      ];
 
   return {
     method: writeResult.createdNew ? 'POST+PUT' : 'PUT',

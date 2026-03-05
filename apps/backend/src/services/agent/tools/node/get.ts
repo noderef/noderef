@@ -5,17 +5,13 @@
 import { NodesApi } from '@alfresco/js-api';
 import { getAlfrescoNodePath } from '../../../../lib/alfresco-endpoints.js';
 import type { AgentExecutionContext } from '../../types.js';
+import { isRecord, normalizeNodePath } from '../helpers/nodeResultHelpers.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
-
-const normalizeNodePath = (p: string | undefined): string | null =>
-  p?.trim().length ? p.trim() : null;
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 export const nodeGetTool: ToolDefinition = {
   name: 'node_get',
-  description:
-    'Fetch metadata for a single Alfresco node by ID. Returns name, path, type, dates, and properties.',
+  description: 'Fetch metadata for a single node by ID, including path, type, and properties.',
+  skill: { kind: 'local_md', path: '../skills/node_get.md', version: 1 },
   inputSchema: {
     type: 'object',
     properties: {
@@ -30,27 +26,6 @@ export const nodeGetTool: ToolDefinition = {
       const nodeId = typeof args.nodeId === 'string' ? args.nodeId.trim() : '';
       if (!nodeId) return { ok: false, error: 'nodeId is required' };
 
-      const nodesApi = new NodesApi(ctx.api);
-      const result = await nodesApi.getNode(nodeId, {
-        fields: [
-          'id',
-          'name',
-          'nodeType',
-          'isFolder',
-          'isFile',
-          'path',
-          'content',
-          'aspectNames',
-          'properties',
-          'createdAt',
-          'modifiedAt',
-          'createdByUser',
-          'modifiedByUser',
-        ],
-        include: ['path', 'properties', 'allowableOperations'],
-      });
-
-      const e = (result as any)?.entry ?? result;
       const requestQuery = {
         fields: [
           'id',
@@ -69,6 +44,10 @@ export const nodeGetTool: ToolDefinition = {
         ],
         include: ['path', 'properties', 'allowableOperations'],
       };
+
+      const nodesApi = new NodesApi(ctx.api);
+      const result = await nodesApi.getNode(nodeId, requestQuery);
+      const e = (result as any)?.entry ?? result;
 
       return {
         ok: true,

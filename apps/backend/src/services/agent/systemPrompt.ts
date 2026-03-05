@@ -2,10 +2,13 @@
  * Copyright 2025-2026 NodeRef — Apache 2.0
  *
  * Single system prompt for the agent.
- * The LLM reads this once. All tool descriptions live in the tool schemas.
  */
 
+import { ALL_TOOLS } from './tools/registry.js';
+import { loadToolSkill } from './tools/skills.js';
+
 const LANGUAGE_CODE_PATTERN = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})?$/i;
+const MAX_TOOL_SKILLS_CHARS = 60_000;
 
 function normalizeLanguageCode(input: string | undefined): string | null {
   const trimmed = input?.trim();
@@ -32,7 +35,46 @@ function getLanguageDisplayName(code: string): string {
   }
 }
 
-export function buildSystemPrompt(mentionContext: string, preferredLanguage?: string): string {
+const buildToolSkillsSection = async (): Promise<string> => {
+  const blocks: string[] = [];
+  let totalChars = 0;
+  let included = 0;
+
+  // TODO: optimize by including only skills relevant to the current request/tools.
+  for (const tool of ALL_TOOLS) {
+    let skillText: string;
+    try {
+      skillText = await loadToolSkill(tool.skill);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new Error(`Failed to load skill for tool "${tool.name}": ${detail}`);
+    }
+
+    const block = `---8<--- tool: ${tool.name} ---8<---\n${skillText.trim()}\n`;
+    if (totalChars + block.length > MAX_TOOL_SKILLS_CHARS) {
+      break;
+    }
+    blocks.push(block);
+    totalChars += block.length;
+    included += 1;
+  }
+
+  const truncationNote =
+    included < ALL_TOOLS.length
+      ? `\nNote: skill section truncated to stay under ${MAX_TOOL_SKILLS_CHARS} characters (${included}/${ALL_TOOLS.length} tools included).`
+      : '';
+
+  return `TOOL SKILLS (authoritative):
+- For each tool, the following skill markdown defines how to use it and how to interpret its results.
+- When a tool skill has "critical rules", follow them strictly.${truncationNote}
+
+${blocks.join('\n')}`.trim();
+};
+
+export async function buildSystemPrompt(
+  mentionContext: string,
+  preferredLanguage?: string
+): Promise<string> {
   const normalizedLanguage = normalizeLanguageCode(preferredLanguage);
   const languageDirective = normalizedLanguage
     ? `Language directive:
@@ -46,6 +88,7 @@ export function buildSystemPrompt(mentionContext: string, preferredLanguage?: st
   const mentionBlock = mentionContext.trim()
     ? `\n<mentioned_nodes>\n${mentionContext.trim()}\n</mentioned_nodes>\n`
     : '';
+  const toolSkillsSection = await buildToolSkillsSection();
 
   return `You are the NodeRef assistant — an Alfresco Content Services repository agent.
 You help users search, browse, and manage content in their Alfresco repository.
@@ -100,5 +143,7 @@ CRITICAL RULES — you MUST follow these:
    - prefer node name over bare UUID
    - when nodeId is known, include a markdown link using this format:
      [Node Name](nodebrowser://node/<nodeId>)
-${mentionBlock}`.trim();
+${mentionBlock}
+
+${toolSkillsSection}`.trim();
 }

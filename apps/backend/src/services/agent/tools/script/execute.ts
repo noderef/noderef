@@ -11,7 +11,8 @@ import type { ToolDefinition, ToolResult } from '../types.js';
 export const scriptExecuteTool: ToolDefinition = {
   name: 'script_execute',
   description:
-    'Execute a JavaScript Console script on the Alfresco server. Use when no other tool can accomplish the task. Requires explicit user confirmation.',
+    'Execute a JavaScript Console script on the server. Use only when standard repository tools cannot complete the task.',
+  skill: { kind: 'local_md', path: '../skills/script_execute.md', version: 1 },
   inputSchema: {
     type: 'object',
     properties: {

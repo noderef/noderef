@@ -4,57 +4,17 @@
 
 import { SearchApi } from '@alfresco/js-api';
 import type { AgentExecutionContext } from '../../types.js';
+import { normalizeNodePath } from '../helpers/nodeResultHelpers.js';
+import { extractByPath, SEARCH_API_PATH } from '../helpers/searchHelpers.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
 
-const normalizeNodePath = (pathName: string | undefined): string | null => {
-  const trimmed = pathName?.trim();
-  return trimmed?.length ? trimmed : null;
-};
-
 const tokenize = (value: string): string[] => value.toLowerCase().split(/\s+/g).filter(Boolean);
-const SEARCH_API_PATH = '/alfresco/api/-default-/public/search/versions/1/search';
-
-const extractByPath = (source: unknown, path: string): unknown => {
-  if (!path) {
-    return undefined;
-  }
-
-  const segments = path.split('.').filter(Boolean);
-  let current: unknown = source;
-  for (const segment of segments) {
-    if (!current || typeof current !== 'object' || Array.isArray(current)) {
-      return undefined;
-    }
-    current = (current as Record<string, unknown>)[segment];
-  }
-  return current;
-};
 
 export const searchTool: ToolDefinition = {
   name: 'search',
-  description: `Search the Alfresco repository using AFTS (Alfresco Full Text Search) syntax.
-
-RESULT READING RULES (critical):
-- result.pagination.totalCount = TRUE total in the repository (use this for any count answer)
-- result.sample[] = preview only — NEVER count sample[] to answer totals
-- For complete listings, paginate with skipCount and repeat until hasMoreItems=false.
-- For overview/list requests (names, titles, or custom properties), use collectAllPages=true.
-- If listing specific fields, pass returnFields (e.g. ["name"], ["properties.cm:title"], ["properties.my:customProp"]).
-- Output values only from result.projectedItems (never invent values).
-
-COMMON AFTS PATTERNS:
-- All folders:                 TYPE:"cm:folder"
-- All files:                   TYPE:"cm:content"
-- By name:                     @cm:name:"budget*"
-- Full-text keyword:           TEXT:"invoice"
-- By path:                     PATH:"/app:company_home/cm:Shared//*"
-- By mimetype:                 @cm:content.mimetype:"application/pdf"
-- By date range:               @cm:created:[2024-01-01 TO NOW]
-- Sites:                       TYPE:"st:site"
-
-For "how many folders": use  TYPE:"cm:folder"  with maxItems:1 — read totalCount.
-For "how many files":   use  TYPE:"cm:content"  with maxItems:1 — read totalCount.
-For full listings:      use maxItems:200 with collectAllPages:true.`,
+  description:
+    'Search the repository using AFTS or keyword mode with paging support. Use this for counts and listings across folders/files.',
+  skill: { kind: 'local_md', path: '../skills/search.md', version: 1 },
 
   inputSchema: {
     type: 'object',

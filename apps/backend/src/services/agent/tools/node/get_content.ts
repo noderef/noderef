@@ -5,6 +5,7 @@
 import { NodesApi } from '@alfresco/js-api';
 import { getAlfrescoNodeContentPath } from '../../../../lib/alfresco-endpoints.js';
 import type { AgentExecutionContext } from '../../types.js';
+import { normalizeNodePath } from '../helpers/nodeResultHelpers.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
 
 const EXTENSION_TO_LANGUAGE: Record<string, string> = {
@@ -144,11 +145,6 @@ const looksBinary = (buffer: Buffer): boolean => {
   return suspicious / sample.length > 0.2;
 };
 
-const normalizePath = (pathName: string | undefined): string | null => {
-  const trimmed = pathName?.trim();
-  return trimmed?.length ? trimmed : null;
-};
-
 const buildFence = (text: string): string => {
   const matches = text.match(/`+/g);
   const maxTicks = matches?.reduce((max, run) => Math.max(max, run.length), 0) ?? 0;
@@ -157,13 +153,9 @@ const buildFence = (text: string): string => {
 
 export const nodeGetContentTool: ToolDefinition = {
   name: 'node_get_content',
-  description: [
-    'Read and return text content for a file node by nodeId.',
-    'Supports text-based files like XML, Markdown, JavaScript, TypeScript, FreeMarker (.ftl), TXT, CSV, JSON, HTML, YAML, CSS, SQL.',
-    'Returns detected language and a ready-to-render markdown fenced code block.',
-    'When responding with file content, prefer returning markdownCodeBlock verbatim.',
-    'If file is not text-based, returns metadata with isTextBased=false and no content body.',
-  ].join(' '),
+  description:
+    'Read file content by node ID and return text when the file is text-based. For binary files, returns metadata with isTextBased=false.',
+  skill: { kind: 'local_md', path: '../skills/node_get_content.md', version: 1 },
   inputSchema: {
     type: 'object',
     properties: {
@@ -240,7 +232,7 @@ export const nodeGetContentTool: ToolDefinition = {
             node: {
               id: entry?.id,
               name: fileName,
-              path: normalizePath(entry?.path?.name),
+              path: normalizeNodePath(entry?.path?.name),
               nodeType: entry?.nodeType,
               mimeType,
               isFile: Boolean(entry?.isFile),
@@ -285,7 +277,7 @@ export const nodeGetContentTool: ToolDefinition = {
           node: {
             id: entry?.id,
             name: fileName,
-            path: normalizePath(entry?.path?.name),
+            path: normalizeNodePath(entry?.path?.name),
             nodeType: entry?.nodeType,
             mimeType,
             isFile: Boolean(entry?.isFile),

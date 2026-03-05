@@ -10,7 +10,8 @@ import type { ToolDefinition, ToolResult } from '../types.js';
 export const nodeDeleteTool: ToolDefinition = {
   name: 'node_delete',
   description:
-    'Delete one or more nodes. Destructive — moves to trash by default. Requires explicit user confirmation.',
+    'Delete one or more nodes, moving to trash by default unless permanent deletion is requested.',
+  skill: { kind: 'local_md', path: '../skills/node_delete.md', version: 1 },
   inputSchema: {
     type: 'object',
     properties: {

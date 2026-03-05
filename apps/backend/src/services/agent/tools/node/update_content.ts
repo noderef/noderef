@@ -21,7 +21,8 @@ const MAX_TRACE_CONTENT_CHARS = 4000;
 export const nodeUpdateContentTool: ToolDefinition = {
   name: 'node_update_content',
   description:
-    'Update file content for an existing node using PUT /nodes/{nodeId}/content. Useful after node_create when you need to set or replace text content. Requires explicit user confirmation.',
+    'Replace file content for an existing node, with optional versioning fields.',
+  skill: { kind: 'local_md', path: '../skills/node_update_content.md', version: 1 },
   inputSchema: {
     type: 'object',
     properties: {

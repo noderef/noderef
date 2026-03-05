@@ -9,7 +9,8 @@ import { appendTextWriteSession } from './write_service.js';
 export const textWriteAppendTool: ToolDefinition = {
   name: 'text_write_append',
   description:
-    'Append one text chunk to a buffered write session. Use sequential chunks to upload very large text safely.',
+    'Append one text chunk to an active buffered write session. Use repeated calls for large payloads.',
+  skill: { kind: 'local_md', path: '../skills/text_write_append.md', version: 1 },
   inputSchema: {
     type: 'object',
     properties: {

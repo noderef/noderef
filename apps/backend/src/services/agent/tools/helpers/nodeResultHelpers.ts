@@ -13,7 +13,7 @@ export interface NodeSummary {
   properties: unknown;
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
+export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 export const buildNodeMetadataQuery = (): { fields: string[]; include: string[] } => ({
@@ -26,9 +26,7 @@ export const normalizeNodePath = (pathName: string | undefined): string | null =
   return trimmed?.length ? trimmed : null;
 };
 
-export const toNodeSummary = (
-  entry: Record<string, unknown> | null | undefined
-): NodeSummary => {
+export const toNodeSummary = (entry: Record<string, unknown> | null | undefined): NodeSummary => {
   const pathValue = isRecord(entry?.path) ? entry.path.name : undefined;
   const mimeValue = isRecord(entry?.content) ? entry.content.mimeType : null;
 

@@ -6,6 +6,7 @@
  */
 
 import type { AgentToolSchema } from '../../../ai/anthropic.js';
+import { existsSync } from 'node:fs';
 import { nodeCopyTool } from './node/copy.js';
 import { nodeCreateTool } from './node/create.js';
 import { nodeDeleteTool } from './node/delete.js';
@@ -23,6 +24,7 @@ import { textWriteAppendTool } from './text/write_append.js';
 import { textWriteBeginTool } from './text/write_begin.js';
 import { textWriteCommitTool } from './text/write_commit.js';
 import { textWriteStatusTool } from './text/write_status.js';
+import { resolveToolSkillPath } from './skills.js';
 import type { ToolDefinition } from './types.js';
 import { toAnthropicSchema } from './types.js';
 
@@ -48,6 +50,23 @@ export const ALL_TOOLS: ToolDefinition[] = [
   nodeDeleteTool,
   scriptExecuteTool,
 ];
+
+const assertToolSkills = (tools: ToolDefinition[]): void => {
+  for (const tool of tools) {
+    if (!tool.skill || tool.skill.kind !== 'local_md') {
+      throw new Error(`Tool "${tool.name}" is missing a valid local_md skill definition`);
+    }
+    const resolvedPath = resolveToolSkillPath(tool.skill, __filename);
+    if (!existsSync(resolvedPath)) {
+      throw new Error(
+        `Tool "${tool.name}" skill file not found: ${resolvedPath}. ` +
+          'Each tool must ship with a default local markdown skill.'
+      );
+    }
+  }
+};
+
+assertToolSkills(ALL_TOOLS);
 
 const toolMap = new Map<string, ToolDefinition>(ALL_TOOLS.map(t => [t.name, t]));
 

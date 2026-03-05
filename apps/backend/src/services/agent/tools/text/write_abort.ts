@@ -8,7 +8,8 @@ import { abortTextWriteSession } from './write_service.js';
 
 export const textWriteAbortTool: ToolDefinition = {
   name: 'text_write_abort',
-  description: 'Abort a buffered text write session and discard buffered content.',
+  description: 'Abort a buffered write session and stop further appends/commit for that session.',
+  skill: { kind: 'local_md', path: '../skills/text_write_abort.md', version: 1 },
   inputSchema: {
     type: 'object',
     properties: {

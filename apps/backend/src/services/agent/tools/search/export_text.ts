@@ -5,10 +5,9 @@
 import { SearchApi } from '@alfresco/js-api';
 import type { AgentExecutionContext } from '../../types.js';
 import { toNodeSummary } from '../helpers/nodeResultHelpers.js';
+import { extractByPath, SEARCH_API_PATH } from '../helpers/searchHelpers.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
 import { buildWriteApiTrace, writeTextToNode } from '../text/write_service.js';
-
-const SEARCH_API_PATH = '/alfresco/api/-default-/public/search/versions/1/search';
 const DEFAULT_QUERY = 'TYPE:"cm:content"';
 const DEFAULT_PAGE_SIZE = 200;
 const MAX_PAGE_SIZE = 500;
@@ -74,21 +73,6 @@ const resolveCompanyHomeId = async (searchApi: SearchApi): Promise<string | null
   const entry = result?.list?.entries?.[0]?.entry;
   const id = typeof entry?.id === 'string' ? entry.id.trim() : '';
   return id || null;
-};
-
-const extractByPath = (source: unknown, path: string): unknown => {
-  if (!path) {
-    return undefined;
-  }
-  const segments = path.split('.').filter(Boolean);
-  let current: unknown = source;
-  for (const segment of segments) {
-    if (!current || typeof current !== 'object' || Array.isArray(current)) {
-      return undefined;
-    }
-    current = (current as Record<string, unknown>)[segment];
-  }
-  return current;
 };
 
 const normalizeColumns = (value: unknown): string[] => {
@@ -202,9 +186,7 @@ const renderDocument = ({
     lines.push(separator);
     for (const entry of entries) {
       lines.push(
-        `| ${columns
-          .map(column => markdownEscape(extractByPath(entry, column)))
-          .join(' | ')} |`
+        `| ${columns.map(column => markdownEscape(extractByPath(entry, column))).join(' | ')} |`
       );
     }
   } else if (format === 'xml') {
@@ -241,7 +223,8 @@ const renderDocument = ({
 export const searchExportTextTool: ToolDefinition = {
   name: 'search_export_text',
   description:
-    'Export repository search results to a text file directly on the server side (stable for large result sets), then write/update it in Alfresco. Supports csv, tsv, jsonl, markdown, xml, plain, and custom template formats.',
+    'Export search results directly to a repository text file. Use this for large result sets or structured exports (csv, tsv, jsonl, markdown, xml, plain, custom).',
+  skill: { kind: 'local_md', path: '../skills/search_export_text.md', version: 1 },
   inputSchema: {
     type: 'object',
     properties: {
@@ -257,8 +240,7 @@ export const searchExportTextTool: ToolDefinition = {
       columns: {
         type: 'array',
         items: { type: 'string' },
-        description:
-          'Field paths to export, e.g. ["id","name","modifiedAt","content.mimeType"].',
+        description: 'Field paths to export, e.g. ["id","name","modifiedAt","content.mimeType"].',
       },
       includeHeader: {
         type: 'boolean',
@@ -279,7 +261,8 @@ export const searchExportTextTool: ToolDefinition = {
       },
       nodeId: {
         type: 'string',
-        description: 'Optional existing target file node ID to update instead of creating a new file.',
+        description:
+          'Optional existing target file node ID to update instead of creating a new file.',
       },
       parentId: {
         type: 'string',
@@ -348,7 +331,9 @@ export const searchExportTextTool: ToolDefinition = {
         typeof args.nodeId === 'string' && args.nodeId.trim().length ? args.nodeId.trim() : null;
 
       let destinationParentId: string | null =
-        typeof args.parentId === 'string' && args.parentId.trim().length ? args.parentId.trim() : null;
+        typeof args.parentId === 'string' && args.parentId.trim().length
+          ? args.parentId.trim()
+          : null;
       if (!targetNodeId && !destinationParentId) {
         destinationParentId = await resolveCompanyHomeId(searchApi);
       }
@@ -384,7 +369,9 @@ export const searchExportTextTool: ToolDefinition = {
         const result = await searchApi.search(requestBody as any);
         pagesFetched += 1;
 
-        const entries = (result?.list?.entries ?? []).map((item: any) => item?.entry).filter(Boolean);
+        const entries = (result?.list?.entries ?? [])
+          .map((item: any) => item?.entry)
+          .filter(Boolean);
         const totalItems = result?.list?.pagination?.totalItems;
         if (typeof totalItems === 'number' && Number.isFinite(totalItems)) {
           repositoryTotal = totalItems;
