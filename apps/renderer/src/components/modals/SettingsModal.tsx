@@ -165,8 +165,6 @@ export function SettingsModal() {
         const end = selectionEnd ?? value.length;
         const newValue = value.slice(0, start) + text + value.slice(end);
         const cursorPos = start + text.length;
-
-        // Identify the field using data-field attribute and update React state
         const fieldName = editableTarget.getAttribute('data-field') || '';
 
         if (fieldName === 'aiToken') {
@@ -175,9 +173,11 @@ export function SettingsModal() {
             setAiTokenValid(false);
             setAiTokenError(null);
           }
+        } else {
+          editableTarget.setRangeText(text, start, end, 'end');
+          editableTarget.dispatchEvent(new Event('input', { bubbles: true }));
         }
 
-        // Update cursor position after React updates the DOM
         setTimeout(() => {
           if (document.activeElement === editableTarget) {
             editableTarget.setSelectionRange(cursorPos, cursorPos);
@@ -194,6 +194,7 @@ export function SettingsModal() {
     isEnabled: isOpen && isDesktopMode,
     containerRef: modalContentRef,
     onInsertText: handleInsertText,
+    enableCopyCut: true,
   });
 
   const currentVersion = getCurrentVersion();

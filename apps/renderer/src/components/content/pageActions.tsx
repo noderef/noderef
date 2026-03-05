@@ -267,6 +267,11 @@ export function getPageActions(
       moreMenuActions: [],
     },
 
+    agentPage: {
+      actionIcons: [],
+      moreMenuActions: [],
+    },
+
     'text-editor': {
       actionIcons: [
         {
