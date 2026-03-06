@@ -16,6 +16,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  detokenizeText,
   getDefaultMaskingConfig,
   maskPayload,
   maskString,
@@ -218,6 +219,17 @@ describe('masking engine', () => {
       expect(result['cm:email'][1]).toMatch(/^<MASKED_[a-f0-9]+>$/);
       expect(stats.maskedFields).toBe(2);
     });
+
+    it('handles circular references without returning unmasked payload', () => {
+      const data: Record<string, unknown> = { 'cm:creator': 'admin' };
+      data.self = data;
+
+      const { masked, stats } = maskPayload(data, baseConfig);
+      const result = masked as Record<string, unknown>;
+      expect(result['cm:creator']).toMatch(/^<MASKED_[a-f0-9]+>$/);
+      expect(result.self).toMatch(/^<MASKED_[a-f0-9]+>$/);
+      expect(stats.maskedFields).toBeGreaterThanOrEqual(2);
+    });
   });
 
   describe('empty/null/undefined handling', () => {
@@ -234,6 +246,14 @@ describe('masking engine', () => {
       const result = masked as Record<string, unknown>;
       // Empty string still gets masked since key matches
       expect(stats.maskedFields).toBe(1);
+    });
+
+    it('handles bigint values safely', () => {
+      const data = { 'cm:creator': BigInt(42), id: BigInt(7) };
+      const { masked } = maskPayload(data, baseConfig);
+      const result = masked as Record<string, unknown>;
+      expect(result['cm:creator']).toMatch(/^<MASKED_[a-f0-9]+>$/);
+      expect(result.id).toBe('7');
     });
   });
 
@@ -259,6 +279,23 @@ describe('masking engine', () => {
       const config: LlmMaskingConfig = { ...baseConfig, enabled: false };
       const { masked } = maskString('test@example.com', config);
       expect(masked).toBe('test@example.com');
+    });
+  });
+
+  describe('detokenizeText', () => {
+    it('restores known masked tokens to their original values', () => {
+      const tokenMap = new Map<string, string>();
+      const data = { 'cm:creator': 'admin' };
+      const { masked } = maskPayload(data, baseConfig, { tokenMap });
+      const token = (masked as Record<string, unknown>)['cm:creator'] as string;
+
+      const result = detokenizeText(`Creator is ${token}`, tokenMap);
+      expect(result).toBe('Creator is admin');
+    });
+
+    it('leaves unknown tokens unchanged', () => {
+      const result = detokenizeText('Value <MASKED_deadbeefcafe>', new Map());
+      expect(result).toBe('Value <MASKED_deadbeefcafe>');
     });
   });
 

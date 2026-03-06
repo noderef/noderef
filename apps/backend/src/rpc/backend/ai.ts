@@ -207,6 +207,7 @@ export function registerAiHandlers(routes: Routes): void {
       input: z.string(),
     }),
     handler: async (params: unknown) => {
+      await getCurrentUserId();
       const { config, input } = params as { config: unknown; input: string };
       return previewMasking(config, input);
     },

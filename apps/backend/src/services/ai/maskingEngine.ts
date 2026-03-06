@@ -55,6 +55,10 @@ export interface MaskingResult {
   stats: MaskingStats;
 }
 
+export interface MaskingOptions {
+  tokenMap?: Map<string, string>;
+}
+
 // ── Defaults ───────────────────────────────────────────────────────────────────
 
 const DEFAULT_EXACT_KEYS = ['cm:creator', 'cm:modifier', 'cm:email'];
@@ -72,6 +76,7 @@ const INTERNAL_SALT = 'noderef-masking-v1-internal-salt';
 const SAFE_REGEX_FLAGS = new Set(['g', 'i', 'm']);
 const MAX_ARRAY_ITEMS = 100;
 const REDACTED_TEXT = '[REDACTED]';
+const MASKED_TOKEN_PATTERN = /<MASKED_[a-f0-9]{12}>/g;
 
 export function getDefaultMaskingConfig(): LlmMaskingConfig {
   return {
@@ -213,9 +218,16 @@ function tokenizeValue(value: string, hmacKey: string): string {
   return `<MASKED_${hash}>`;
 }
 
-function maskStringValue(value: string, mode: 'tokenize' | 'redact', hmacKey: string): string {
+function maskStringValue(
+  value: string,
+  mode: 'tokenize' | 'redact',
+  hmacKey: string,
+  tokenMap?: Map<string, string>
+): string {
   if (mode === 'tokenize') {
-    return tokenizeValue(value, hmacKey);
+    const token = tokenizeValue(value, hmacKey);
+    tokenMap?.set(token, value);
+    return token;
   }
   return REDACTED_TEXT;
 }
@@ -273,18 +285,29 @@ function applyTextRegexRules(value: string, compiled: CompiledConfig, stats: Mas
   return result;
 }
 
+interface TraversalState {
+  inProgress: WeakSet<object>;
+  tokenMap?: Map<string, string>;
+}
+
+function maskCircularReference(compiled: CompiledConfig, stats: MaskingStats, state: TraversalState) {
+  stats.maskedFields += 1;
+  return maskStringValue('[CIRCULAR_REFERENCE]', compiled.mode, compiled.hmacKey, state.tokenMap);
+}
+
 function maskValue(
   value: unknown,
   key: string,
   compiled: CompiledConfig,
-  stats: MaskingStats
+  stats: MaskingStats,
+  state: TraversalState
 ): unknown {
   if (value === null || value === undefined) return value;
 
   if (typeof value === 'string') {
     if (shouldMaskKey(key, compiled)) {
       stats.maskedFields += 1;
-      return maskStringValue(value, compiled.mode, compiled.hmacKey);
+      return maskStringValue(value, compiled.mode, compiled.hmacKey, state.tokenMap);
     }
     // Apply text regex rules to all string values regardless of key
     return applyTextRegexRules(value, compiled, stats);
@@ -293,17 +316,47 @@ function maskValue(
   if (typeof value === 'number' || typeof value === 'boolean') {
     if (shouldMaskKey(key, compiled)) {
       stats.maskedFields += 1;
-      return maskStringValue(String(value), compiled.mode, compiled.hmacKey);
+      return maskStringValue(String(value), compiled.mode, compiled.hmacKey, state.tokenMap);
     }
     return value;
   }
 
+  if (typeof value === 'bigint') {
+    const asString = value.toString();
+    if (shouldMaskKey(key, compiled)) {
+      stats.maskedFields += 1;
+      return maskStringValue(asString, compiled.mode, compiled.hmacKey, state.tokenMap);
+    }
+    return asString;
+  }
+
   if (Array.isArray(value)) {
-    return value.map(item => maskValue(item, key, compiled, stats));
+    if (state.inProgress.has(value)) {
+      return maskCircularReference(compiled, stats, state);
+    }
+    state.inProgress.add(value);
+    const masked = value.map(item => maskValue(item, key, compiled, stats, state));
+    state.inProgress.delete(value);
+    return masked;
   }
 
   if (typeof value === 'object') {
-    return maskObject(value as Record<string, unknown>, compiled, stats);
+    if (value instanceof Date) {
+      const iso = value.toISOString();
+      if (shouldMaskKey(key, compiled)) {
+        stats.maskedFields += 1;
+        return maskStringValue(iso, compiled.mode, compiled.hmacKey, state.tokenMap);
+      }
+      return applyTextRegexRules(iso, compiled, stats);
+    }
+
+    if (state.inProgress.has(value)) {
+      return maskCircularReference(compiled, stats, state);
+    }
+    state.inProgress.add(value);
+    const masked = maskObject(value as Record<string, unknown>, compiled, stats, state);
+    state.inProgress.delete(value);
+    return masked;
   }
 
   return value;
@@ -312,12 +365,13 @@ function maskValue(
 function maskObject(
   obj: Record<string, unknown>,
   compiled: CompiledConfig,
-  stats: MaskingStats
+  stats: MaskingStats,
+  state: TraversalState
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {};
 
   for (const [key, val] of Object.entries(obj)) {
-    result[key] = maskValue(val, key, compiled, stats);
+    result[key] = maskValue(val, key, compiled, stats, state);
   }
 
   return result;
@@ -345,13 +399,21 @@ export function maskString(
  * Top-level entry point: mask an entire payload (object, array, or string).
  * Returns a deep copy with sensitive values masked.
  */
-export function maskPayload(payload: unknown, config: LlmMaskingConfig): MaskingResult {
+export function maskPayload(
+  payload: unknown,
+  config: LlmMaskingConfig,
+  options: MaskingOptions = {}
+): MaskingResult {
   if (!config.enabled) {
     return { masked: payload, stats: { maskedFields: 0, regexHits: 0 } };
   }
 
   const compiled = compileConfig(config);
   const stats: MaskingStats = { maskedFields: 0, regexHits: 0 };
+  const state: TraversalState = {
+    inProgress: new WeakSet<object>(),
+    tokenMap: options.tokenMap,
+  };
 
   if (typeof payload === 'string') {
     const masked = applyTextRegexRules(payload, compiled, stats);
@@ -359,21 +421,22 @@ export function maskPayload(payload: unknown, config: LlmMaskingConfig): Masking
   }
 
   if (Array.isArray(payload)) {
-    const masked = payload.map((item, index) => maskValue(item, `[${index}]`, compiled, stats));
+    const masked = payload.map((item, index) => maskValue(item, `[${index}]`, compiled, stats, state));
     return { masked, stats };
   }
 
   if (payload && typeof payload === 'object') {
-    // Deep clone to avoid mutation
-    let cloned: Record<string, unknown>;
-    try {
-      cloned = JSON.parse(JSON.stringify(payload)) as Record<string, unknown>;
-    } catch {
-      return { masked: payload, stats };
-    }
-    const masked = maskObject(cloned, compiled, stats);
+    const masked = maskValue(payload, '$', compiled, stats, state);
     return { masked, stats };
   }
 
   return { masked: payload, stats };
+}
+
+export function detokenizeText(text: string, tokenMap: Map<string, string> | null | undefined): string {
+  if (!tokenMap || tokenMap.size === 0 || !text) {
+    return text;
+  }
+
+  return text.replace(MASKED_TOKEN_PATTERN, token => tokenMap.get(token) ?? token);
 }

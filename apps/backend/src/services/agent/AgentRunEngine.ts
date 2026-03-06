@@ -27,7 +27,12 @@ import {
 } from '../../ai/anthropic.js';
 import { createLogger } from '../../lib/logger.js';
 import type { AgentRepository } from '../../repositories/agentRepository.js';
-import { maskPayload, maskString, type LlmMaskingConfig } from '../ai/maskingEngine.js';
+import {
+  detokenizeText,
+  maskPayload,
+  maskString,
+  type LlmMaskingConfig,
+} from '../ai/maskingEngine.js';
 import { getMaskingSettings } from '../ai/maskingSettings.js';
 import { emitRunEvent, formatConversationHistory, stripHorizontalRules } from './agentUtils.js';
 import { buildDescriptionNote, type ProgressNote } from './progressMessages.js';
@@ -857,6 +862,7 @@ export class AgentRunEngine {
     } catch {
       // Masking unavailable — proceed unmasked
     }
+    const maskingTokenMap = maskingConfig?.mode === 'tokenize' ? new Map<string, string>() : null;
 
     for (let iteration = 0; iteration < MAX_LOOP_STEPS; iteration++) {
       this.checkAborted();
@@ -903,7 +909,9 @@ export class AgentRunEngine {
         let maskedMessages = messages;
         if (maskingConfig) {
           maskedSystem = maskString(systemPrompt, maskingConfig).masked;
-          const { masked } = maskPayload(messages, maskingConfig);
+          const { masked } = maskPayload(messages, maskingConfig, {
+            tokenMap: maskingTokenMap ?? undefined,
+          });
           maskedMessages = masked as AgentMessageParam[];
         }
 
@@ -985,7 +993,10 @@ export class AgentRunEngine {
 
       // ── Final text answer ──────────────────────────────────────────────────
       if (response.type === 'text') {
-        const sanitizedText = stripHorizontalRules(response.text);
+        const detokenizedText = maskingTokenMap
+          ? detokenizeText(response.text, maskingTokenMap)
+          : response.text;
+        const sanitizedText = stripHorizontalRules(detokenizedText);
         await this.repository.createMessage({
           chatId: input.chatId,
           userId: input.userId,
@@ -997,8 +1008,18 @@ export class AgentRunEngine {
       }
 
       // ── Tool calls ─────────────────────────────────────────────────────────
+      const detokenizedReasoning =
+        maskingTokenMap && response.reasoning
+          ? detokenizeText(response.reasoning, maskingTokenMap)
+          : response.reasoning;
+      const rawContentForHistory = maskingTokenMap
+        ? response.rawContent.map(block =>
+            block.type === 'text' ? { ...block, text: detokenizeText(block.text, maskingTokenMap) } : block
+          )
+        : response.rawContent;
+
       // The model's full response (text + tool_use blocks) appended as-is
-      messages.push({ role: 'assistant', content: response.rawContent });
+      messages.push({ role: 'assistant', content: rawContentForHistory });
 
       const toolResultContents: Array<{
         tool_use_id: string;
@@ -1033,7 +1054,7 @@ export class AgentRunEngine {
           const stepSummary = buildStepSummary({
             operation: canonicalOperation,
             args: call.args,
-            reasoning: response.reasoning,
+            reasoning: detokenizedReasoning,
             callIndex,
             totalCalls: response.calls.length,
           });
@@ -1078,7 +1099,7 @@ export class AgentRunEngine {
         const stepSummary = buildStepSummary({
           operation: canonicalOperation,
           args: call.args,
-          reasoning: response.reasoning,
+          reasoning: detokenizedReasoning,
           callIndex,
           totalCalls: response.calls.length,
         });
@@ -1095,8 +1116,8 @@ export class AgentRunEngine {
         });
 
         // ── Emit description note on first tool call: use LLM's own words ────
-        if (stepOrdinal === 1 && response.reasoning?.trim()) {
-          await this.emitNote(input.runId, buildDescriptionNote(response.reasoning.trim()));
+        if (stepOrdinal === 1 && detokenizedReasoning?.trim()) {
+          await this.emitNote(input.runId, buildDescriptionNote(detokenizedReasoning.trim()));
         }
         // ── Confirmation gate ────────────────────────────────────────────────
         if (requiresManualConfirmation) {
