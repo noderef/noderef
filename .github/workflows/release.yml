@@ -10,6 +10,7 @@ permissions:
   contents: write
   packages: write
   issues: write
+  pull-requests: read
 
 jobs:
   # 1) Build all binaries once on macOS
