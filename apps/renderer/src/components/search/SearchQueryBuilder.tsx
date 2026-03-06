@@ -1637,6 +1637,10 @@ export function SearchQueryBuilder({
                         onChange={event => setPendingPropValue(event.currentTarget.value)}
                         onKeyDown={handlePendingKeyDown}
                         placeholder={t('placeholderValue')}
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck={false}
                         style={{
                           border: 'none',
                           outline: 'none',

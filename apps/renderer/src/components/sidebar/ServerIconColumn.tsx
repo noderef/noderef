@@ -15,7 +15,6 @@
  */
 
 import { backendRpc } from '@/core/ipc/backend';
-import { useSavedSearchesStore } from '@/core/store/savedSearches';
 import { useServersStore } from '@/core/store/servers';
 import { useActivePage, useNavigation } from '@/hooks/useNavigation';
 import type { PublicServer } from '@app/contracts';
@@ -43,8 +42,6 @@ export function ServerIconColumn({
   const { navigate } = useNavigation();
   const activePage = useActivePage();
   const reorderServers = useServersStore(state => state.reorderServers);
-  const savedSearches = useSavedSearchesStore(state => state.savedSearches);
-  const setActiveSavedSearchId = useSavedSearchesStore(state => state.setActiveSavedSearchId);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const originalOrderRef = useRef<PublicServer[]>([]);
@@ -56,15 +53,8 @@ export function ServerIconColumn({
     const server = servers.find(s => s.id === serverId);
 
     if (isAlreadySelected && server?.serverType === 'alfresco') {
-      // Server already selected - navigate to appropriate default page
-      const serverSearches = savedSearches.filter(s => s.serverId === serverId);
-      if (serverSearches.length > 0) {
-        const defaultSearch = serverSearches.find(s => s.isDefault) || serverSearches[0];
-        setActiveSavedSearchId(defaultSearch.id);
-        navigate('saved-search');
-      } else {
-        navigate('jsconsole');
-      }
+      // Server already selected - keep behavior deterministic and avoid saved-search auto-redirect.
+      navigate('jsconsole');
     } else if (GLOBAL_PAGES.includes(activePage as any)) {
       // Stay on current global page when switching servers to prevent flickering
       // No navigation needed - just update the server

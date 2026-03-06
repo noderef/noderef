@@ -173,6 +173,25 @@ export const useDesktopClipboardHandlers = ({
       const container = containerRef.current;
       if (!container) return;
 
+      // Handle Ctrl/Cmd+A for editable targets in desktop mode.
+      // Some Neutralino contexts do not reliably apply native select-all.
+      if (key === 'a') {
+        const editableTarget = getEditableTarget(event.target);
+        if (
+          enableCopyCut &&
+          editableTarget &&
+          (editableTarget instanceof HTMLInputElement ||
+            editableTarget instanceof HTMLTextAreaElement)
+        ) {
+          if (!container.contains(editableTarget)) return;
+          event.preventDefault();
+          event.stopPropagation();
+          editableTarget.focus();
+          editableTarget.setSelectionRange(0, editableTarget.value.length);
+        }
+        return;
+      }
+
       // Handle Ctrl+C/X for copy/cut
       if (key === 'c' || key === 'x') {
         const editableTarget = getEditableTarget(event.target);

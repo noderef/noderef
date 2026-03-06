@@ -266,6 +266,10 @@ export function getPageActions(
       ],
       moreMenuActions: [],
     },
+    'saved-search-new': {
+      actionIcons: [],
+      moreMenuActions: [],
+    },
 
     agentPage: {
       actionIcons: [],

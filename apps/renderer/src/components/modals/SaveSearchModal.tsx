@@ -524,6 +524,10 @@ export function SaveSearchModal() {
             required
             disabled={formDisabled}
             data-field="name"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
           />
 
           <Textarea
@@ -581,12 +585,16 @@ export function SaveSearchModal() {
                         }
                         onChange={event => {
                           const value = event.currentTarget.value;
-                          const hasColon = value.includes(':');
                           setPropertyInput(value);
-                          if (hasColon) {
+                          if (value.trim().length > 0) {
                             combobox.openDropdown();
                           } else {
                             combobox.closeDropdown();
+                          }
+                        }}
+                        onFocus={() => {
+                          if (propertyInput.trim().length > 0) {
+                            combobox.openDropdown();
                           }
                         }}
                         onKeyDown={event => {
@@ -609,6 +617,10 @@ export function SaveSearchModal() {
                             handleRemoveColumn(last);
                           }
                         }}
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck={false}
                       />
                     </Combobox.EventsTarget>
                   </Pill.Group>

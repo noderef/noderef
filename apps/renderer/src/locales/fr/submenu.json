@@ -13,6 +13,7 @@
   "repository": "Repository",
   "system": "Système",
   "search": "Recherche",
+  "noSavedSearchesYet": "Aucune recherche enregistrée pour le moment.",
   "agentPage": "Agent",
   "waitingApproval": "En attente d'approbation",
   "jsConsole": "JavaScript Console",

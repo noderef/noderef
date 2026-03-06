@@ -13,6 +13,7 @@
   "repository": "Repository",
   "system": "Systeem",
   "search": "Zoeken",
+  "noSavedSearchesYet": "Nog geen opgeslagen zoekopdrachten.",
   "agentPage": "Agent",
   "waitingApproval": "Wachten op goedkeuring",
   "jsConsole": "JavaScript Console",

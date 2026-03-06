@@ -118,7 +118,7 @@ const formatElapsedCompact = (date: Date | string | null | undefined): string =>
 };
 
 export function SimpleMenuNavigation() {
-  const { t } = useTranslation(['submenu', 'addServer', 'agent']);
+  const { t } = useTranslation(['submenu', 'addServer', 'agent', 'search']);
   const { activeServerId, activePage, navigate, setActiveServer } = useNavigation();
   const getServerById = useServersStore(state => state.getServerById);
 
@@ -172,17 +172,7 @@ export function SimpleMenuNavigation() {
               activePage === 'agentPage';
 
             if (!shouldPreservePage) {
-              if (searches.length > 0) {
-                const defaultSearch = searches.find(s => s.isDefault);
-                if (defaultSearch) {
-                  setActiveSavedSearchId(defaultSearch.id);
-                  navigate('saved-search');
-                } else {
-                  navigate('saved-search');
-                }
-              } else {
-                navigate('jsconsole');
-              }
+              navigate('jsconsole');
             }
           }
         } else {
@@ -449,6 +439,15 @@ export function SimpleMenuNavigation() {
         icon: 'search',
         collapsible: true,
         initiallyOpened: shouldOpen,
+        showWhenEmpty: true,
+        emptyLabel: t('submenu:noSavedSearchesYet'),
+        actions: [
+          {
+            id: 'create-search',
+            icon: 'plus',
+            label: t('search:newSavedSearch'),
+          },
+        ],
         items: savedSearchItems,
       },
     ];
@@ -612,13 +611,6 @@ export function SimpleMenuNavigation() {
   const repositoryIcon = getIconComponent('folder');
   const systemTreeIcon = getIconComponent('settings');
 
-  const searchSection = sections.find(section => section.id === 'search-main');
-  const nonSearchSections = sections.filter(section => section.id !== 'search-main');
-  const showSearchFirst = !isNodeRefSpace && savedSearches.length > 0 && Boolean(searchSection);
-
-  const sectionsBeforeTopLevel = showSearchFirst && searchSection ? [searchSection] : [];
-  const sectionsAfterTopLevel = showSearchFirst ? nonSearchSections : sections;
-
   const renderSections = (items: MenuSectionType[]) =>
     items.map(section => {
       const isSearchSection = section.id === 'search-main';
@@ -652,7 +644,10 @@ export function SimpleMenuNavigation() {
           }
           onItemRename={isSearchSection ? handleRenameSavedSearch : undefined}
           onSectionAction={(sectionData, actionId) => {
-            if (sectionData.id === 'agent-main') {
+            if (sectionData.id === 'search-main' && actionId === 'create-search') {
+              setActiveSavedSearchId(null);
+              navigate('saved-search-new');
+            } else if (sectionData.id === 'agent-main') {
               if (actionId === 'create-chat') {
                 void handleCreateAgentChat();
               } else if (actionId === 'search-chats') {
@@ -680,15 +675,11 @@ export function SimpleMenuNavigation() {
           {/* NodeRef Space primary navigation */}
           {isNodeRefSpace && renderMenuItems(nodeRefPrimaryMenuItems)}
 
-          {/* Saved searches should stay on top when available */}
-          {(isNodeRefSpace || server?.serverType === 'alfresco') &&
-            renderSections(sectionsBeforeTopLevel)}
-
           {/* JavaScript Console next (server context) */}
           {!isNodeRefSpace && renderMenuItems(topLevelItems)}
 
           {(isNodeRefSpace || server?.serverType === 'alfresco') &&
-            renderSections(sectionsAfterTopLevel)}
+            renderSections(sections)}
 
           {/* NodeRef Space secondary navigation */}
           {isNodeRefSpace && renderMenuItems(nodeRefSecondaryMenuItems)}

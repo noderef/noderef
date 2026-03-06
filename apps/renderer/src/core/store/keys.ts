@@ -29,7 +29,8 @@ export type PageKey =
   | 'node-browser'
   | 'file-folder-browser'
   | 'text-editor'
-  | 'saved-search';
+  | 'saved-search'
+  | 'saved-search-new';
 
 export type ModalKey =
   | 'settings'
@@ -58,6 +59,7 @@ export const PAGE_KEYS: Record<string, PageKey> = {
   FILE_FOLDER_BROWSER: 'file-folder-browser',
   TEXT_EDITOR: 'text-editor',
   SAVED_SEARCH: 'saved-search',
+  SAVED_SEARCH_NEW: 'saved-search-new',
 } as const;
 
 export const MODAL_KEYS: Record<string, ModalKey> = {

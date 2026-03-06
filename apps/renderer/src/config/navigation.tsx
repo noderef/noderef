@@ -22,6 +22,7 @@ import { AgentPage } from '@/pages/AgentPage';
 import { NodeBrowserPage } from '@/pages/NodeBrowserPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { SavedSearchPage } from '@/pages/SavedSearchPage';
+import { SavedSearchNewPage } from '@/pages/SavedSearchNewPage';
 import { SearchPage } from '@/pages/SearchPage';
 import { ComponentType, lazy } from 'react';
 
@@ -78,6 +79,12 @@ export const routes: Record<PageKey, RouteConfig> = {
     defaultTitle: 'Saved search',
     icon: 'search',
     component: SavedSearchPage,
+  },
+  'saved-search-new': {
+    title: 'search:newSavedSearchPage',
+    defaultTitle: 'New search',
+    icon: 'search',
+    component: SavedSearchNewPage,
   },
   jsconsole: {
     title: 'submenu:jsConsole',
