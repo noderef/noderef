@@ -176,7 +176,9 @@ export function MenuItem({
                 width: 20,
                 height: 20,
                 flexShrink: 0,
-                color: active ? 'var(--submenu-item-active-color)' : 'var(--submenu-item-icon-color)',
+                color: active
+                  ? 'var(--submenu-item-active-color)'
+                  : 'var(--submenu-item-icon-color)',
               }}
             >
               {icon}

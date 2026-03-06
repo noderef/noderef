@@ -211,8 +211,10 @@ export function SettingsModal() {
   const syncMaskingTestScroll = useCallback((source: 'input' | 'output') => {
     if (maskingTestScrollSyncingRef.current) return;
 
-    const sourceEl = source === 'input' ? maskingTestInputRef.current : maskingTestOutputRef.current;
-    const targetEl = source === 'input' ? maskingTestOutputRef.current : maskingTestInputRef.current;
+    const sourceEl =
+      source === 'input' ? maskingTestInputRef.current : maskingTestOutputRef.current;
+    const targetEl =
+      source === 'input' ? maskingTestOutputRef.current : maskingTestInputRef.current;
     if (!sourceEl || !targetEl) return;
 
     const sourceMax = Math.max(0, sourceEl.scrollHeight - sourceEl.clientHeight);

@@ -1,5 +1,17 @@
 /**
- * Copyright 2025-2026 NodeRef — Apache 2.0
+ * Copyright 2025-2026 NodeRef
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 import { isRecord, normalizeNodePath } from './nodeResultHelpers.js';
@@ -52,15 +64,21 @@ function toPermissionSummary(value: unknown): PermissionSummary | null {
   };
 }
 
-export function extractPermissionsState(entry: unknown, fallbackNodeId: string): NodePermissionsState {
+export function extractPermissionsState(
+  entry: unknown,
+  fallbackNodeId: string
+): NodePermissionsState {
   const nodeEntry = isRecord(entry) ? entry : {};
   const permissions = isRecord(nodeEntry.permissions) ? nodeEntry.permissions : {};
 
-  const nodeId = typeof nodeEntry.id === 'string' && nodeEntry.id.trim() ? nodeEntry.id : fallbackNodeId;
+  const nodeId =
+    typeof nodeEntry.id === 'string' && nodeEntry.id.trim() ? nodeEntry.id : fallbackNodeId;
   const name = typeof nodeEntry.name === 'string' && nodeEntry.name.trim() ? nodeEntry.name : null;
 
   const pathName =
-    isRecord(nodeEntry.path) && typeof nodeEntry.path.name === 'string' ? nodeEntry.path.name : undefined;
+    isRecord(nodeEntry.path) && typeof nodeEntry.path.name === 'string'
+      ? nodeEntry.path.name
+      : undefined;
 
   const localPermissions = Array.isArray(permissions.locallySet)
     ? permissions.locallySet
@@ -83,7 +101,9 @@ export function extractPermissionsState(entry: unknown, fallbackNodeId: string):
     name,
     path: normalizeNodePath(pathName),
     isInheritanceEnabled:
-      typeof permissions.isInheritanceEnabled === 'boolean' ? permissions.isInheritanceEnabled : null,
+      typeof permissions.isInheritanceEnabled === 'boolean'
+        ? permissions.isInheritanceEnabled
+        : null,
     localPermissions,
     inheritedPermissions,
     settablePermissions,

@@ -340,7 +340,14 @@ export const NodeMentionList = forwardRef<MentionListRef, NodeMentionSuggestionP
             </Stack>
           </div>
           {props.loading && (
-            <Group justify="center" mt="xs" pt="sm" pb="sm" gap={6} style={{ pointerEvents: 'none' }}>
+            <Group
+              justify="center"
+              mt="xs"
+              pt="sm"
+              pb="sm"
+              gap={6}
+              style={{ pointerEvents: 'none' }}
+            >
               <Loader size="xs" style={{ opacity: 0.7 }} />
               <Text size="sm" c="dimmed" fw={400} style={{ opacity: 0.72, fontFamily: 'inherit' }}>
                 {t('loadingMoreResults')}

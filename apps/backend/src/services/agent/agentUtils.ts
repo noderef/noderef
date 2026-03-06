@@ -230,7 +230,10 @@ export function stripHorizontalRules(value: string): string {
   const withoutHtmlHr = value.replace(/<hr\s*\/?>/gi, '');
   return withoutHtmlHr
     .split(/\r?\n/)
-    .filter(line => !/^\s*(?:-{3,}|\*{3,}|_{3,}|(?:-\s+){2,}-?|(?:\*\s+){2,}\*?|(?:_\s+){2,}_?)\s*$/.test(line))
+    .filter(
+      line =>
+        !/^\s*(?:-{3,}|\*{3,}|_{3,}|(?:-\s+){2,}-?|(?:\*\s+){2,}\*?|(?:_\s+){2,}_?)\s*$/.test(line)
+    )
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();

@@ -177,7 +177,9 @@ export function SavedSearchNewPage() {
     return alfrescoServers.find(server => server.id === resolvedServerId) || null;
   }, [activeServerId, alfrescoServers, isNodeRefSpaceContext, serverId]);
   const baseUrl = selectedServer?.baseUrl ?? null;
-  const { dictionary, loading: loadingDictionary } = useSearchDictionary(selectedServer?.id ?? null);
+  const { dictionary, loading: loadingDictionary } = useSearchDictionary(
+    selectedServer?.id ?? null
+  );
 
   const propertyPrefix = useMemo(() => {
     const match = propertyInput.match(/^([a-z0-9_-]+:)/i);
@@ -559,7 +561,11 @@ export function SavedSearchNewPage() {
                               combobox.closeDropdown();
                             }
                           }
-                        } else if (event.key === 'Backspace' && !propertyInput && columns.length > 0) {
+                        } else if (
+                          event.key === 'Backspace' &&
+                          !propertyInput &&
+                          columns.length > 0
+                        ) {
                           event.preventDefault();
                           const last = columns[columns.length - 1];
                           handleRemoveColumn(last);
@@ -719,7 +725,10 @@ export function SavedSearchNewPage() {
                               item.mimeType || 'application/octet-stream'
                             );
                             return (
-                              <FileIcon size={16} style={{ color: 'var(--mantine-color-gray-7)' }} />
+                              <FileIcon
+                                size={16}
+                                style={{ color: 'var(--mantine-color-gray-7)' }}
+                              />
                             );
                           })()}
                         </Table.Td>

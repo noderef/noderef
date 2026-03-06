@@ -678,8 +678,7 @@ export function SimpleMenuNavigation() {
           {/* JavaScript Console next (server context) */}
           {!isNodeRefSpace && renderMenuItems(topLevelItems)}
 
-          {(isNodeRefSpace || server?.serverType === 'alfresco') &&
-            renderSections(sections)}
+          {(isNodeRefSpace || server?.serverType === 'alfresco') && renderSections(sections)}
 
           {/* NodeRef Space secondary navigation */}
           {isNodeRefSpace && renderMenuItems(nodeRefSecondaryMenuItems)}

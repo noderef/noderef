@@ -1,27 +1,38 @@
 /**
- * Copyright 2025-2026 NodeRef — Apache 2.0
+ * Copyright 2025-2026 NodeRef
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 import { NodesApi } from '@alfresco/js-api';
-import { getAlfrescoNodeContentPath, getAlfrescoNodePath } from '../../../../lib/alfresco-endpoints.js';
+import {
+  getAlfrescoNodeContentPath,
+  getAlfrescoNodePath,
+} from '../../../../lib/alfresco-endpoints.js';
 import type { AgentExecutionContext } from '../../types.js';
 import {
   buildContentRequestPreview,
   extractContentCandidate,
   normalizeContentArg,
 } from '../helpers/contentNormalization.js';
-import {
-  buildNodeMetadataQuery,
-  toNodeSummary,
-} from '../helpers/nodeResultHelpers.js';
+import { buildNodeMetadataQuery, toNodeSummary } from '../helpers/nodeResultHelpers.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
 
 const MAX_TRACE_CONTENT_CHARS = 4000;
 
 export const nodeUpdateContentTool: ToolDefinition = {
   name: 'node_update_content',
-  description:
-    'Replace file content for an existing node, with optional versioning fields.',
+  description: 'Replace file content for an existing node, with optional versioning fields.',
   skill: { kind: 'local_md', path: '../skills/node_update_content.md', version: 1 },
   inputSchema: {
     type: 'object',
@@ -60,7 +71,8 @@ export const nodeUpdateContentTool: ToolDefinition = {
       if (!normalizedContent) {
         return {
           ok: false,
-          error: 'content is required and must be string/array/object (or provide text/value/body/data)',
+          error:
+            'content is required and must be string/array/object (or provide text/value/body/data)',
         };
       }
 

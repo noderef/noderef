@@ -64,14 +64,7 @@ export interface MaskingOptions {
 const DEFAULT_EXACT_KEYS = ['cm:creator', 'cm:modifier', 'cm:email'];
 const DEFAULT_PREFIXES = ['displayName'];
 
-const DEFAULT_PRESERVE_KEYS = [
-  'id',
-  'name',
-  'nodeType',
-  'path',
-  'isFile',
-  'isFolder',
-];
+const DEFAULT_PRESERVE_KEYS = ['id', 'name', 'nodeType', 'path', 'isFile', 'isFolder'];
 
 const INTERNAL_SALT = 'noderef-masking-v1-internal-salt';
 const SAFE_REGEX_FLAGS = new Set(['g', 'i', 'm']);
@@ -207,7 +200,9 @@ function sanitizeStringArray(raw: unknown, max: number): string[] {
 function sanitizeFlags(flags: string): string {
   const normalized = flags.toLowerCase();
   const orderedFlags: Array<'g' | 'i' | 'm'> = ['g', 'i', 'm'];
-  return orderedFlags.filter(flag => SAFE_REGEX_FLAGS.has(flag) && normalized.includes(flag)).join('');
+  return orderedFlags
+    .filter(flag => SAFE_REGEX_FLAGS.has(flag) && normalized.includes(flag))
+    .join('');
 }
 
 // ── Masking Core ───────────────────────────────────────────────────────────────
@@ -294,7 +289,11 @@ interface TraversalState {
   tokenMap?: Map<string, string>;
 }
 
-function maskCircularReference(compiled: CompiledConfig, stats: MaskingStats, state: TraversalState) {
+function maskCircularReference(
+  compiled: CompiledConfig,
+  stats: MaskingStats,
+  state: TraversalState
+) {
   stats.maskedFields += 1;
   return maskStringValue('[CIRCULAR_REFERENCE]', compiled.mode, compiled.hmacKey, state.tokenMap);
 }
@@ -425,7 +424,9 @@ export function maskPayload(
   }
 
   if (Array.isArray(payload)) {
-    const masked = payload.map((item, index) => maskValue(item, `[${index}]`, compiled, stats, state));
+    const masked = payload.map((item, index) =>
+      maskValue(item, `[${index}]`, compiled, stats, state)
+    );
     return { masked, stats };
   }
 
@@ -437,7 +438,10 @@ export function maskPayload(
   return { masked: payload, stats };
 }
 
-export function detokenizeText(text: string, tokenMap: Map<string, string> | null | undefined): string {
+export function detokenizeText(
+  text: string,
+  tokenMap: Map<string, string> | null | undefined
+): string {
   if (!tokenMap || tokenMap.size === 0 || !text) {
     return text;
   }

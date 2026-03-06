@@ -1,9 +1,24 @@
 /**
- * Copyright 2025-2026 NodeRef — Apache 2.0
+ * Copyright 2025-2026 NodeRef
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 import { GroupsApi } from '@alfresco/js-api';
-import { getAlfrescoGroupMembersPath, getAlfrescoGroupPath } from '../../../../lib/alfresco-endpoints.js';
+import {
+  getAlfrescoGroupMembersPath,
+  getAlfrescoGroupPath,
+} from '../../../../lib/alfresco-endpoints.js';
 import type { AgentExecutionContext } from '../../types.js';
 import { normalizeGroupId } from '../helpers/groupHelpers.js';
 import { isRecord } from '../helpers/nodeResultHelpers.js';
@@ -41,8 +56,7 @@ export const groupGetTool: ToolDefinition = {
         return { ok: false, error: 'groupId is required' };
       }
 
-      const includeMembers =
-        typeof args.includeMembers === 'boolean' ? args.includeMembers : true;
+      const includeMembers = typeof args.includeMembers === 'boolean' ? args.includeMembers : true;
       const maxMembersRaw =
         typeof args.maxMembers === 'number' && Number.isFinite(args.maxMembers)
           ? Math.max(0, Math.min(Math.floor(args.maxMembers), 200))
@@ -63,8 +77,11 @@ export const groupGetTool: ToolDefinition = {
       const groupEntry = (groupResult as any)?.entry ?? groupResult;
 
       let membersResult: unknown = null;
-      let members: Array<{ id: string | null; displayName: string | null; memberType: 'GROUP' | 'PERSON' }> =
-        [];
+      let members: Array<{
+        id: string | null;
+        displayName: string | null;
+        memberType: 'GROUP' | 'PERSON';
+      }> = [];
       let pagination = {
         totalCount: 0,
         hasMoreItems: false,
@@ -85,13 +102,17 @@ export const groupGetTool: ToolDefinition = {
         }
 
         membersResult = await groupsApi.listGroupMemberships(groupId, membersQuery);
-        const memberList = isRecord((membersResult as any)?.list) ? (membersResult as any).list : {};
+        const memberList = isRecord((membersResult as any)?.list)
+          ? (membersResult as any).list
+          : {};
         const memberEntries = Array.isArray(memberList.entries) ? memberList.entries : [];
         const membersPagination = isRecord(memberList.pagination) ? memberList.pagination : {};
 
         members = memberEntries
           .map((item: unknown) => (isRecord((item as any)?.entry) ? (item as any).entry : null))
-          .filter((entry: Record<string, unknown> | null): entry is Record<string, unknown> => Boolean(entry))
+          .filter((entry: Record<string, unknown> | null): entry is Record<string, unknown> =>
+            Boolean(entry)
+          )
           .map((entry: Record<string, unknown>) => ({
             id: typeof entry.id === 'string' ? entry.id : null,
             displayName: typeof entry.displayName === 'string' ? entry.displayName : null,
@@ -99,7 +120,8 @@ export const groupGetTool: ToolDefinition = {
           }));
 
         const totalCount =
-          typeof membersPagination.totalItems === 'number' && Number.isFinite(membersPagination.totalItems)
+          typeof membersPagination.totalItems === 'number' &&
+          Number.isFinite(membersPagination.totalItems)
             ? membersPagination.totalItems
             : members.length;
         const hasMoreItems =

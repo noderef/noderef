@@ -1702,9 +1702,7 @@ export function AgentPage() {
         event.preventDefault();
         event.stopPropagation();
 
-        const codeElement = copyButton
-          .closest('.agent-code-block')
-          ?.querySelector('pre > code');
+        const codeElement = copyButton.closest('.agent-code-block')?.querySelector('pre > code');
         const code = codeElement?.textContent ?? '';
         if (!code.trim()) {
           return;
@@ -1822,7 +1820,9 @@ export function AgentPage() {
               <AgentEmptyState
                 chatId={activeChat?.id}
                 aiUnavailable={showAiUnavailableState}
-                noServerSelected={activeServerId === null && activeChatId === null && servers.length > 0}
+                noServerSelected={
+                  activeServerId === null && activeChatId === null && servers.length > 0
+                }
                 onOpenSettings={openSettings}
               />
             ) : (

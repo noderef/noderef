@@ -1,15 +1,24 @@
 /**
- * Copyright 2025-2026 NodeRef — Apache 2.0
+ * Copyright 2025-2026 NodeRef
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 import { NodesApi } from '@alfresco/js-api';
 import { getAlfrescoNodePath } from '../../../../lib/alfresco-endpoints.js';
 import type { AgentExecutionContext } from '../../types.js';
 import { isRecord } from '../helpers/nodeResultHelpers.js';
-import {
-  extractPermissionsState,
-  type PermissionSummary,
-} from '../helpers/permissionsHelpers.js';
+import { extractPermissionsState, type PermissionSummary } from '../helpers/permissionsHelpers.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
 
 interface PermissionChange {
@@ -54,7 +63,9 @@ function parsePermissionChanges(value: unknown): PermissionChange[] {
   return parsed;
 }
 
-function toPermissionMap(localPermissions: PermissionSummary[]): Map<string, PermissionElementPayload> {
+function toPermissionMap(
+  localPermissions: PermissionSummary[]
+): Map<string, PermissionElementPayload> {
   const map = new Map<string, PermissionElementPayload>();
   for (const item of localPermissions) {
     const key = `${item.authority}::${item.role}`;
@@ -69,7 +80,8 @@ function toPermissionMap(localPermissions: PermissionSummary[]): Map<string, Per
 
 export const permissionsSetTool: ToolDefinition = {
   name: 'permissions_set',
-  description: 'Update node ACLs by toggling inheritance and adding/removing local permission entries.',
+  description:
+    'Update node ACLs by toggling inheritance and adding/removing local permission entries.',
   skill: { kind: 'local_md', path: '../skills/permissions_set.md', version: 1 },
   inputSchema: {
     type: 'object',

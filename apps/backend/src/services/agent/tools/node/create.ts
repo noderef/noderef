@@ -1,5 +1,17 @@
 /**
- * Copyright 2025-2026 NodeRef — Apache 2.0
+ * Copyright 2025-2026 NodeRef
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 import { NodesApi } from '@alfresco/js-api';
@@ -14,10 +26,7 @@ import {
   extractContentCandidate,
   normalizeContentArg,
 } from '../helpers/contentNormalization.js';
-import {
-  buildNodeMetadataQuery,
-  toNodeSummary,
-} from '../helpers/nodeResultHelpers.js';
+import { buildNodeMetadataQuery, toNodeSummary } from '../helpers/nodeResultHelpers.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
 
 const MAX_TRACE_CONTENT_CHARS = 4000;
@@ -30,7 +39,10 @@ export const nodeCreateTool: ToolDefinition = {
   inputSchema: {
     type: 'object',
     properties: {
-      parentId: { type: 'string', description: 'Parent folder node ID where the new node will be created' },
+      parentId: {
+        type: 'string',
+        description: 'Parent folder node ID where the new node will be created',
+      },
       name: { type: 'string', description: 'Name of the new node' },
       nodeType: {
         type: 'string',
@@ -63,7 +75,10 @@ export const nodeCreateTool: ToolDefinition = {
         return { ok: false, error: 'parentId and name are required' };
       }
 
-      const nodeType = typeof args.nodeType === 'string' && args.nodeType.trim() ? args.nodeType.trim() : 'cm:content';
+      const nodeType =
+        typeof args.nodeType === 'string' && args.nodeType.trim()
+          ? args.nodeType.trim()
+          : 'cm:content';
       const properties =
         args.properties && typeof args.properties === 'object' && !Array.isArray(args.properties)
           ? (args.properties as Record<string, unknown>)
@@ -82,7 +97,10 @@ export const nodeCreateTool: ToolDefinition = {
       }
       const content = normalizedContent?.content ?? null;
       if (contentProvided && nodeType === 'cm:folder') {
-        return { ok: false, error: 'content cannot be provided when creating a folder (cm:folder)' };
+        return {
+          ok: false,
+          error: 'content cannot be provided when creating a folder (cm:folder)',
+        };
       }
 
       const requestBody: Record<string, unknown> = {
@@ -107,7 +125,10 @@ export const nodeCreateTool: ToolDefinition = {
       const createdId = typeof createdEntry?.id === 'string' ? createdEntry.id.trim() : '';
       if (contentProvided) {
         if (!createdId) {
-          return { ok: false, error: 'Node was created but no id was returned; cannot update content' };
+          return {
+            ok: false,
+            error: 'Node was created but no id was returned; cannot update content',
+          };
         }
 
         try {

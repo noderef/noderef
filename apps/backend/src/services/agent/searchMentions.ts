@@ -79,10 +79,7 @@ function normalizeOptionalText(value: unknown): string | null {
   return trimmed.length ? trimmed : null;
 }
 
-export async function searchMentions(
-  ctx: AgentExecutionContext,
-  payload: SearchMentionsPayload
-) {
+export async function searchMentions(ctx: AgentExecutionContext, payload: SearchMentionsPayload) {
   const query = payload.query.trim();
   if (!query) {
     return {
@@ -159,7 +156,8 @@ export async function searchMentions(
 
     for (const entry of people.list?.entries || []) {
       const person = entry.entry;
-      const label = [person.firstName, person.lastName].filter(Boolean).join(' ').trim() || person.id;
+      const label =
+        [person.firstName, person.lastName].filter(Boolean).join(' ').trim() || person.id;
       const haystack = `${person.id || ''} ${label} ${person.email || ''}`.toLowerCase();
       if (!haystack.includes(lowered)) {
         continue;
@@ -222,7 +220,9 @@ export async function searchMentions(
     })
     .sort((a, b) => (a.score !== b.score ? a.score - b.score : a.label.localeCompare(b.label)));
 
-  const page = ranked.slice(skipCount, skipCount + maxItems).map(({ score: _score, ...rest }) => rest);
+  const page = ranked
+    .slice(skipCount, skipCount + maxItems)
+    .map(({ score: _score, ...rest }) => rest);
 
   return {
     items: page,
