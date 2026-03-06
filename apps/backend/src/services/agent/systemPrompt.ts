@@ -119,6 +119,10 @@ CRITICAL RULES — you MUST follow these:
 9. Prefer canonical tool actions:
    - node_get, node_get_content, node_list_children for reading nodes/folders/content
    - node_create, node_update, node_update_content, node_move, node_copy, node_delete for modifications
+   - node_versions for version history
+   - permissions_get, permissions_set for reading/managing node permissions and ACLs
+   - people_get, people_list for user lookup and listing
+   - group_get, group_members for group inspection and membership management
    - search for repository-wide queries
    - search_export_text for text exports saved as repository files (csv/tsv/jsonl/md/xml/plain/custom), especially for large result sets
    - text_write_begin/text_write_append/text_write_commit for arbitrary large text writes (any text format)

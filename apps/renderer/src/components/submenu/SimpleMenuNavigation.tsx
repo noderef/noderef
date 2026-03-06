@@ -276,7 +276,7 @@ export function SimpleMenuNavigation() {
       if (!isNaN(chatId)) {
         setActiveChatId(chatId);
         const chat = agentChats.find(entry => entry.id === chatId);
-        if (chat) {
+        if (chat && !isNodeRefSpace) {
           setActiveServer(chat.serverId);
         }
         navigate('agentPage');
@@ -465,15 +465,21 @@ export function SimpleMenuNavigation() {
       return bTime - aTime;
     });
 
-    const chatItems: MenuItemType[] = sortedChats.map(chat => ({
-      id: `agent-chat-${chat.id}`,
-      label: chat.title,
-      icon: chat.hasActiveRun ? 'loading' : chat.chatIcon || 'hash',
-      viewMode: 'monaco' as const,
-      badgeLabel: chat.hasWaitingConfirmation ? t('submenu:waitingApproval') : undefined,
-      badgeColor: 'green',
-      metaLabel: formatElapsedCompact(chat.lastMessageAt || chat.updatedAt),
-    }));
+    const chatItems: MenuItemType[] = sortedChats.map(chat => {
+      const chatServer = getServerById(chat.serverId);
+      const serverLabel = chatServer?.label || chatServer?.name;
+      return {
+        id: `agent-chat-${chat.id}`,
+        label: chat.title,
+        icon: chat.hasActiveRun ? 'loading' : chat.chatIcon || 'hash',
+        viewMode: 'monaco' as const,
+        badgeLabel: chat.hasWaitingConfirmation ? t('submenu:waitingApproval') : undefined,
+        badgeColor: 'green',
+        metaLabel: isNodeRefSpace
+          ? serverLabel || `#${chat.serverId}`
+          : formatElapsedCompact(chat.lastMessageAt || chat.updatedAt),
+      };
+    });
 
     const persistedOpened = getPersistedSectionOpened(activeServerId, 'agent-main');
     const shouldOpen = persistedOpened ?? true;
@@ -507,7 +513,7 @@ export function SimpleMenuNavigation() {
         items: chatItems,
       },
     ];
-  }, [activeServerId, agentChats, t]);
+  }, [activeServerId, agentChats, getServerById, isNodeRefSpace, t]);
 
   // Web section (separate for ordering - appears after JavaScript Console)
   // Repository Admin is now in the submenu header dropdown as an external link
@@ -522,7 +528,7 @@ export function SimpleMenuNavigation() {
     },
   ];
 
-  const nodeRefMenuItems: MenuItemType[] = isNodeRefSpace
+  const nodeRefPrimaryMenuItems: MenuItemType[] = isNodeRefSpace
     ? [
         dashboardItem,
         {
@@ -531,6 +537,11 @@ export function SimpleMenuNavigation() {
           icon: 'code',
           viewMode: 'monaco' as const,
         },
+      ]
+    : [];
+
+  const nodeRefSecondaryMenuItems: MenuItemType[] = isNodeRefSpace
+    ? [
         {
           id: 'files',
           label: t('submenu:files'),
@@ -557,7 +568,8 @@ export function SimpleMenuNavigation() {
   const hasAnyItems =
     sections.some(s => s.items.length > 0) ||
     topLevelItems.length > 0 ||
-    nodeRefMenuItems.length > 0;
+    nodeRefPrimaryMenuItems.length > 0 ||
+    nodeRefSecondaryMenuItems.length > 0;
 
   if (!hasAnyItems) {
     return (
@@ -602,7 +614,7 @@ export function SimpleMenuNavigation() {
 
   const searchSection = sections.find(section => section.id === 'search-main');
   const nonSearchSections = sections.filter(section => section.id !== 'search-main');
-  const showSearchFirst = savedSearches.length > 0 && Boolean(searchSection);
+  const showSearchFirst = !isNodeRefSpace && savedSearches.length > 0 && Boolean(searchSection);
 
   const sectionsBeforeTopLevel = showSearchFirst && searchSection ? [searchSection] : [];
   const sectionsAfterTopLevel = showSearchFirst ? nonSearchSections : sections;
@@ -666,7 +678,7 @@ export function SimpleMenuNavigation() {
       <div style={{ padding: 'var(--mantine-spacing-md)' }}>
         <Stack gap="xs">
           {/* NodeRef Space primary navigation */}
-          {isNodeRefSpace && renderMenuItems(nodeRefMenuItems)}
+          {isNodeRefSpace && renderMenuItems(nodeRefPrimaryMenuItems)}
 
           {/* Saved searches should stay on top when available */}
           {(isNodeRefSpace || server?.serverType === 'alfresco') &&
@@ -677,6 +689,9 @@ export function SimpleMenuNavigation() {
 
           {(isNodeRefSpace || server?.serverType === 'alfresco') &&
             renderSections(sectionsAfterTopLevel)}
+
+          {/* NodeRef Space secondary navigation */}
+          {isNodeRefSpace && renderMenuItems(nodeRefSecondaryMenuItems)}
 
           {/* Repository Tree Section for Alfresco servers */}
           {!isNodeRefSpace && server?.serverType === 'alfresco' && (

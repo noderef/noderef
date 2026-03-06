@@ -1,18 +1,20 @@
 import { backendRpc } from '@/core/ipc/backend';
 import { Box, Button, Text } from '@mantine/core';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BrandLogo } from '../BrandLogo';
 
 interface AgentEmptyStateProps {
   chatId?: number | null;
   aiUnavailable?: boolean;
+  noServerSelected?: boolean;
   onOpenSettings?: () => void;
 }
 
 export function AgentEmptyState({
   chatId,
   aiUnavailable = false,
+  noServerSelected = false,
   onOpenSettings,
 }: AgentEmptyStateProps) {
   const { t } = useTranslation('agent');
@@ -20,14 +22,12 @@ export function AgentEmptyState({
     fullName: string | null;
     username: string;
   } | null>(null);
-  const fallbackVariantRef = useRef(Math.floor(Math.random() * 3) + 1);
   const welcomeVariant = useMemo(() => {
     if (typeof chatId === 'number') {
       const seed = Math.abs(chatId);
       return (seed % 3) + 1;
     }
-    // No active chat yet: pick one random variant per mounted empty-state session.
-    return fallbackVariantRef.current;
+    return 1;
   }, [chatId]);
 
   useEffect(() => {
@@ -86,6 +86,11 @@ export function AgentEmptyState({
           <Text size="md" c="dimmed">
             {t('howCanIHelp')}
           </Text>
+          {noServerSelected ? (
+            <Text size="sm" c="dimmed" mt={6}>
+              {t('selectServerHint')}
+            </Text>
+          ) : null}
         </>
       )}
     </Box>

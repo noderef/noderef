@@ -4,8 +4,8 @@
 
 import axios from 'axios';
 import { buildAlfrescoUrl } from '../../../../lib/alfresco-url.js';
-import { AppErrors } from '../../../../lib/errors.js';
 import type { AgentExecutionContext } from '../../types.js';
+import { buildAuthHeader } from '../helpers/authHeaders.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
 
 export const scriptExecuteTool: ToolDefinition = {
@@ -38,16 +38,7 @@ export const scriptExecuteTool: ToolDefinition = {
       );
       const executePath = `/service/${ctx.jsconsoleEndpoint.replace(/^\/+/, '')}/execute`;
 
-      let authHeader: Record<string, string>;
-      if (ctx.authType === 'openid_connect') {
-        if (!ctx.token) throw AppErrors.unauthorized('No OAuth2 access token');
-        authHeader = { Authorization: `Bearer ${ctx.token}` };
-      } else {
-        if (!ctx.username || !ctx.token) throw AppErrors.unauthorized('No credentials available');
-        authHeader = {
-          Authorization: `Basic ${Buffer.from(`${ctx.username}:${ctx.token}`).toString('base64')}`,
-        };
-      }
+      const authHeader = buildAuthHeader(ctx);
 
       const requestBody = {
         script,

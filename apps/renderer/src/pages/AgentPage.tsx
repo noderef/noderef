@@ -55,8 +55,10 @@ import {
   IconArrowUp,
   IconCheck,
   IconChevronDown,
+  IconCpu,
   IconCopy,
   IconPlayerStop,
+  IconServer2,
   IconShield,
   IconShieldCheck,
 } from '@tabler/icons-react';
@@ -396,6 +398,26 @@ interface AiModelChoice {
 const AGENT_MODEL_SELECTION_STORAGE_KEY = 'agent.selected.model.v1';
 
 const MODEL_SELECTION_GLOBAL_SCOPE = 'global';
+const MODEL_SELECT_WIDTH = 260;
+const MODEL_DROPDOWN_WIDTH = 300;
+const SERVER_SELECT_WIDTH = 160;
+const SERVER_DROPDOWN_WIDTH = 220;
+const COMPOSER_SELECT_STYLES = {
+  input: {
+    border: 'none',
+    background: 'transparent',
+    paddingLeft: 20,
+    paddingRight: 18,
+    color: 'var(--mantine-color-dimmed)',
+    fontSize: 13,
+    fontWeight: 500,
+    minHeight: 24,
+    height: 24,
+  },
+  section: {
+    pointerEvents: 'none',
+  },
+} as const;
 
 const readModelSelectionStore = (): Record<string, { provider: string; model: string }> => {
   try {
@@ -857,6 +879,9 @@ export function AgentPage() {
   const [loadingConversation, setLoadingConversation] = useState(false);
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState('');
+  const [composerServerId, setComposerServerId] = useState<number | null>(
+    () => servers[0]?.id ?? null
+  );
 
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionQuerySession, setMentionQuerySession] = useState(0);
@@ -903,7 +928,15 @@ export function AgentPage() {
     () => chats.find(chat => chat.id === activeChatId) || null,
     [chats, activeChatId]
   );
-  const modelSelectionServerId = activeChat?.serverId || activeServerId || null;
+  const composerServerOptions = useMemo(
+    () =>
+      servers.map(server => ({
+        value: String(server.id),
+        label: server.label || server.name,
+      })),
+    [servers]
+  );
+  const modelSelectionServerId = activeChat?.serverId || activeServerId || composerServerId || null;
 
   const [qnameQuery, setQnameQuery] = useState<string | null>(null);
 
@@ -1508,6 +1541,25 @@ export function AgentPage() {
 
     viewport.scrollTop = viewport.scrollHeight;
   }, [activeChatId, conversationTimeline.length, totalRunEventCount, thinkingRunIds.length]);
+
+  useEffect(() => {
+    if (activeServerId !== null || activeChatId !== null) {
+      return;
+    }
+
+    if (servers.length === 0) {
+      if (composerServerId !== null) {
+        setComposerServerId(null);
+      }
+      return;
+    }
+
+    if (composerServerId === null || !servers.some(server => server.id === composerServerId)) {
+      setComposerServerId(servers[0].id);
+      return;
+    }
+  }, [activeServerId, activeChatId, composerServerId, servers]);
+
   const handleSend = async (text: string, mentions: AgentMention[]) => {
     if (!text.trim()) {
       return;
@@ -1527,7 +1579,7 @@ export function AgentPage() {
 
       // Create chat on first message if no chat exists yet
       if (!chatId) {
-        const serverId = activeServerId || servers[0]?.id;
+        const serverId = activeServerId || composerServerId || servers[0]?.id;
         if (!serverId) {
           notifications.show({
             title: t('errors.sendMessageTitle'),
@@ -1770,6 +1822,7 @@ export function AgentPage() {
               <AgentEmptyState
                 chatId={activeChat?.id}
                 aiUnavailable={showAiUnavailableState}
+                noServerSelected={activeServerId === null && activeChatId === null && servers.length > 0}
                 onOpenSettings={openSettings}
               />
             ) : (
@@ -2065,11 +2118,12 @@ export function AgentPage() {
                   />
 
                   <Group justify="space-between" align="center" mt="xs" wrap="nowrap">
-                    <Group gap={4} align="center" wrap="nowrap">
+                    <Group gap={4} align="center" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
                       <Select
                         size="xs"
                         placeholder={t('modelPlaceholder')}
                         data={aiModelOptions}
+                        comboboxProps={{ width: MODEL_DROPDOWN_WIDTH }}
                         value={selectedAiModelOption}
                         disabled={aiModelOptions.length === 0 || aiModelsLoading}
                         variant="unstyled"
@@ -2099,25 +2153,37 @@ export function AgentPage() {
                         rightSection={
                           aiModelsLoading ? <Loader size={12} /> : <IconChevronDown size={14} />
                         }
+                        leftSection={<IconCpu size={14} />}
+                        leftSectionWidth={18}
                         rightSectionWidth={18}
-                        styles={{
-                          input: {
-                            border: 'none',
-                            background: 'transparent',
-                            paddingLeft: 0,
-                            paddingRight: 18,
-                            color: 'var(--mantine-color-dimmed)',
-                            fontSize: 13,
-                            fontWeight: 500,
-                            minHeight: 24,
-                            height: 24,
-                          },
-                          section: {
-                            pointerEvents: 'none',
-                          },
-                        }}
-                        w={220}
+                        styles={COMPOSER_SELECT_STYLES}
+                        w={MODEL_SELECT_WIDTH}
                       />
+                      {activeServerId === null && activeChatId === null ? (
+                        <Select
+                          size="xs"
+                          placeholder={t('serverSelectorPlaceholder')}
+                          data={composerServerOptions}
+                          comboboxProps={{ width: SERVER_DROPDOWN_WIDTH }}
+                          value={composerServerId ? String(composerServerId) : null}
+                          variant="unstyled"
+                          onChange={value => {
+                            if (!value) {
+                              setComposerServerId(null);
+                              return;
+                            }
+                            const parsed = Number.parseInt(value, 10);
+                            setComposerServerId(Number.isNaN(parsed) ? null : parsed);
+                          }}
+                          leftSection={<IconServer2 size={14} />}
+                          leftSectionWidth={18}
+                          rightSection={<IconChevronDown size={14} />}
+                          rightSectionWidth={18}
+                          styles={COMPOSER_SELECT_STYLES}
+                          w={SERVER_SELECT_WIDTH}
+                          aria-label={t('selectServer')}
+                        />
+                      ) : null}
                       {activeChatId ? (
                         <Tooltip
                           withArrow

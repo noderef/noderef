@@ -16,6 +16,13 @@ import { nodeListChildrenTool } from './node/list_children.js';
 import { nodeMoveTool } from './node/move.js';
 import { nodeUpdateTool } from './node/update.js';
 import { nodeUpdateContentTool } from './node/update_content.js';
+import { nodeVersionsTool } from './node/versions.js';
+import { groupGetTool } from './groups/get.js';
+import { groupMembersTool } from './groups/members.js';
+import { peopleGetTool } from './people/get.js';
+import { peopleListTool } from './people/list.js';
+import { permissionsGetTool } from './permissions/get.js';
+import { permissionsSetTool } from './permissions/set.js';
 import { searchExportTextTool } from './search/export_text.js';
 import { searchTool } from './search/query.js';
 import { scriptCreateTool } from './script/create.js';
@@ -48,7 +55,14 @@ export const ALL_TOOLS: ToolDefinition[] = [
   nodeUpdateContentTool,
   nodeMoveTool,
   nodeCopyTool,
+  nodeVersionsTool,
   nodeDeleteTool,
+  permissionsGetTool,
+  permissionsSetTool,
+  peopleGetTool,
+  peopleListTool,
+  groupGetTool,
+  groupMembersTool,
   scriptCreateTool,
   scriptExecuteTool,
 ];
@@ -79,7 +93,16 @@ const TOOL_NAME_ALIASES: Record<string, string> = {
   get_children: 'node_list_children',
   move_node: 'node_move',
   copy_node: 'node_copy',
+  get_versions: 'node_versions',
+  list_versions: 'node_versions',
   delete_nodes: 'node_delete',
+  get_permissions: 'permissions_get',
+  set_permissions: 'permissions_set',
+  get_person: 'people_get',
+  list_people: 'people_list',
+  list_users: 'people_list',
+  get_group: 'group_get',
+  manage_group_members: 'group_members',
   execute_script: 'script_execute',
   create_script: 'script_create',
   export_csv: 'search_export_text',

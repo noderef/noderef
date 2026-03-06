@@ -24,7 +24,14 @@ export type OperationName =
   | 'node_update_content'
   | 'node_move'
   | 'node_copy'
+  | 'node_versions'
   | 'node_delete'
+  | 'permissions_get'
+  | 'permissions_set'
+  | 'people_get'
+  | 'people_list'
+  | 'group_get'
+  | 'group_members'
   | 'script_create'
   | 'script_execute';
 
