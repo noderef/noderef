@@ -1,6 +1,6 @@
 import { backendRpc } from '@/core/ipc/backend';
 import { Box, Button, Text } from '@mantine/core';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BrandLogo } from '../BrandLogo';
 
@@ -20,9 +20,14 @@ export function AgentEmptyState({
     fullName: string | null;
     username: string;
   } | null>(null);
+  const fallbackVariantRef = useRef(Math.floor(Math.random() * 3) + 1);
   const welcomeVariant = useMemo(() => {
-    const seed = typeof chatId === 'number' ? Math.abs(chatId) : 0;
-    return (seed % 3) + 1;
+    if (typeof chatId === 'number') {
+      const seed = Math.abs(chatId);
+      return (seed % 3) + 1;
+    }
+    // No active chat yet: pick one random variant per mounted empty-state session.
+    return fallbackVariantRef.current;
   }, [chatId]);
 
   useEffect(() => {

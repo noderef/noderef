@@ -18,6 +18,7 @@ import { nodeUpdateTool } from './node/update.js';
 import { nodeUpdateContentTool } from './node/update_content.js';
 import { searchExportTextTool } from './search/export_text.js';
 import { searchTool } from './search/query.js';
+import { scriptCreateTool } from './script/create.js';
 import { scriptExecuteTool } from './script/execute.js';
 import { textWriteAbortTool } from './text/write_abort.js';
 import { textWriteAppendTool } from './text/write_append.js';
@@ -48,6 +49,7 @@ export const ALL_TOOLS: ToolDefinition[] = [
   nodeMoveTool,
   nodeCopyTool,
   nodeDeleteTool,
+  scriptCreateTool,
   scriptExecuteTool,
 ];
 
@@ -79,6 +81,7 @@ const TOOL_NAME_ALIASES: Record<string, string> = {
   copy_node: 'node_copy',
   delete_nodes: 'node_delete',
   execute_script: 'script_execute',
+  create_script: 'script_create',
   export_csv: 'search_export_text',
   search_export_csv: 'search_export_text',
   text_write_start: 'text_write_begin',

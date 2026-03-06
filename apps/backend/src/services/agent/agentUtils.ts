@@ -88,7 +88,11 @@ export async function createExecutionContext(
   prisma: PrismaClient,
   serverService: ServerService,
   userId: number,
-  serverId: number
+  serverId: number,
+  options?: {
+    signal?: AbortSignal;
+    aiRuntime?: ResolvedAiRuntime;
+  }
 ): Promise<AgentExecutionContext> {
   const server = await serverService.findById(userId, serverId);
   if (!server) {
@@ -105,8 +109,6 @@ export async function createExecutionContext(
     return AppErrors.unauthorized('Failed to authenticate against server');
   }
 
-  const noopController = new AbortController();
-
   return {
     api,
     serverBaseUrl: server.baseUrl,
@@ -114,7 +116,9 @@ export async function createExecutionContext(
     authType: credentials.authType,
     username: credentials.username,
     token: credentials.token,
-    signal: noopController.signal,
+    userId,
+    aiRuntime: options?.aiRuntime,
+    signal: options?.signal ?? new AbortController().signal,
   };
 }
 

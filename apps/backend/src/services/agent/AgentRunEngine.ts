@@ -45,6 +45,20 @@ const CALL_TIMEOUT_MS = (() => {
   }
   return 60_000;
 })();
+const DEFAULT_AGENT_MAX_TOKENS = (() => {
+  const configured = Number(process.env.AGENT_MAX_TOKENS);
+  if (Number.isFinite(configured) && configured >= 512 && configured <= 16_384) {
+    return Math.floor(configured);
+  }
+  return 2048;
+})();
+const LARGE_TEXT_AGENT_MAX_TOKENS = (() => {
+  const configured = Number(process.env.AGENT_LARGE_TEXT_MAX_TOKENS);
+  if (Number.isFinite(configured) && configured >= DEFAULT_AGENT_MAX_TOKENS && configured <= 16_384) {
+    return Math.floor(configured);
+  }
+  return Math.max(DEFAULT_AGENT_MAX_TOKENS, 8192);
+})();
 const MAX_TOOL_RESULT_JSON_CHARS_FOR_MODEL = 60_000;
 const MAX_API_TRACE_ENTRIES_PREVIEW = 10;
 const MAX_API_TRACE_RESPONSE_CHARS_FOR_MODEL = 4_000;
@@ -98,6 +112,12 @@ const EXPLICIT_SCRIPT_REQUEST_PATTERNS: RegExp[] = [
   /\bscript ausf[üu]hren\b/i,
 ];
 
+const EXPLICIT_CONTENT_REQUEST_PATTERNS: RegExp[] = [
+  /\b(geef|toon|laat\s+zien|open|lees)\b[\s\S]{0,80}\b(inhoud|content)\b/i,
+  /\b(show|display|open|read|get)\b[\s\S]{0,80}\b(content|contents)\b/i,
+  /\b(inhoud|file\s+content|file\s+contents)\b/i,
+];
+
 const withTimeout = <T>(p: Promise<T>, ms: number, label: string): Promise<T> => {
   let h: ReturnType<typeof setTimeout> | null = null;
   return Promise.race([
@@ -115,6 +135,68 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const toErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : typeof error === 'string' ? error : String(error);
+
+const isExplicitContentRequest = (text: string): boolean => {
+  const normalized = text.trim();
+  if (!normalized) {
+    return false;
+  }
+  return EXPLICIT_CONTENT_REQUEST_PATTERNS.some(pattern => pattern.test(normalized));
+};
+
+const buildDirectNodeContentReply = (
+  data: Record<string, unknown>,
+  preferredLanguage?: string
+): string | null => {
+  const isTextBased = data.isTextBased === true;
+  const node = isRecord(data.node) ? data.node : null;
+  const nodeName = typeof node?.name === 'string' && node.name.trim() ? node.name.trim() : 'file';
+  const isDutch = (preferredLanguage ?? '').toLowerCase().startsWith('nl');
+
+  if (!isTextBased) {
+    return isDutch
+      ? `De inhoud van **${nodeName}** lijkt niet tekst-gebaseerd (binary).`
+      : `The content of **${nodeName}** appears to be binary/non-text.`;
+  }
+
+  const codeBlock = typeof data.markdownCodeBlock === 'string' ? data.markdownCodeBlock : null;
+  if (!codeBlock) {
+    return null;
+  }
+
+  const hasMoreContent = data.hasMoreContent === true;
+  const startChar =
+    typeof data.startChar === 'number' && Number.isFinite(data.startChar) ? data.startChar : 0;
+  const endCharExclusive =
+    typeof data.endCharExclusive === 'number' && Number.isFinite(data.endCharExclusive)
+      ? data.endCharExclusive
+      : null;
+  const totalChars =
+    typeof data.totalChars === 'number' && Number.isFinite(data.totalChars) ? data.totalChars : null;
+
+  if (!hasMoreContent) {
+    return isDutch
+      ? `Hier is de inhoud van **${nodeName}**:\n\n${codeBlock}`
+      : `Here is the content of **${nodeName}**:\n\n${codeBlock}`;
+  }
+
+  const rangeText =
+    endCharExclusive !== null && totalChars !== null
+      ? `${startChar + 1}-${endCharExclusive} / ${totalChars}`
+      : null;
+
+  const continuation = isDutch
+    ? rangeText
+      ? `Dit is een deelweergave (${rangeText}). Vraag om het volgende deel om verder te gaan.`
+      : 'Dit is een deelweergave. Vraag om het volgende deel om verder te gaan.'
+    : rangeText
+      ? `This is a partial view (${rangeText}). Ask for the next part to continue.`
+      : 'This is a partial view. Ask for the next part to continue.';
+
+  return isDutch
+    ? `Hier is (een deel van) de inhoud van **${nodeName}**.\n\n${continuation}\n\n${codeBlock}`
+    : `Here is (part of) the content of **${nodeName}**.\n\n${continuation}\n\n${codeBlock}`;
+};
 
 const toTokenEstimate = (text: string): number =>
   Math.ceil(Math.max(text.length, 1) / AVG_CHARS_PER_TOKEN);
@@ -195,6 +277,11 @@ const buildFallbackStepSummary = (operation: string, args: Record<string, unknow
         return `Execute script: ${truncateText(preview.trim(), 90)}`;
       }
       return 'Execute a server script';
+    }
+    case 'script_create': {
+      const request = toNonEmptyString(args.request);
+      if (request) return `Generate script: ${truncateText(request, 90)}`;
+      return 'Generate a JavaScript Console script';
     }
     case 'search': {
       const query = toNonEmptyString(args.query);
@@ -760,6 +847,7 @@ export class AgentRunEngine {
     // ── Tool-use loop ─────────────────────────────────────────────────────────
     let stepOrdinal = await this.repository.getMaxRunStepOrdinal(input.runId);
     const contextWindow = resolveModelContextWindow(this.runtime.model);
+    let nextCallMaxTokens = DEFAULT_AGENT_MAX_TOKENS;
 
     // ── Load masking config once for the run ────────────────────────────────
     let maskingConfig: LlmMaskingConfig | null = null;
@@ -827,7 +915,7 @@ export class AgentRunEngine {
             system: maskedSystem,
             messages: maskedMessages,
             tools,
-            maxTokens: 2048,
+            maxTokens: nextCallMaxTokens,
             temperature: this.runtime.temperature,
           }),
           CALL_TIMEOUT_MS,
@@ -918,6 +1006,8 @@ export class AgentRunEngine {
         content: string;
         is_error?: boolean;
       }> = [];
+      let shouldBoostNextCallMaxTokens = false;
+      let directNodeContentReply: string | null = null;
 
       for (const [callIndex, call] of response.calls.entries()) {
         this.checkAborted();
@@ -1053,6 +1143,19 @@ export class AgentRunEngine {
         }
 
         if (toolResult.ok) {
+          if (canonicalOperation === 'node_get_content' && toolResult.data.isTextBased === true) {
+            shouldBoostNextCallMaxTokens = true;
+          }
+          if (
+            canonicalOperation === 'node_get_content' &&
+            isExplicitContentRequest(input.content) &&
+            !directNodeContentReply
+          ) {
+            directNodeContentReply = buildDirectNodeContentReply(
+              toolResult.data,
+              input.preferredLanguage
+            );
+          }
           await this.repository.updateRunStep(input.userId, input.runId, step.id, {
             status: 'completed',
             completedAt: new Date(),
@@ -1089,8 +1192,22 @@ export class AgentRunEngine {
         });
       }
 
+      if (directNodeContentReply) {
+        await this.repository.createMessage({
+          chatId: input.chatId,
+          userId: input.userId,
+          role: 'assistant',
+          content: directNodeContentReply,
+          mentions: [],
+        });
+        return;
+      }
+
       // Append all tool results as a user message, then loop back to model
       messages.push({ role: 'user', content: toolResultContents });
+      nextCallMaxTokens = shouldBoostNextCallMaxTokens
+        ? LARGE_TEXT_AGENT_MAX_TOKENS
+        : DEFAULT_AGENT_MAX_TOKENS;
     }
 
     // Safety: if we hit MAX_LOOP_STEPS, emit a fallback message

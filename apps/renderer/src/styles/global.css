@@ -170,6 +170,67 @@ code {
   overflow-x: auto;
 }
 
+.agent-markdown .agent-code-block {
+  position: relative;
+  margin: 0.75rem 0;
+}
+
+.agent-markdown .agent-code-block pre {
+  margin: 0;
+  padding-top: 2.1rem;
+}
+
+.agent-markdown .agent-code-copy-btn {
+  position: absolute;
+  top: 0.42rem;
+  right: 0.42rem;
+  z-index: 1;
+  border: none;
+  background: transparent;
+  color: var(--mantine-color-gray-6);
+  border-radius: var(--mantine-radius-sm);
+  height: 1.55rem;
+  width: 1.55rem;
+  min-width: 1.55rem;
+  padding: 0;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.agent-markdown .agent-code-copy-btn:hover,
+.agent-markdown .agent-code-copy-btn:focus-visible {
+  color: var(--mantine-color-gray-8);
+  background: var(--mantine-color-gray-1);
+}
+
+.agent-markdown .agent-code-copy-btn[data-copied='true'] {
+  color: var(--mantine-color-teal-6);
+  background: transparent;
+}
+
+.agent-markdown .agent-code-copy-icon,
+.agent-markdown .agent-code-copy-icon-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.agent-markdown .agent-code-copy-icon-check {
+  display: none;
+}
+
+.agent-markdown .agent-code-copy-btn[data-copied='true'] .agent-code-copy-icon {
+  display: none;
+}
+
+.agent-markdown .agent-code-copy-btn[data-copied='true'] .agent-code-copy-icon-check {
+  display: inline-flex;
+}
+
 .agent-markdown pre code {
   display: block;
   font-family: Monaco, Menlo, Consolas, 'Courier New', monospace;
@@ -224,6 +285,17 @@ code {
 :root[data-mantine-color-scheme='dark'] .agent-markdown pre {
   background: var(--mantine-color-dark-6);
   border-color: var(--mantine-color-dark-3);
+}
+
+:root[data-mantine-color-scheme='dark'] .agent-markdown .agent-code-copy-btn {
+  background: transparent;
+  color: var(--mantine-color-gray-5);
+}
+
+:root[data-mantine-color-scheme='dark'] .agent-markdown .agent-code-copy-btn:hover,
+:root[data-mantine-color-scheme='dark'] .agent-markdown .agent-code-copy-btn:focus-visible {
+  color: var(--mantine-color-gray-1);
+  background: var(--mantine-color-dark-5);
 }
 
 :root[data-mantine-color-scheme='dark'] .agent-markdown .agent-code-comment {

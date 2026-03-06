@@ -25,6 +25,7 @@ export type OperationName =
   | 'node_move'
   | 'node_copy'
   | 'node_delete'
+  | 'script_create'
   | 'script_execute';
 
 export interface ActionDefinition {
@@ -55,6 +56,8 @@ export interface AgentExecutionContext {
   authType: string | null;
   username: string | null;
   token: string | null;
+  userId?: number;
+  aiRuntime?: ResolvedAiRuntime;
   signal: AbortSignal;
 }
 

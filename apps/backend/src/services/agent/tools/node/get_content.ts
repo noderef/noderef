@@ -154,7 +154,7 @@ const buildFence = (text: string): string => {
 export const nodeGetContentTool: ToolDefinition = {
   name: 'node_get_content',
   description:
-    'Read file content by node ID and return text when the file is text-based. For binary files, returns metadata with isTextBased=false.',
+    'Read file content by node ID and return text when the file is text-based. Supports chunked reads with startChar/maxChars for large files.',
   skill: { kind: 'local_md', path: '../skills/node_get_content.md', version: 1 },
   inputSchema: {
     type: 'object',
@@ -163,7 +163,12 @@ export const nodeGetContentTool: ToolDefinition = {
       maxChars: {
         type: 'number',
         description:
-          'Maximum number of characters to return from file content (default 12000, max 100000)',
+          'Maximum number of characters to return from file content (default 20000, max 100000)',
+      },
+      startChar: {
+        type: 'number',
+        description:
+          'Optional character offset to start reading from (default 0). Use with nextStartChar to paginate large text files.',
       },
       forceText: {
         type: 'boolean',
@@ -185,7 +190,11 @@ export const nodeGetContentTool: ToolDefinition = {
       const maxChars =
         typeof args.maxChars === 'number' && Number.isFinite(args.maxChars)
           ? Math.max(200, Math.min(Math.floor(args.maxChars), 100_000))
-          : 12_000;
+          : 20_000;
+      const startChar =
+        typeof args.startChar === 'number' && Number.isFinite(args.startChar)
+          ? Math.max(0, Math.floor(args.startChar))
+          : 0;
       const forceText = Boolean(args.forceText);
 
       const nodesApi = new NodesApi(ctx.api);
@@ -251,8 +260,12 @@ export const nodeGetContentTool: ToolDefinition = {
 
       const decodedText = new TextDecoder('utf-8', { fatal: false }).decode(contentBuffer);
       const totalChars = decodedText.length;
-      const truncated = totalChars > maxChars;
-      const text = truncated ? decodedText.slice(0, maxChars) : decodedText;
+      const safeStartChar = Math.min(startChar, totalChars);
+      const endCharExclusive = Math.min(safeStartChar + maxChars, totalChars);
+      const text = decodedText.slice(safeStartChar, endCharExclusive);
+      const hasMoreContent = endCharExclusive < totalChars;
+      const nextStartChar = hasMoreContent ? endCharExclusive : null;
+      const truncated = safeStartChar > 0 || hasMoreContent;
 
       const fence = buildFence(text);
       const markdownCodeBlock = `${fence}${detectedLanguage}\n${text}\n${fence}`;
@@ -268,8 +281,12 @@ export const nodeGetContentTool: ToolDefinition = {
               extractedText: true,
               contentBytes: contentBuffer.length,
               totalChars,
+              startChar: safeStartChar,
+              endCharExclusive,
               returnedChars: text.length,
               truncated,
+              hasMoreContent,
+              nextStartChar,
               mimeType,
               detectedLanguage,
             },
@@ -287,8 +304,12 @@ export const nodeGetContentTool: ToolDefinition = {
           contentLanguage: detectedLanguage,
           contentBytes: contentBuffer.length,
           totalChars,
+          startChar: safeStartChar,
+          endCharExclusive,
           returnedChars: text.length,
           truncated,
+          hasMoreContent,
+          nextStartChar,
           content: text,
           markdownCodeBlock,
         },

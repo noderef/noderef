@@ -28,6 +28,7 @@ import { MODAL_KEYS } from '@/core/store/keys';
 import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
 import { useServersStore } from '@/core/store/servers';
 import { useUIStore } from '@/core/store/ui';
+import { writeClipboardText } from '@/core/utils/clipboard';
 import { useModal } from '@/hooks/useModal';
 import { useNavigation } from '@/hooks/useNavigation';
 import { useQNameSuggestions } from '@/hooks/useQNameSuggestions';
@@ -286,7 +287,15 @@ const highlightCode = (code: string, language: string): string => {
   return escapeHtml(code);
 };
 
-const renderMarkdown = (md: string): string => {
+const renderMarkdown = (
+  md: string,
+  options?: { copyLabel?: string; copiedLabel?: string }
+): string => {
+  const copyLabelRaw = options?.copyLabel?.trim() || 'Copy';
+  const copiedLabelRaw = options?.copiedLabel?.trim() || 'Copied';
+  const copyLabel = escapeHtml(copyLabelRaw);
+  const copiedLabel = escapeHtml(copiedLabelRaw);
+
   try {
     const renderer = new marked.Renderer();
     renderer.code = ({ text, lang }) => {
@@ -294,7 +303,24 @@ const renderMarkdown = (md: string): string => {
       const effectiveLang =
         normalizedLang === 'text' ? detectCodeLanguageFromContent(text) : normalizedLang;
       const highlighted = highlightCode(text, effectiveLang);
-      return `<pre><code class="language-${effectiveLang}">${highlighted}</code></pre>`;
+      return [
+        '<div class="agent-code-block">',
+        `<button type="button" class="agent-code-copy-btn" data-agent-code-copy data-copy-label="${copyLabel}" data-copied-label="${copiedLabel}" aria-label="${copyLabel}" title="${copyLabel}">`,
+        '<span class="agent-code-copy-icon" aria-hidden="true">',
+        '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
+        '<rect x="9" y="9" width="13" height="13" rx="3" ry="3"></rect>',
+        '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>',
+        '</svg>',
+        '</span>',
+        '<span class="agent-code-copy-icon-check" aria-hidden="true">',
+        '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">',
+        '<path d="M20 6 9 17l-5-5"></path>',
+        '</svg>',
+        '</span>',
+        '</button>',
+        `<pre><code class="language-${effectiveLang}">${highlighted}</code></pre>`,
+        '</div>',
+      ].join('');
     };
     return marked.parse(md, { async: false, breaks: true, gfm: true, renderer }) as string;
   } catch {
@@ -1619,6 +1645,48 @@ export function AgentPage() {
         return;
       }
 
+      const copyButton = target.closest('[data-agent-code-copy]');
+      if (copyButton instanceof HTMLButtonElement) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const codeElement = copyButton
+          .closest('.agent-code-block')
+          ?.querySelector('pre > code');
+        const code = codeElement?.textContent ?? '';
+        if (!code.trim()) {
+          return;
+        }
+
+        void (async () => {
+          const copied = await writeClipboardText(code);
+          if (!copied) {
+            notifications.show({
+              title: t('errors.generic'),
+              message: t('errors.generic'),
+              color: 'red',
+            });
+            return;
+          }
+
+          const copyLabel = copyButton.getAttribute('data-copy-label') || 'Copy';
+          const copiedLabel = copyButton.getAttribute('data-copied-label') || 'Copied';
+          copyButton.dataset.copied = 'true';
+          copyButton.setAttribute('aria-label', copiedLabel);
+          copyButton.setAttribute('title', copiedLabel);
+
+          window.setTimeout(() => {
+            if (!copyButton.isConnected) {
+              return;
+            }
+            copyButton.removeAttribute('data-copied');
+            copyButton.setAttribute('aria-label', copyLabel);
+            copyButton.setAttribute('title', copyLabel);
+          }, 1800);
+        })();
+        return;
+      }
+
       const anchor = target.closest('a');
       if (!(anchor instanceof HTMLAnchorElement)) {
         return;
@@ -1724,7 +1792,12 @@ export function AgentPage() {
                                 <Box
                                   key={idx}
                                   className="agent-markdown"
-                                  dangerouslySetInnerHTML={{ __html: renderMarkdown(step.label) }}
+                                  dangerouslySetInnerHTML={{
+                                    __html: renderMarkdown(step.label, {
+                                      copyLabel: t('copy'),
+                                      copiedLabel: t('copied'),
+                                    }),
+                                  }}
                                   style={{ fontSize: 14, lineHeight: 1.6 }}
                                 />
                               );
@@ -1806,7 +1879,12 @@ export function AgentPage() {
                         <Box
                           py={2}
                           className="agent-markdown"
-                          dangerouslySetInnerHTML={{ __html: renderMarkdown(message.content) }}
+                          dangerouslySetInnerHTML={{
+                            __html: renderMarkdown(message.content, {
+                              copyLabel: t('copy'),
+                              copiedLabel: t('copied'),
+                            }),
+                          }}
                           style={{ fontSize: 14, lineHeight: 1.6 }}
                         />
                         <Box

@@ -889,6 +889,7 @@ export class AgentService {
         action: 'abort the text write session',
       },
       text_write_commit: { title: 'Text write commit failed', action: 'commit text to Alfresco' },
+      script_create: { title: 'Script generation failed', action: 'generate the script' },
       script_execute: { title: 'Script execution failed', action: 'execute the script' },
     };
     const operationLabel = operationLabelMap[operation] ?? {
@@ -959,6 +960,7 @@ export class AgentService {
       text_write_status: 'Text write status retrieved',
       text_write_abort: 'Text write session aborted',
       text_write_commit: 'Text write committed',
+      script_create: 'Script generated',
       script_execute: 'Script executed',
     };
     const verification = isRecord(output.postActionVerification)
@@ -1477,13 +1479,16 @@ export class AgentService {
         },
       });
 
-      const baseCtx = await createExecutionContext(
+      const execCtx = await createExecutionContext(
         this.prisma,
         this.serverService,
         userId,
-        runRow.serverId
+        runRow.serverId,
+        {
+          signal: controller.signal,
+          aiRuntime: runtime,
+        }
       );
-      const execCtx: AgentExecutionContext = { ...baseCtx, signal: controller.signal };
 
       const engine = new AgentRunEngine(this.repository, runtime, execCtx, controller.signal);
 
