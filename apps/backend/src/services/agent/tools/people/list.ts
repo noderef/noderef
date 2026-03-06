@@ -4,7 +4,7 @@
 
 import axios from 'axios';
 import { getAlfrescoPeopleCollectionPath } from '../../../../lib/alfresco-endpoints.js';
-import { buildAlfrescoUrl } from '../../../../lib/alfresco-url.js';
+import { normalizeBaseUrl } from '../../../../lib/alfresco-url.js';
 import type { AgentExecutionContext } from '../../types.js';
 import { buildAuthHeader } from '../helpers/authHeaders.js';
 import { isRecord } from '../helpers/nodeResultHelpers.js';
@@ -53,7 +53,7 @@ export const peopleListTool: ToolDefinition = {
       };
 
       const path = getAlfrescoPeopleCollectionPath();
-      const url = buildAlfrescoUrl(ctx.serverBaseUrl, path);
+      const url = `${normalizeBaseUrl(ctx.serverBaseUrl)}${path}`;
 
       if (ctx.signal.aborted) {
         throw new Error('Run was cancelled');
