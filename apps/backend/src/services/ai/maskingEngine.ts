@@ -62,6 +62,7 @@ export interface MaskingOptions {
 // ── Defaults ───────────────────────────────────────────────────────────────────
 
 const DEFAULT_EXACT_KEYS = ['cm:creator', 'cm:modifier', 'cm:email'];
+const DEFAULT_PREFIXES = ['displayName'];
 
 const DEFAULT_PRESERVE_KEYS = [
   'id',
@@ -84,7 +85,7 @@ export function getDefaultMaskingConfig(): LlmMaskingConfig {
     mode: 'tokenize',
     propertyRules: {
       exact: [...DEFAULT_EXACT_KEYS],
-      prefixes: [],
+      prefixes: [...DEFAULT_PREFIXES],
       regex: [],
     },
     textRegexRules: [],
@@ -116,7 +117,7 @@ export function validateMaskingConfig(input: unknown): LlmMaskingConfig {
 
 function validatePropertyRules(raw: unknown): LlmMaskingConfig['propertyRules'] {
   if (!raw || typeof raw !== 'object') {
-    return { exact: [...DEFAULT_EXACT_KEYS], prefixes: [], regex: [] };
+    return { exact: [...DEFAULT_EXACT_KEYS], prefixes: [...DEFAULT_PREFIXES], regex: [] };
   }
 
   const rules = raw as Record<string, unknown>;
@@ -124,7 +125,10 @@ function validatePropertyRules(raw: unknown): LlmMaskingConfig['propertyRules'] 
     rules.exact === undefined
       ? [...DEFAULT_EXACT_KEYS]
       : sanitizeStringArray(rules.exact, MAX_ARRAY_ITEMS);
-  const prefixes = sanitizeStringArray(rules.prefixes, MAX_ARRAY_ITEMS);
+  const prefixes =
+    rules.prefixes === undefined
+      ? [...DEFAULT_PREFIXES]
+      : sanitizeStringArray(rules.prefixes, MAX_ARRAY_ITEMS);
   const regex = validateRegexArray(rules.regex);
 
   return { exact, prefixes, regex };

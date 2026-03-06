@@ -39,6 +39,7 @@ describe('masking engine', () => {
       expect(defaults.propertyRules.exact).toContain('cm:creator');
       expect(defaults.propertyRules.exact).toContain('cm:modifier');
       expect(defaults.propertyRules.exact).toContain('cm:email');
+      expect(defaults.propertyRules.prefixes).toContain('displayName');
       expect(defaults.preserveKeys).toContain('id');
       expect(defaults.preserveKeys).toContain('name');
       expect(defaults.textRegexRules).toEqual([]);
@@ -421,6 +422,7 @@ describe('validateMaskingConfig', () => {
     expect(result.propertyRules.exact).toContain('cm:creator');
     expect(result.propertyRules.exact).toContain('cm:modifier');
     expect(result.propertyRules.exact).toContain('cm:email');
+    expect(result.propertyRules.prefixes).toContain('displayName');
     expect(result.preserveKeys).toContain('id');
     expect(result.preserveKeys).toContain('name');
   });

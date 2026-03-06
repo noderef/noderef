@@ -50,6 +50,7 @@ import {
   Text,
   TextInput,
   Textarea,
+  Title,
   Tooltip,
   UnstyledButton,
   useComputedColorScheme,
@@ -150,6 +151,10 @@ export function SettingsModal() {
   const [testModalOpen, setTestModalOpen] = useState(false);
 
   const modalContentRef = useRef<HTMLDivElement | null>(null);
+  const testModalContentRef = useRef<HTMLDivElement | null>(null);
+  const maskingTestInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const maskingTestOutputRef = useRef<HTMLTextAreaElement | null>(null);
+  const maskingTestScrollSyncingRef = useRef(false);
   const isDesktopMode = useMemo(
     () => typeof window !== 'undefined' && isNeutralinoMode() && !!(window as any).Neutralino,
     []
@@ -196,6 +201,30 @@ export function SettingsModal() {
     onInsertText: handleInsertText,
     enableCopyCut: true,
   });
+  useDesktopClipboardHandlers({
+    isEnabled: isOpen && isDesktopMode && testModalOpen,
+    containerRef: testModalContentRef,
+    onInsertText: handleInsertText,
+    enableCopyCut: true,
+  });
+
+  const syncMaskingTestScroll = useCallback((source: 'input' | 'output') => {
+    if (maskingTestScrollSyncingRef.current) return;
+
+    const sourceEl = source === 'input' ? maskingTestInputRef.current : maskingTestOutputRef.current;
+    const targetEl = source === 'input' ? maskingTestOutputRef.current : maskingTestInputRef.current;
+    if (!sourceEl || !targetEl) return;
+
+    const sourceMax = Math.max(0, sourceEl.scrollHeight - sourceEl.clientHeight);
+    const targetMax = Math.max(0, targetEl.scrollHeight - targetEl.clientHeight);
+    const progress = sourceMax > 0 ? sourceEl.scrollTop / sourceMax : 0;
+
+    maskingTestScrollSyncingRef.current = true;
+    targetEl.scrollTop = progress * targetMax;
+    requestAnimationFrame(() => {
+      maskingTestScrollSyncingRef.current = false;
+    });
+  }, []);
 
   const currentVersion = getCurrentVersion();
   const checkForUpdates = useUpdateStore(state => state.checkForUpdates);
@@ -1284,54 +1313,132 @@ export function SettingsModal() {
                   <Modal
                     opened={testModalOpen}
                     onClose={() => setTestModalOpen(false)}
-                    title={t('settings:maskingTestTitle')}
-                    size="xl"
+                    title={
+                      <Group gap="xs">
+                        <IconEyeOff size={22} stroke={1.5} />
+                        <Title order={4}>{t('settings:maskingTestTitle')}</Title>
+                      </Group>
+                    }
+                    size="90vw"
+                    radius="lg"
+                    trapFocus
+                    returnFocus
+                    closeOnEscape
+                    closeOnClickOutside
                     centered
+                    styles={{
+                      content: { maxWidth: '1280px' },
+                      body: { padding: 'var(--mantine-spacing-xl)' },
+                    }}
                   >
-                    <SimpleGrid cols={2} spacing="md">
-                      <Textarea
-                        label={t('settings:maskingTestInput')}
-                        value={maskingTestInput}
-                        onChange={e => setMaskingTestInput(e.currentTarget.value)}
-                        minRows={10}
-                        maxRows={20}
-                        autosize
-                        autoComplete="off"
-                        autoCorrect="off"
-                        autoCapitalize="off"
-                        spellCheck={false}
-                      />
-                      <Textarea
-                        label={t('settings:maskingTestOutput')}
-                        value={maskingTestOutput}
-                        readOnly
-                        minRows={10}
-                        maxRows={20}
-                        autosize
-                        autoComplete="off"
-                        autoCorrect="off"
-                        autoCapitalize="off"
-                        spellCheck={false}
-                      />
-                    </SimpleGrid>
-                    {maskingTestStats && (
-                      <Text size="xs" c="dimmed" mt="xs">
-                        {t('settings:maskingTestStats', {
-                          fields: maskingTestStats.maskedFields,
-                          regex: maskingTestStats.regexHits,
-                        })}
-                      </Text>
-                    )}
-                    <Group justify="flex-end" mt="md">
-                      <Button
-                        variant="light"
-                        onClick={handleMaskingTestRun}
-                        loading={maskingTestRunning}
-                        disabled={!maskingTestInput.trim()}
-                      >
-                        {t('settings:maskingTestRun')}
-                      </Button>
-                    </Group>
+                    <div ref={testModalContentRef}>
+                      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="xl">
+                        <Stack gap="xs">
+                          <Text fw={500} size="sm">
+                            {t('settings:maskingTestInput')}
+                          </Text>
+                          <Paper
+                            withBorder
+                            p={0}
+                            radius="md"
+                            style={{ overflow: 'hidden', height: '56vh', minHeight: 420 }}
+                          >
+                            <Textarea
+                              ref={maskingTestInputRef}
+                              value={maskingTestInput}
+                              onChange={e => setMaskingTestInput(e.currentTarget.value)}
+                              onScroll={() => syncMaskingTestScroll('input')}
+                              variant="unstyled"
+                              styles={{
+                                root: {
+                                  height: '100%',
+                                },
+                                wrapper: {
+                                  height: '100%',
+                                },
+                                input: {
+                                  padding: '6px 8px',
+                                  boxSizing: 'border-box',
+                                  height: '100%',
+                                  minHeight: '100%',
+                                  overflowY: 'auto',
+                                  resize: 'none',
+                                  lineHeight: '1.4',
+                                  fontSize: '14px',
+                                  fontFamily:
+                                    'var(--mantine-font-family-monospace, Menlo, Monaco, Consolas, monospace)',
+                                },
+                              }}
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="off"
+                              spellCheck={false}
+                            />
+                          </Paper>
+                        </Stack>
+                        <Stack gap="xs">
+                          <Text fw={500} size="sm">
+                            {t('settings:maskingTestOutput')}
+                          </Text>
+                          <Paper
+                            withBorder
+                            p={0}
+                            radius="md"
+                            style={{ overflow: 'hidden', height: '56vh', minHeight: 420 }}
+                          >
+                            <Textarea
+                              ref={maskingTestOutputRef}
+                              value={maskingTestOutput}
+                              readOnly
+                              onScroll={() => syncMaskingTestScroll('output')}
+                              variant="unstyled"
+                              styles={{
+                                root: {
+                                  height: '100%',
+                                },
+                                wrapper: {
+                                  height: '100%',
+                                },
+                                input: {
+                                  padding: '6px 8px',
+                                  boxSizing: 'border-box',
+                                  height: '100%',
+                                  minHeight: '100%',
+                                  overflowY: 'auto',
+                                  resize: 'none',
+                                  lineHeight: '1.4',
+                                  fontSize: '14px',
+                                  fontFamily:
+                                    'var(--mantine-font-family-monospace, Menlo, Monaco, Consolas, monospace)',
+                                },
+                              }}
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="off"
+                              spellCheck={false}
+                            />
+                          </Paper>
+                        </Stack>
+                      </SimpleGrid>
+                      {maskingTestStats && (
+                        <Text size="xs" c="dimmed" mt="xs">
+                          {t('settings:maskingTestStats', {
+                            fields: maskingTestStats.maskedFields,
+                            regex: maskingTestStats.regexHits,
+                          })}
+                        </Text>
+                      )}
+                      <Group justify="flex-end" mt="md">
+                        <Button
+                          variant="light"
+                          onClick={handleMaskingTestRun}
+                          loading={maskingTestRunning}
+                          disabled={!maskingTestInput.trim()}
+                        >
+                          {t('settings:maskingTestRun')}
+                        </Button>
+                      </Group>
+                    </div>
                   </Modal>
 
                   {activeSection === 'about' && (
