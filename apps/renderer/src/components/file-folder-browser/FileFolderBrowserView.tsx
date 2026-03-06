@@ -1994,6 +1994,10 @@ export function FileFolderBrowserView({
               >
                 {t('submenu:nodeBrowser')}
               </Menu.Item>
+            </>
+          )}
+          {selectedItem && (
+            <>
               <Menu.Divider />
               <Menu.Item leftSection={<IconLock size={14} />} onClick={handleManagePermissions}>
                 {t('submenu:managePermissionsAction')}
