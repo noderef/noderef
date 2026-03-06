@@ -31,12 +31,33 @@ const fs = require('fs');
 const projectRoot = path.resolve(__dirname, '../../..');
 const backendDir = path.resolve(__dirname, '..');
 const outDir = path.join(projectRoot, 'resources', 'node-src', 'dist');
+const skillsSrcDir = path.join(backendDir, 'src', 'services', 'agent', 'skills');
+const skillsOutDir = path.join(projectRoot, 'resources', 'node-src', 'skills');
 const entryPoint = path.join(backendDir, 'src', 'server.ts');
 
 // Ensure output directory exists
 fs.mkdirSync(outDir, { recursive: true });
 
 console.log('→ Bundling backend with esbuild...');
+
+function copyAgentSkills() {
+  if (!fs.existsSync(skillsSrcDir)) {
+    throw new Error(`Missing skills source directory: ${skillsSrcDir}`);
+  }
+
+  fs.rmSync(skillsOutDir, { recursive: true, force: true });
+  fs.mkdirSync(skillsOutDir, { recursive: true });
+
+  const skillFiles = fs
+    .readdirSync(skillsSrcDir, { withFileTypes: true })
+    .filter(entry => entry.isFile() && entry.name.endsWith('.md'));
+
+  for (const entry of skillFiles) {
+    fs.copyFileSync(path.join(skillsSrcDir, entry.name), path.join(skillsOutDir, entry.name));
+  }
+
+  console.log(`✓ Copied ${skillFiles.length} agent skill(s) to resources/node-src/skills`);
+}
 
 esbuild
   .build({
@@ -82,6 +103,7 @@ require('./server.bundle.js');
     fs.chmodSync(path.join(outDir, 'server.js'), 0o755);
 
     console.log('✓ Created server.js entry point');
+    copyAgentSkills();
   })
   .catch(error => {
     console.error('❌ Bundling failed:', error);
