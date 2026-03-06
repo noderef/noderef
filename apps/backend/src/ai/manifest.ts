@@ -219,6 +219,523 @@ export const manifest: Manifest = {
       'services',
     ],
   },
+
+  attributes: {
+    description:
+      'Work with Alfresco repository attributes (AttributeService) via OOTBee Support Tools: check existence, get values, create new attributes, set/overwrite values, remove individual attributes, remove subtrees, remove wildcard patterns, and fetch attribute trees as JavaScript objects.',
+    tags: [
+      'alfresco',
+      'attributes',
+      'attributeService',
+      'ootbee',
+      'support-tools',
+      'config',
+      'settings',
+      'metadata',
+      'key-value',
+      'repository',
+      'admin',
+      'automation',
+      'remove',
+      'exists',
+      'getAttributes',
+    ],
+  },
+
+  audit: {
+    description:
+      'Inspect and manage Alfresco audit logs via OOTBee Support Tools: check and toggle auditing globally, check auditing for a specific app+path, list registered audit applications, query audit entries by application/user/time range, and clear audit data for an application (optionally within a time range).',
+    tags: [
+      'alfresco',
+      'audit',
+      'auditService',
+      'ootbee',
+      'support-tools',
+      'monitoring',
+      'logging',
+      'security',
+      'compliance',
+      'admin',
+      'query',
+      'clear',
+      'applications',
+      'events',
+      'tracking',
+    ],
+  },
+
+  auth: {
+    description:
+      'Authentication context utilities (OOTBee Support Tools): switch current execution user to system or another user (admin-only), inspect runAs vs fully authenticated user, and retrieve system/admin usernames. Useful for running repository operations under a different security context from scripts.',
+    tags: [
+      'alfresco',
+      'auth',
+      'authentication',
+      'security',
+      'runAs',
+      'system',
+      'admin',
+      'authority',
+      'permissions',
+      'ootbee',
+      'support-tools',
+      'context',
+      'impersonation',
+      'identity',
+    ],
+  },
+
+  batchExecuter: {
+    description:
+      'Execute high-volume operations in Alfresco using multi-threaded batching (OOTBee Support Tools): process arrays or browse folders recursively, apply per-node or per-batch functions, tune batch size and threads, optionally disable rules, monitor running jobs, and request cancellation.',
+    tags: [
+      'alfresco',
+      'batchExecuter',
+      'batch',
+      'bulk',
+      'automation',
+      'threads',
+      'transactions',
+      'retryingTransactionHelper',
+      'rules',
+      'disableRules',
+      'folder',
+      'recursive',
+      'nodes',
+      'documents',
+      'processing',
+      'cancel',
+      'monitoring',
+      'ootbee',
+      'support-tools',
+    ],
+  },
+
+  contentUrls: {
+    description:
+      'Resolve the underlying Alfresco content URL for a document node using FileFolderService: provide a NodeRef string and get back the contentUrl from ContentData. Useful for diagnostics, storage troubleshooting, and content-store investigations.',
+    tags: [
+      'alfresco',
+      'contentUrls',
+      'content',
+      'contentstore',
+      'contentUrl',
+      'filestatus',
+      'filefolderservice',
+      'diagnostics',
+      'troubleshooting',
+      'repository',
+      'ootbee',
+      'support-tools',
+      'nodeRef',
+    ],
+  },
+
+  database: {
+    description:
+      'Admin only SQL access for diagnostics and maintenance via Spring DataSource: run parameterized SELECT queries (database.query) and execute UPDATE/DELETE/DDL statements (database.update). Useful for reporting, troubleshooting contentstore mappings, auditing/property table cleanup, and advanced repository inspection.',
+    tags: [
+      'alfresco',
+      'database',
+      'sql',
+      'jdbc',
+      'datasource',
+      'admin-only',
+      'diagnostics',
+      'maintenance',
+      'reporting',
+      'contentstore',
+      'alf_node',
+      'alf_content_url',
+      'alf_content_data',
+      'audit',
+      'attributes',
+      'ootbee',
+      'support-tools',
+    ],
+  },
+
+  dictionary: {
+    description:
+      'Inspect Alfresco content model definitions from scripts: list all types, fetch type/aspect/property definitions, resolve property names for a type including default aspects, check subtype relationships, detect multi-valued properties, and detect LIST constraints on properties.',
+    tags: [
+      'alfresco',
+      'dictionary',
+      'model',
+      'types',
+      'aspects',
+      'properties',
+      'qname',
+      'namespace',
+      'constraints',
+      'list-constraint',
+      'metadata',
+      'schema',
+      'ootbee',
+      'support-tools',
+    ],
+  },
+
+  downloads: {
+    description:
+      'Create and manage Alfresco bulk download (zip) requests from scripts via DownloadService: create downloads for one or many nodes (by ScriptNode or NodeRef string), optionally recursive for folders, poll download status, and cancel download requests.',
+    tags: [
+      'alfresco',
+      'downloads',
+      'downloadservice',
+      'zip',
+      'bulk-download',
+      'archive',
+      'folders',
+      'recursive',
+      'status',
+      'cancel',
+      'content',
+      'repository',
+      'ootbee',
+      'support-tools',
+      'nodeRef',
+    ],
+  },
+
+  favorites: {
+    description:
+      'Manage Alfresco user favourites from scripts via FavouritesService: add/remove a node as a favourite, check whether a node is favourited by the current user, and page through favourites (returns PersonFavourite objects). Includes an overload to add favourites on behalf of another user (requires sufficient privileges).',
+    tags: [
+      'alfresco',
+      'favorites',
+      'favourites',
+      'users',
+      'profile',
+      'personalization',
+      'bookmark',
+      'paging',
+      'personfavourite',
+      'security',
+      'ootbee',
+      'support-tools',
+      'node',
+    ],
+  },
+
+  hidden: {
+    description:
+      'Control Alfresco hidden nodes via HiddenAspect: explicitly hide/unhide nodes, test whether a node has the hidden aspect, remove the hidden aspect, and detect whether a node is located on a hidden path (returns HiddenFileInfo). Useful for CIFS/WebDAV/client visibility troubleshooting and cleanup.',
+    tags: [
+      'alfresco',
+      'hidden',
+      'hidden-aspect',
+      'visibility',
+      'cifs',
+      'webdav',
+      'clients',
+      'folder',
+      'document',
+      'diagnostics',
+      'cleanup',
+      'ootbee',
+      'support-tools',
+    ],
+  },
+
+  jobs: {
+    description:
+      'Inspect and control Quartz-scheduled jobs via OOTBee Support Tools: list jobs, print details, get job by name, run immediately, check running state, pause/resume jobs, unschedule triggers, delete jobs, and schedule temporary inline-script jobs with cron expressions.',
+    tags: [
+      'alfresco',
+      'jobs',
+      'quartz',
+      'scheduler',
+      'ootbee',
+      'support-tools',
+      'cron',
+      'triggers',
+      'admin',
+      'automation',
+      'monitoring',
+      'pause',
+      'resume',
+      'runNow',
+      'cancel',
+      'delete',
+    ],
+  },
+
+  links: {
+    description:
+      'Work with Alfresco document links via DocumentLinkService: create a link to a document in another folder, resolve the original source document for a link node, and delete all links pointing to a document (returns DeleteLinksStatusReport for diagnostics).',
+    tags: [
+      'alfresco',
+      'links',
+      'documentlinkservice',
+      'shortcuts',
+      'references',
+      'folders',
+      'cleanup',
+      'delete-links',
+      'status-report',
+      'node',
+      'repository',
+      'ootbee',
+      'support-tools',
+    ],
+  },
+
+  messages: {
+    description:
+      'Access Alfresco i18n messages from scripts via MessageService: resolve message keys, format parameterized messages using an array of parameters, and list all registered message bundles for troubleshooting missing translations.',
+    tags: [
+      'alfresco',
+      'messages',
+      'i18n',
+      'messageService',
+      'bundles',
+      'translations',
+      'localization',
+      'keys',
+      'message-format',
+      'params',
+      'ootbee',
+      'support-tools',
+    ],
+  },
+
+  customModel: {
+    description:
+      'Manage Alfresco Custom Models via CustomModelService: check whether the current user is a model admin, list custom models with paging (returns CustomModelDefinition objects), activate/deactivate models by name, delete models, and fetch the underlying model node as a ScriptNode for inspection or content access.',
+    tags: [
+      'alfresco',
+      'customModel',
+      'custom-models',
+      'model-admin',
+      'dictionary',
+      'types',
+      'aspects',
+      'activate',
+      'deactivate',
+      'delete',
+      'definition',
+      'ootbee',
+      'support-tools',
+      'admin',
+    ],
+  },
+
+  permissions: {
+    description:
+      'Inspect and manage Alfresco node permissions via PermissionService: check read/permission access for the current user or another authority (runAs), list effective and explicitly set AccessPermission entries, grant/deny permissions, delete individual permissions, clear all permissions for an authority, delete all permissions on a node, and toggle inheritance of parent permissions. Includes store-level permission cleanup helpers.',
+    tags: [
+      'alfresco',
+      'permissions',
+      'permissionService',
+      'access',
+      'acl',
+      'security',
+      'authorities',
+      'groups',
+      'users',
+      'grant',
+      'deny',
+      'inheritance',
+      'accesspermission',
+      'cleanup',
+      'store',
+      'ootbee',
+      'support-tools',
+    ],
+  },
+
+  policies: {
+    description:
+      'Control Alfresco behaviours (policies/rules) during script execution via BehaviourFilter: enable/disable behaviours for a single node or for an entire type/aspect within the current transaction, and restore all behaviours afterwards. Useful for maintenance scripts that must update metadata without triggering rules, audits, or policy side effects.',
+    tags: [
+      'alfresco',
+      'policies',
+      'behaviourFilter',
+      'behaviors',
+      'rules',
+      'disable',
+      'enable',
+      'transaction',
+      'maintenance',
+      'auditable',
+      'aspects',
+      'types',
+      'ootbee',
+      'support-tools',
+    ],
+  },
+
+  quickshares: {
+    description:
+      'Manage Alfresco QuickShare links from scripts: share a document to generate an anonymous shareId, unshare to revoke access, and inspect QuickShare metadata by shareId or by node (returns the internal "item" map from QuickShareService). Useful for support diagnostics, token rotation, and bulk share/unshare automation.',
+    tags: [
+      'alfresco',
+      'quickshare',
+      'quickshares',
+      'share',
+      'anonymous',
+      'public-link',
+      'token',
+      'metadata',
+      'unshare',
+      'revoke',
+      'diagnostics',
+      'ootbee',
+      'support-tools',
+    ],
+  },
+
+  repoAdmin: {
+    description:
+      'Execute commands through the Alfresco Repo Admin Console interpreter (RepoAdminInterpreter). This enables scripts to run admin-console-style commands such as help, status queries, and deployment-related operations (messages/models) depending on what the interpreter supports.',
+    tags: [
+      'alfresco',
+      'repo-admin',
+      'repoAdmin',
+      'admin-console',
+      'commands',
+      'interpreter',
+      'models',
+      'messages',
+      'deployment',
+      'ootbee',
+      'support-tools',
+    ],
+  },
+
+  repository: {
+    description:
+      'Convenience wrapper around Alfresco Repository helper and core services for quickly retrieving important anchor nodes (Company Home, Root Home, Sites Root, People Container) and resolving related locations such as the document library for a given node. Useful for diagnostics, navigation, and scripts that need stable starting points.',
+    tags: [
+      'alfresco',
+      'repository',
+      'companyhome',
+      'roothome',
+      'sites',
+      'people',
+      'userhome',
+      'doclib',
+      'navigation',
+      'helpers',
+      'ootbee',
+      'support-tools',
+    ],
+  },
+
+  rules: {
+    description:
+      'Wrapper around Alfresco RuleService: check whether rules are enabled, enable/disable rules for the current thread or for a specific node, inspect attached rules (direct vs inherited), enable/disable individual rules, count rules, and remove all rules from a node. Useful for admin scripts, migrations, and bulk updates where rule side effects must be controlled.',
+    tags: [
+      'alfresco',
+      'rules',
+      'ruleService',
+      'behaviour',
+      'automation',
+      'folders',
+      'documents',
+      'admin',
+      'bulk-update',
+      'disable-rules',
+      'enable-rules',
+      'cleanup',
+      'ootbee',
+      'support-tools',
+    ],
+  },
+
+  tenantAdmin: {
+    description:
+      'Run tenant administration console commands from repository JavaScript via TenantInterpreter. Supports listing tenants, inspecting tenant details, creating tenants, and deleting tenants depending on Alfresco version. Intended for admin-only automation and diagnostics.',
+    tags: [
+      'alfresco',
+      'tenant',
+      'tenantAdmin',
+      'multitenancy',
+      'admin',
+      'console',
+      'interpreter',
+      'ootbee',
+      'support-tools',
+      'diagnostics',
+      'automation',
+    ],
+  },
+
+  ticket: {
+    description:
+      'Expose the current user authentication ticket (alf_ticket) to repository JavaScript. Useful for diagnostics, legacy integrations, and building authenticated URLs. Tickets are sensitive and should be handled with care.',
+    tags: [
+      'alfresco',
+      'authentication',
+      'ticket',
+      'alf_ticket',
+      'security',
+      'admin',
+      'integration',
+      'legacy',
+      'ootbee',
+      'support-tools',
+      'diagnostics',
+    ],
+  },
+
+  transactions: {
+    description:
+      'Access Alfresco TransactionService via scripting: create a UserTransaction wrapper to explicitly begin/commit/rollback and inspect status, and check whether the current execution context allows writes (read-only check). Use carefully since many scripts already run inside an existing transaction.',
+    tags: [
+      'alfresco',
+      'transaction',
+      'transactions',
+      'tx',
+      'rollback',
+      'commit',
+      'usertransaction',
+      'consistency',
+      'admin',
+      'diagnostics',
+      'support-tools',
+      'ootbee',
+    ],
+  },
+
+  globalProperties: {
+    description:
+      'Read Alfresco global properties from scripts (java.util.Properties). Provides simple key lookup with optional fallback. Useful for environment-specific configuration and feature flags, but avoid dumping all properties since sensitive values may be present.',
+    tags: [
+      'alfresco',
+      'globalProperties',
+      'properties',
+      'configuration',
+      'env',
+      'feature-flags',
+      'settings',
+      'support-tools',
+      'ootbee',
+      'admin',
+      'security',
+    ],
+  },
+
+  workflowAdmin: {
+    description:
+      'Run Alfresco Workflow Admin Console commands from scripts via WorkflowInterpreter. Useful for listing workflow definitions and instances, inspecting workflows, and cancelling problematic workflow instances. Command set varies by Alfresco version; use workflowAdmin.exec("help") to discover supported commands.',
+    tags: [
+      'alfresco',
+      'workflow',
+      'workflowAdmin',
+      'admin-console',
+      'interpreter',
+      'activiti',
+      'jbpm',
+      'definitions',
+      'instances',
+      'cancel',
+      'support-tools',
+      'ootbee',
+      'diagnostics',
+    ],
+  },
 };
 
 export default manifest;

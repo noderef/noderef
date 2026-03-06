@@ -155,7 +155,7 @@ router.post('/execute', async (req, res) => {
       apiKey: aiConfig.apiKey,
       model: aiConfig.model,
       prompt: maskedPrompt,
-      maxTokens: 1200,
+      maxTokens: 8192,
       images,
     });
 
@@ -370,10 +370,6 @@ function extractJsonArray(raw: string): string {
   return extractJson(raw, ['[', ']']);
 }
 
-function extractJsonObject(raw: string): string {
-  return extractJson(raw, ['{', '}']);
-}
-
 const VALID_DSL_TYPES = new Set(['replace_selection', 'replace_file'] as const);
 type DslChangeType = 'replace_selection' | 'replace_file';
 interface DslResponse {
@@ -518,6 +514,27 @@ function extractCodeFence(raw: string): string | null {
   const fenceMatch = raw.match(/```(?:javascript|js|typescript|ts)?\s*([\s\S]*?)```/i);
   const code = fenceMatch?.[1]?.trim();
   return code && code.length > 0 ? code : null;
+}
+
+function extractJsonObject(raw: string): string {
+  const trimmed = raw.trim();
+  // Handle markdown code blocks if present
+  if (trimmed.startsWith('```')) {
+    const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenceMatch?.[1]) {
+      return fenceMatch[1].trim();
+    }
+  }
+
+  // Find outer-most braces
+  const firstBrace = trimmed.indexOf('{');
+  const lastBrace = trimmed.lastIndexOf('}');
+
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    return trimmed.slice(firstBrace, lastBrace + 1);
+  }
+
+  return '';
 }
 
 function handleError(res: Response, err: Error, durationMs: number, route: string) {

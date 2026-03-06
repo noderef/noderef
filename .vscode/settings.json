@@ -74,6 +74,6 @@
     "**/resources": true
   },
   "cSpell.language": "en,nl,de,fr",
-  "cSpell.words": ["neutralino", "NodeRef"],
+  "cSpell.words": ["neutralino", "NodeRef", "ootbee"],
   "postman.settings.dotenv-detection-notification-visibility": false
 }
