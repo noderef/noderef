@@ -23,6 +23,7 @@ import express from 'express';
 import { existsSync, readFileSync } from 'fs';
 import * as net from 'net';
 import path from 'path';
+import { applyPendingPrismaMigrations } from './lib/migrations.js';
 import { log } from './lib/logger.js';
 import {
   getHost,
@@ -145,23 +146,16 @@ function tryReadBuildMeta(): { version?: string } {
 }
 
 /**
- * Run Prisma migrations in development mode
+ * Run pending Prisma migration SQL files bundled in prisma/migrations.
+ * Works in both dev and packaged desktop builds without Prisma CLI.
  */
 async function runMigrations(): Promise<void> {
-  if (isDev || process.env.PRISMA_RUN_MIGRATIONS === '1') {
-    try {
-      const { execSync } = await import('child_process');
-      const backendRoot = path.resolve(process.cwd(), 'apps/backend');
-      const prismaCmd = process.platform === 'win32' ? 'npx prisma.cmd' : 'npx prisma';
-      execSync(`${prismaCmd} migrate deploy`, {
-        stdio: 'inherit',
-        cwd: backendRoot,
-      });
-      log.info('Prisma migrations deployed successfully');
-    } catch (e) {
-      log.error({ err: e }, 'Prisma migrate deploy failed');
-      // Continue but log the error - app can run read-only if migrations fail
-    }
+  const prisma = await getPrismaClient();
+  const result = await applyPendingPrismaMigrations(prisma);
+  if (result.applied.length > 0) {
+    log.info({ migrations: result.applied }, 'Applied pending Prisma migrations');
+  } else if (isDev) {
+    log.info('No pending Prisma migrations');
   }
 }
 
@@ -300,7 +294,7 @@ async function main() {
   // CORS middleware
   app.use(corsMiddleware());
 
-  // Run migrations in dev only
+  // Apply pending database migrations
   await runMigrations();
 
   // Initialize encryption
