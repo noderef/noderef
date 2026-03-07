@@ -51,9 +51,11 @@
 
 - **Activity overview** — Dashboard heatmap and timeline of recent nodes.
 - **Query builder** — Search by property, aspect, type, path, or site. No CMIS/AFTS syntax required.
-- **Saved & recent searches** — Store queries with custom result columns, reuse across servers.
-- **Multi-server workspace** — Connect prod, test, and dev environments simultaneously.
+- **Saved searches** — Store queries with custom result columns, reuse across servers.
 - **JavaScript console** — Execute scripts across servers, view history, and `/ai` assist.
+- **Agent chat** — Ask your repo in plain English. Search nodes, run scripts, or change permissions by describing what you need.
+- **Privacy masking** — Mask sensitive properties/text before prompts are sent to the configured AI provider.
+- **Multi-server workspace** — Connect prod, test, and dev environments simultaneously.
 - **Tabbed node browser** — Open nodes side-by-side, follow references, compare structures.
 - **File viewer & editor** — Edit JS or text content directly from the repository.
 - **System tree** — Browse users, groups, permissions, and credentials per server.
