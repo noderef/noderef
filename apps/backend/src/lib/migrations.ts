@@ -43,6 +43,11 @@ type AppliedMigrationRow = {
   checksum: string;
 };
 
+type SqliteCreatedObject = {
+  name: string;
+  type: 'index' | 'table';
+};
+
 export type MigrationRunResult = {
   applied: string[];
   skipped: string[];
@@ -194,6 +199,74 @@ function loadMigrationFiles(migrationsDir: string): MigrationFile[] {
   return migrations;
 }
 
+function stripLeadingSqlComments(statement: string): string {
+  let remaining = statement.trimStart();
+
+  while (remaining) {
+    if (remaining.startsWith('--')) {
+      const newlineIdx = remaining.indexOf('\n');
+      remaining = newlineIdx === -1 ? '' : remaining.slice(newlineIdx + 1).trimStart();
+      continue;
+    }
+
+    if (remaining.startsWith('/*')) {
+      const endIdx = remaining.indexOf('*/');
+      remaining = endIdx === -1 ? '' : remaining.slice(endIdx + 2).trimStart();
+      continue;
+    }
+
+    break;
+  }
+
+  return remaining;
+}
+
+function parseCreatedSqliteObject(statement: string): SqliteCreatedObject | null {
+  const normalizedStatement = stripLeadingSqlComments(statement);
+
+  const tableMatch = normalizedStatement.match(
+    /^CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+["`]?([^"`\s(]+)["`]?/i
+  );
+  if (tableMatch) {
+    return { name: tableMatch[1], type: 'table' };
+  }
+
+  const indexMatch = normalizedStatement.match(
+    /^CREATE\s+(?:UNIQUE\s+)?INDEX(?:\s+IF\s+NOT\s+EXISTS)?\s+["`]?([^"`\s(]+)["`]?\s+ON\b/i
+  );
+  if (indexMatch) {
+    return { name: indexMatch[1], type: 'index' };
+  }
+
+  return null;
+}
+
+function isIgnorableSqliteExistsError(statement: string, error: unknown): boolean {
+  const normalizedStatement = stripLeadingSqlComments(statement).toUpperCase();
+  const isCreateTable = normalizedStatement.startsWith('CREATE TABLE');
+  const isCreateIndex = normalizedStatement.startsWith('CREATE INDEX');
+  const isCreateUniqueIndex = normalizedStatement.startsWith('CREATE UNIQUE INDEX');
+  if (!isCreateTable && !isCreateIndex && !isCreateUniqueIndex) {
+    return false;
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  return /\balready exists\b/i.test(message);
+}
+
+async function sqliteObjectExists(
+  prisma: PrismaClient,
+  object: SqliteCreatedObject
+): Promise<boolean> {
+  const rows = await prisma.$queryRawUnsafe<Array<{ name: string }>>(
+    `SELECT "name" FROM "sqlite_master" WHERE "type" = ? AND "name" = ? LIMIT 1`,
+    object.type,
+    object.name
+  );
+
+  return rows.length > 0;
+}
+
 async function ensureMigrationsTable(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(MIGRATIONS_TABLE_SQL);
 }
@@ -214,10 +287,24 @@ async function executeMigrationSql(prisma: PrismaClient, sql: string): Promise<n
   const statements = splitSqlStatements(sql);
   if (!statements.length) return 0;
 
+  let processedStatements = 0;
   await prisma.$executeRawUnsafe('BEGIN');
   try {
     for (const statement of statements) {
-      await prisma.$executeRawUnsafe(statement);
+      const createdObject = parseCreatedSqliteObject(statement);
+      if (createdObject && (await sqliteObjectExists(prisma, createdObject))) {
+        processedStatements++;
+        continue;
+      }
+
+      try {
+        await prisma.$executeRawUnsafe(statement);
+      } catch (error) {
+        if (!isIgnorableSqliteExistsError(statement, error)) {
+          throw error;
+        }
+      }
+      processedStatements++;
     }
     await prisma.$executeRawUnsafe('COMMIT');
   } catch (error) {
@@ -225,7 +312,7 @@ async function executeMigrationSql(prisma: PrismaClient, sql: string): Promise<n
     throw error;
   }
 
-  return statements.length;
+  return processedStatements;
 }
 
 export async function applyPendingPrismaMigrations(

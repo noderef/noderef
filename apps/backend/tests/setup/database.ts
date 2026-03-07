@@ -22,10 +22,10 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { execSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { afterAll, beforeAll } from 'vitest';
+import { applyPendingPrismaMigrations } from '../../src/lib/migrations';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEST_DB_PATH = path.join(__dirname, '../../test.db');
@@ -74,18 +74,13 @@ export async function ensureTestUser(): Promise<{ id: number; username: string }
 
 // Global setup: run migrations and connect
 beforeAll(async () => {
-  // Run migrations to ensure test.db schema is up to date
   try {
-    execSync('npx prisma db push --skip-generate --accept-data-loss', {
-      cwd: path.join(__dirname, '../..'),
-      env: { ...process.env, DATABASE_URL: `file:${TEST_DB_PATH}` },
-      stdio: 'pipe',
-    });
+    await prisma.$connect();
+    await applyPendingPrismaMigrations(prisma);
   } catch (error) {
     console.error('Failed to initialize test database:', error);
   }
 
-  await prisma.$connect();
   await cleanupTables();
 });
 
