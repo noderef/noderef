@@ -3,7 +3,7 @@
   <img src="./assets/logo-center-black.svg#gh-light-mode-only" alt="NodeRef" width="260" />
   <img src="./assets/logo-center-white.svg#gh-dark-mode-only" alt="NodeRef" width="260" />
 
-  <h3>Desktop client for Alfresco</h3>
+  <h3>Desktop workspace for Alfresco</h3>
 
 </p>
 
@@ -47,6 +47,8 @@
 
 </div>
 
+NodeRef gives Alfresco teams a focused desktop workspace for searching repositories, inspecting nodes, running scripts, and working across environments without bouncing between multiple admin tools.
+
 ### ✨ **Features**
 
 - **Activity overview** — Dashboard heatmap and timeline of recent nodes.
@@ -62,11 +64,11 @@
 - **Personalization** — Themes, languages, personal scripts, `Cmd+K` command palette.
 - **Credentials encryption** — AES-256-GCM; master key stored outside the database.
 
-Built for Alfresco admins, developers, and support engineers.
+Built for Alfresco admins, developers, and support engineers who need faster diagnostics, safer operational workflows, and fewer context switches.
 
 ### 📋 **Prerequisites**
 
-Before running NodeRef, make sure both your workstation and target Alfresco servers have the basics covered:
+Before running NodeRef from source, make sure both your workstation and target Alfresco servers have the basics covered:
 
 #### Local workstation
 
@@ -80,9 +82,12 @@ Before running NodeRef, make sure both your workstation and target Alfresco serv
 
 #### Alfresco servers
 
+- Designed around Alfresco public APIs, with broad compatibility across Alfresco 5.x and newer installations. Some features may vary by server version and module availability.
 - The [OOTBee Support Tools](https://github.com/OrderOfTheBee/ootbee-support-tools) module installed so the JavaScript console and related APIs are available.
 
 ### 🚀 **Quick start**
+
+For local development or evaluation from source:
 
 ```bash
 # 1. Install dependencies and download Neutralino binaries
@@ -97,9 +102,11 @@ Desktop dev mode opens:
 - A **Chrome** window at `http://127.0.0.1:3000` with full DevTools
 - A **Neutralino** window that mirrors how the production app behaves
 
+If you prefer to run NodeRef inside your infrastructure instead of a local desktop shell, see [Docker](#-docker).
+
 ### 🐳 **Docker**
 
-Deploy inside your infrastructure when network policies block the desktop app:
+Deploy inside your infrastructure when network policies block the desktop app or when teams prefer a browser-based rollout:
 
 ```bash
 docker run -p 5111:5111 ghcr.io/noderef/noderef:latest
@@ -128,11 +135,11 @@ Override the database location with the `DATABASE_URL` environment variable when
 
 ### 🔐 **Credentials encryption**
 
-Sensitive fields (passwords, API tokens) are encrypted with **AES-256-GCM**. A 32-byte master key is generated on first run and stored in `{dataDir}/.runtime/master.key`.
+Sensitive fields (passwords, API tokens) are encrypted with **AES-256-GCM**. A 32-byte master key is generated on first run and stored in `{dataDir}/.runtime/master.key`, keeping secrets outside the SQLite database itself.
 
 ### 🔑 **OIDC / OpenID Connect authentication**
 
-NodeRef supports OIDC authentication (e.g., Keycloak) for connecting to Alfresco servers. When configuring your identity provider:
+NodeRef supports OIDC authentication (e.g., Keycloak) for connecting to Alfresco servers, which helps teams align desktop access with existing enterprise identity flows. When configuring your identity provider:
 
 #### Redirect URIs
 
