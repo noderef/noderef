@@ -38,13 +38,22 @@ export function AgentEmptyState({
     fullName: string | null;
     username: string;
   } | null>(null);
+  const [newChatWelcomeVariant, setNewChatWelcomeVariant] = useState(1);
+
+  useEffect(() => {
+    if (typeof chatId === 'number') {
+      return;
+    }
+    setNewChatWelcomeVariant(Math.floor(Math.random() * 3) + 1);
+  }, [chatId]);
+
   const welcomeVariant = useMemo(() => {
     if (typeof chatId === 'number') {
       const seed = Math.abs(chatId);
       return (seed % 3) + 1;
     }
-    return 1;
-  }, [chatId]);
+    return newChatWelcomeVariant;
+  }, [chatId, newChatWelcomeVariant]);
 
   useEffect(() => {
     backendRpc.user.get().then(setCurrentUser).catch(console.error);
