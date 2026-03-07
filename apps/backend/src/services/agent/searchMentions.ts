@@ -30,6 +30,7 @@ interface MentionItem {
   label: string;
   path?: string | null;
   displayPath?: string | null;
+  nodeType?: string | null;
   isContainer?: boolean;
   isFile?: boolean;
   mimeType?: string | null;
@@ -137,6 +138,8 @@ export async function searchMentions(ctx: AgentExecutionContext, payload: Search
         label: node.name,
         path: displayPath,
         displayPath,
+        nodeType:
+          typeof node.nodeType === 'string' && node.nodeType.trim().length ? node.nodeType : null,
         isContainer: Boolean(node.isFolder),
         isFile: Boolean(node.isFile),
         mimeType,

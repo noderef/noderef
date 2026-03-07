@@ -17,7 +17,7 @@
 import type { AgentMentionSuggestion } from '@/core/ipc/backend';
 import { getFileIconByMimeType } from '@/components/submenu/fileIconUtils';
 import { Button, Group, Loader, Paper, Stack, Text, Tooltip } from '@mantine/core';
-import { IconFolder, IconUser, IconUsersGroup } from '@tabler/icons-react';
+import { IconFolder, IconUser, IconUsersGroup, IconWorld } from '@tabler/icons-react';
 import { SuggestionProps } from '@tiptap/suggestion';
 import {
   type CSSProperties,
@@ -118,6 +118,10 @@ function getMentionIcon(item: AgentMentionSuggestion): {
   }
   if (item.type === 'group') {
     return { Icon: IconUsersGroup, color: 'var(--mantine-color-violet-6)' };
+  }
+  const nodeType = typeof item.nodeType === 'string' ? item.nodeType.toLowerCase() : '';
+  if (nodeType === 'st:site' || nodeType === 'st:sites') {
+    return { Icon: IconWorld, color: 'var(--mantine-color-blue-6)' };
   }
   if (item.isContainer) {
     return { Icon: IconFolder, color: 'var(--mantine-color-blue-6)' };

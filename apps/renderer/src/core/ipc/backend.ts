@@ -836,6 +836,7 @@ export interface AgentMentionSuggestion {
   label: string;
   path?: string | null;
   displayPath?: string | null;
+  nodeType?: string | null;
   isContainer?: boolean;
   isFile?: boolean;
   mimeType?: string | null;
