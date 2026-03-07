@@ -15,6 +15,7 @@
  */
 
 import { getFileIconByMimeType } from '@/components/submenu/fileIconUtils';
+import { BrandLogo } from '@/components/BrandLogo';
 import { backendRpc } from '@/core/ipc/backend';
 import { isNeutralinoMode } from '@/core/ipc/neutralino';
 import { MODAL_KEYS } from '@/core/store/keys';
@@ -445,9 +446,33 @@ export function SavedSearchNewPage() {
 
   if (alfrescoServers.length === 0) {
     return (
-      <Paper p="xl" withBorder>
+      <Box
+        style={{
+          flex: 1,
+          width: '100%',
+          minHeight: 'calc(100vh - 160px)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '2rem',
+          paddingTop: '4rem',
+        }}
+      >
         <Text c="dimmed">{t('noAlfrescoServerForSavedSearch')}</Text>
-      </Paper>
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '100%',
+          }}
+        >
+          <div style={{ opacity: 0.08 }}>
+            <BrandLogo size={240} color="var(--mantine-color-gray-6)" />
+          </div>
+        </div>
+      </Box>
     );
   }
 
