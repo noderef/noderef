@@ -259,6 +259,23 @@ const isProd =
     ((window as any).NL_PATH.includes('.app/Contents') ||
       (window as any).NL_PATH.includes('/Contents/')));
 
+/** Frontend app version (injected at build). Used to reject backends from a different release. */
+const EXPECTED_BACKEND_VERSION =
+  typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
+
+/**
+ * Returns true if the backend's reported version is acceptable (same release or dev).
+ * Rejecting mismatched versions avoids connecting to a stale backend from a previous install.
+ * In packaged builds we also accept 'dev' so the app still works if build-meta.json is missing in the bundle.
+ */
+function isBackendVersionAcceptable(backendVersion: string | undefined): boolean {
+  if (!backendVersion || typeof backendVersion !== 'string') return false;
+  if (backendVersion === EXPECTED_BACKEND_VERSION) return true;
+  if (import.meta.env.DEV && backendVersion === 'dev') return true;
+  if (backendVersion === 'dev') return true; // packaged app: backend may report 'dev' if build-meta missing
+  return false;
+}
+
 async function wait(ms: number) {
   return new Promise(r => setTimeout(r, ms));
 }
@@ -413,24 +430,25 @@ async function discoverPort(): Promise<number> {
             const info = await r.json().catch(() => ({}));
             const xNodeRef = r.headers.get('x-noderef');
 
-            // Validation: X-NodeRef header is the strongest signal
-            // If present and starts with 'backend@', it's our backend
-            if (xNodeRef?.startsWith('backend@')) {
+            // Require version match so we don't reconnect to a backend from a previous release
+            if (!isBackendVersionAcceptable(info?.version)) {
+              debugWarn(
+                '[RPC] Portfile port rejected: backend version mismatch',
+                { backend: info?.version, expected: EXPECTED_BACKEND_VERSION }
+              );
+            } else if (xNodeRef?.startsWith('backend@')) {
               debugLog(`[RPC] Found valid backend on port ${published} (X-NodeRef: ${xNodeRef})`);
               return published;
-            }
-
-            // Fallback: strict JSON validation (for backwards compatibility)
-            const looksRight =
-              info?.ok === true &&
-              info?.service === 'noderef-backend' &&
-              typeof info?.version === 'string' &&
-              typeof info?.ts === 'number';
-
-            if (looksRight) {
-              debugLog(`[RPC] Found valid backend on port ${published} (JSON validation)`);
-              return published;
             } else {
+              const looksRight =
+                info?.ok === true &&
+                info?.service === 'noderef-backend' &&
+                typeof info?.version === 'string' &&
+                typeof info?.ts === 'number';
+              if (looksRight) {
+                debugLog(`[RPC] Found valid backend on port ${published} (JSON validation)`);
+                return published;
+              }
               debugWarn('[RPC] Portfile port found but validation failed:', { info, xNodeRef });
             }
           } else {
@@ -462,22 +480,15 @@ async function discoverPort(): Promise<number> {
 
       const info = await r.json().catch(() => ({}));
       const xNodeRef = r.headers.get('x-noderef');
+      if (!isBackendVersionAcceptable(info?.version)) continue;
 
-      // Strict validation - require all fields
       const looksRight =
         info?.ok === true &&
         info?.service === 'noderef-backend' &&
         typeof info?.version === 'string' &&
         typeof info?.ts === 'number';
-
-      // X-NodeRef header is a strong signal
-      if (!xNodeRef?.startsWith('backend@') && !looksRight) {
-        continue; // Hard reject if neither condition is met
-      }
-
-      if (looksRight || xNodeRef?.startsWith('backend@')) {
-        return p;
-      }
+      if (!xNodeRef?.startsWith('backend@') && !looksRight) continue;
+      if (looksRight || xNodeRef?.startsWith('backend@')) return p;
     } catch {
       // Ignore fetch errors - port not available, continue scanning
       continue;
@@ -500,17 +511,15 @@ async function isAlive(url = baseURL): Promise<boolean> {
 
     if (!r.ok) return false;
 
-    // Validate it's actually our backend
     const info = await r.json().catch(() => ({}));
     const xNodeRef = r.headers.get('x-noderef');
+    if (!isBackendVersionAcceptable(info?.version)) return false;
 
-    // Must be our backend
     const isOurBackend =
       info?.ok === true &&
       info?.service === 'noderef-backend' &&
       typeof info?.version === 'string' &&
       (xNodeRef?.startsWith('backend@') || true);
-
     return isOurBackend;
   } catch {
     return false;

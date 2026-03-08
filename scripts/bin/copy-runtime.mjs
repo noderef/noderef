@@ -98,6 +98,11 @@ if (!exists(nodeSrc)) {
   process.exit(1);
 }
 
+const buildMetaPath = path.join(resources(), 'build-meta.json');
+if (!exists(buildMetaPath)) {
+  warn(`build-meta.json not found at ${buildMetaPath} (run pnpm sync:meta before build)`);
+}
+
 let failed = false;
 
 for (const t of platformTargets()) {
@@ -129,6 +134,13 @@ for (const t of platformTargets()) {
   if (!copied) {
     failed = true;
     error(`Prisma client binaries missing for ${t.plat}/${t.arch} (${t.prismaTargets.join(', ')})`);
+  }
+
+  // Backend reads version from ../../resources/build-meta.json (relative to node-src/dist)
+  if (exists(buildMetaPath)) {
+    const appResourcesDir = path.join(t.app, 'resources');
+    fs.mkdirSync(appResourcesDir, { recursive: true });
+    fs.copyFileSync(buildMetaPath, path.join(appResourcesDir, 'build-meta.json'));
   }
 
   info(`✓ ${t.plat}/${t.arch} → OK`);
