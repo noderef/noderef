@@ -1653,12 +1653,28 @@ export function AgentPage() {
     }
   };
 
-  const toggleAutoConfirmForActiveChat = useCallback(() => {
+  const toggleAutoConfirmForActiveChat = useCallback(async () => {
     if (!activeChatId) {
       return;
     }
-    setChatAutoConfirm(activeChatId, !autoConfirmForActiveChat);
-  }, [activeChatId, autoConfirmForActiveChat, setChatAutoConfirm]);
+
+    const nextEnabled = !autoConfirmForActiveChat;
+    setChatAutoConfirm(activeChatId, nextEnabled);
+
+    try {
+      await backendRpc.agent.setChatAutoApproveConfirmations({
+        chatId: activeChatId,
+        enabled: nextEnabled,
+      });
+    } catch (error) {
+      setChatAutoConfirm(activeChatId, autoConfirmForActiveChat);
+      notifications.show({
+        title: t('errors.confirmationTitle'),
+        message: error instanceof Error ? error.message : t('errors.generic'),
+        color: 'red',
+      });
+    }
+  }, [activeChatId, autoConfirmForActiveChat, setChatAutoConfirm, t]);
 
   const handleConfirmPendingStep = async (
     approved: boolean,
@@ -1674,10 +1690,15 @@ export function AgentPage() {
         stepId: pendingConfirmation.pendingStep.id,
         confirmationToken: pendingConfirmation.pendingStep.confirmationToken || '',
         approved,
+        autoApproveConfirmations: Boolean(options?.enableForChat),
       });
 
       if (approved && options?.enableForChat && activeChatId) {
         setChatAutoConfirm(activeChatId, true);
+        await backendRpc.agent.setChatAutoApproveConfirmations({
+          chatId: activeChatId,
+          enabled: true,
+        });
       }
 
       await pollActiveChat();
@@ -2199,7 +2220,7 @@ export function AgentPage() {
                             radius="xl"
                             variant={autoConfirmForActiveChat ? 'light' : 'subtle'}
                             color={autoConfirmForActiveChat ? 'blue' : 'gray'}
-                            onClick={toggleAutoConfirmForActiveChat}
+                            onClick={() => void toggleAutoConfirmForActiveChat()}
                             aria-label={t('toggleAutoConfirm')}
                           >
                             {autoConfirmForActiveChat ? (

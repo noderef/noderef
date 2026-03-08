@@ -59,6 +59,12 @@ interface ConfirmStepInput {
   confirmationToken: string;
   approved: boolean;
   confirmationText?: string;
+  autoApproveConfirmations?: boolean;
+}
+
+interface SetChatAutoApproveInput {
+  chatId: number;
+  enabled: boolean;
 }
 
 function normalizeAppLanguage(input: string | undefined): string | undefined {
@@ -483,6 +489,15 @@ export class AgentService {
       return AppErrors.forbidden('Invalid confirmation token');
     }
 
+    if (payload.approved && payload.autoApproveConfirmations !== undefined) {
+      await this.repository.updateRun(userId, run.id, {
+        plan: {
+          ...(run.plan || {}),
+          autoApproveConfirmations: Boolean(payload.autoApproveConfirmations),
+        },
+      });
+    }
+
     const confirmationMessage = await this.repository.createMessage({
       chatId: run.chatId,
       userId,
@@ -498,6 +513,38 @@ export class AgentService {
     }
 
     return this.approveStep(userId, run, step, confirmationMessage);
+  }
+
+  async setChatAutoApproveConfirmations(userId: number, payload: SetChatAutoApproveInput) {
+    const chat = await this.repository.findChatById(userId, payload.chatId);
+    if (!chat) {
+      return AppErrors.notFound('Chat', payload.chatId);
+    }
+
+    const activeRuns = await this.prisma.agentRun.findMany({
+      where: {
+        userId,
+        chatId: payload.chatId,
+        status: { in: ['queued', 'running', 'waiting_confirmation'] },
+      },
+      select: {
+        id: true,
+        planJson: true,
+      },
+    });
+
+    await Promise.all(
+      activeRuns.map(run =>
+        this.repository.updateRun(userId, run.id, {
+          plan: {
+            ...(parseJsonRecord(run.planJson) || {}),
+            autoApproveConfirmations: payload.enabled,
+          },
+        })
+      )
+    );
+
+    return { success: true, updatedRuns: activeRuns.length };
   }
 
   async searchMentions(
@@ -717,7 +764,7 @@ export class AgentService {
       );
 
       setImmediate(() => {
-        void this.executeRun(userId, run.id, preferredModel, preferredLanguage, false, {
+        void this.executeRun(userId, run.id, preferredModel, preferredLanguage, undefined, {
           completedAction,
           completedOutput: output,
         }).catch(error => {
@@ -1435,7 +1482,7 @@ export class AgentService {
     runId: number,
     preferredModel?: { provider?: string; model?: string },
     preferredLanguage?: string,
-    autoApproveConfirmations = false,
+    autoApproveConfirmations?: boolean,
     continuation?: {
       completedAction: string;
       completedOutput?: Record<string, unknown>;
@@ -1458,6 +1505,10 @@ export class AgentService {
       const runtime = await resolveAiRuntime(userId, preferredModel);
       if (!runtime) throw new Error('No AI provider configured.');
 
+      const existingPlan = parseJsonRecord(runRow.planJson);
+      const effectiveAutoApproveConfirmations =
+        autoApproveConfirmations ?? Boolean(existingPlan?.autoApproveConfirmations);
+
       const content = continuation
         ? this.buildContinuationContent(
             runRow.triggerMessage.content,
@@ -1475,6 +1526,7 @@ export class AgentService {
           version: AGENT_MANIFEST_VERSION,
           provider: runtime.provider,
           model: runtime.model,
+          autoApproveConfirmations: effectiveAutoApproveConfirmations,
           ...(preferredLanguage ? { appLanguage: preferredLanguage } : {}),
         },
       });
@@ -1503,7 +1555,7 @@ export class AgentService {
         chatIcon: runRow.chat.chatIcon,
         triggerMessageId: runRow.triggerMessage.id,
         preferredLanguage,
-        autoApproveConfirmations,
+        autoApproveConfirmations: effectiveAutoApproveConfirmations,
       });
 
       // Only mark as completed if the engine didn't pause for confirmation

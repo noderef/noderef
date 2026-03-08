@@ -1119,9 +1119,12 @@ export class AgentRunEngine {
           continue;
         }
 
-        const autoApproveEnabledForCall = Boolean(
-          input.autoApproveConfirmations && tool.requiresConfirmation
-        );
+        const currentRun = await this.repository.findRunById(input.userId, input.runId);
+        const autoApproveConfirmations =
+          currentRun?.plan && typeof currentRun.plan.autoApproveConfirmations === 'boolean'
+            ? currentRun.plan.autoApproveConfirmations
+            : Boolean(input.autoApproveConfirmations);
+        const autoApproveEnabledForCall = Boolean(autoApproveConfirmations && tool.requiresConfirmation);
         const requiresManualConfirmation = tool.requiresConfirmation && !autoApproveEnabledForCall;
         const stepSummary = buildStepSummary({
           operation: canonicalOperation,

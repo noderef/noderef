@@ -379,8 +379,16 @@ export const backendRpc = {
       confirmationToken: string;
       approved: boolean;
       confirmationText?: string;
+      autoApproveConfirmations?: boolean;
     }): Promise<{ success: boolean; runStatus: string }> {
       return rpc('backend.agent.confirmStep', data);
+    },
+
+    async setChatAutoApproveConfirmations(data: {
+      chatId: number;
+      enabled: boolean;
+    }): Promise<{ success: boolean; updatedRuns: number }> {
+      return rpc('backend.agent.setChatAutoApproveConfirmations', data);
     },
 
     async searchMentions(params: {
