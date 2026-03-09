@@ -59,6 +59,7 @@ interface ConfirmStepInput {
   confirmationToken: string;
   approved: boolean;
   confirmationText?: string;
+  enableAutoApproveConfirmations?: boolean;
 }
 
 function normalizeAppLanguage(input: string | undefined): string | undefined {
@@ -497,7 +498,53 @@ export class AgentService {
       return this.rejectStep(userId, run, step, confirmationMessage);
     }
 
-    return this.approveStep(userId, run, step, confirmationMessage);
+    const shouldAutoApproveContinuation = Boolean(
+      payload.enableAutoApproveConfirmations ||
+        (run.plan && run.plan.autoApproveConfirmations === true)
+    );
+
+    if (shouldAutoApproveContinuation) {
+      await this.repository.updateRun(userId, run.id, {
+        plan: {
+          ...(run.plan || {}),
+          autoApproveConfirmations: true,
+        },
+      });
+    }
+
+    return this.approveStep(userId, run, step, confirmationMessage, {
+      autoApproveConfirmationsForContinuation: shouldAutoApproveContinuation,
+    });
+  }
+
+  async setChatAutoApproveConfirmations(userId: number, chatId: number, enabled: boolean) {
+    const chat = await this.repository.findChatById(userId, chatId);
+    if (!chat) {
+      return AppErrors.notFound('Chat', chatId);
+    }
+
+    const activeRuns = await this.prisma.agentRun.findMany({
+      where: {
+        userId,
+        chatId,
+        status: { in: ['queued', 'running', 'waiting_confirmation'] },
+      },
+      select: { id: true, planJson: true },
+    });
+
+    await Promise.all(
+      activeRuns.map(async run => {
+        const existingPlan = parseJsonRecord(run.planJson) || {};
+        await this.repository.updateRun(userId, run.id, {
+          plan: {
+            ...existingPlan,
+            autoApproveConfirmations: enabled,
+          },
+        });
+      })
+    );
+
+    return { success: true, updatedRuns: activeRuns.length };
   }
 
   async searchMentions(
@@ -589,7 +636,8 @@ export class AgentService {
       summary: string | null;
       input: Record<string, unknown> | null;
     },
-    confirmationMessage: { id: number }
+    confirmationMessage: { id: number },
+    options?: { autoApproveConfirmationsForContinuation?: boolean }
   ) {
     const execCtx = await createExecutionContext(
       this.prisma,
@@ -716,11 +764,20 @@ export class AgentService {
         typeof run.plan?.appLanguage === 'string' ? run.plan.appLanguage : undefined
       );
 
+      const continuationAutoApprove = Boolean(options?.autoApproveConfirmationsForContinuation);
+
       setImmediate(() => {
-        void this.executeRun(userId, run.id, preferredModel, preferredLanguage, false, {
-          completedAction,
-          completedOutput: output,
-        }).catch(error => {
+        void this.executeRun(
+          userId,
+          run.id,
+          preferredModel,
+          preferredLanguage,
+          continuationAutoApprove,
+          {
+            completedAction,
+            completedOutput: output,
+          }
+        ).catch(error => {
           log.error(
             { err: error, runId: run.id, stepId: step.id },
             'Continuation after confirmation failed'
@@ -1475,6 +1532,7 @@ export class AgentService {
           version: AGENT_MANIFEST_VERSION,
           provider: runtime.provider,
           model: runtime.model,
+          autoApproveConfirmations,
           ...(preferredLanguage ? { appLanguage: preferredLanguage } : {}),
         },
       });
