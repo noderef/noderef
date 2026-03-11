@@ -276,6 +276,11 @@ export function getPageActions(
       moreMenuActions: [],
     },
 
+    insights: {
+      actionIcons: [],
+      moreMenuActions: [],
+    },
+
     'text-editor': {
       actionIcons: [
         {

@@ -41,6 +41,7 @@ import {
   IconHash,
   IconPlus,
   IconCpu,
+  IconChartAreaLine,
 } from '@tabler/icons-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Loader } from '@mantine/core';
@@ -82,6 +83,8 @@ const iconMap: Record<string, React.ComponentType<any>> = {
   hash: IconHash,
   agent: IconCpu,
   plus: IconPlus,
+  chart: IconChartAreaLine,
+  'chart-area': IconChartAreaLine,
 };
 
 export function getIconComponent(iconName: string): React.ReactNode {

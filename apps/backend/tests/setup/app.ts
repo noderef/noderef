@@ -33,6 +33,7 @@ import { SavedSearchRepository } from '../../src/repositories/savedSearchReposit
 import { SearchHistoryRepository } from '../../src/repositories/searchHistoryRepository.js';
 import { ServerRepository } from '../../src/repositories/serverRepository.js';
 import { UserRepository } from '../../src/repositories/userRepository.js';
+import { InsightGraphService } from '../../src/services/insightGraphService.js';
 
 import { prisma } from './database';
 
@@ -304,6 +305,9 @@ export async function getTestApp(): Promise<Express> {
   registerNodeHistoryHandlers(routes, nodeHistoryRepo);
   registerJsConsoleHistoryHandlers(routes, jsConsoleHistoryRepo);
 
+  const insightGraphService = new InsightGraphService(prisma);
+  registerInsightGraphHandlers(routes, insightGraphService);
+
   testApp.post('/rpc', rpcHandler(routes));
 
   return testApp;
@@ -411,6 +415,57 @@ function registerJsConsoleHistoryHandlers(routes: Routes, repo: JsConsoleHistory
       const userId = await getTestUserId();
       const { serverId, limit, cursor } = p as any;
       return repo.list(userId, { serverId, limit, cursor });
+    },
+  };
+}
+
+function registerInsightGraphHandlers(routes: Routes, service: InsightGraphService): void {
+  routes['backend.serverInsights.listGraphs'] = {
+    schema: z.object({ serverId: z.number() }),
+    handler: async p => {
+      const userId = await getTestUserId();
+      return service.findAllByServer(userId, (p as { serverId: number }).serverId);
+    },
+  };
+
+  routes['backend.serverInsights.createGraph'] = {
+    schema: z.object({
+      serverId: z.number(),
+      title: z.string().min(1),
+      filterQuery: z.string().min(1),
+      dateField: z.string().min(1),
+      color: z.string().optional(),
+      columnSpan: z.number().min(1).max(2).optional(),
+    }),
+    handler: async p => {
+      const userId = await getTestUserId();
+      const data = p as any;
+      return service.create(userId, data);
+    },
+  };
+
+  routes['backend.serverInsights.updateGraph'] = {
+    schema: z.object({
+      id: z.number(),
+      title: z.string().min(1).optional(),
+      filterQuery: z.string().min(1).optional(),
+      dateField: z.string().min(1).optional(),
+      color: z.string().optional(),
+      displayOrder: z.number().optional(),
+      columnSpan: z.number().min(1).max(2).optional(),
+    }),
+    handler: async p => {
+      const userId = await getTestUserId();
+      const { id, ...data } = p as any;
+      return service.update(userId, id, data);
+    },
+  };
+
+  routes['backend.serverInsights.deleteGraph'] = {
+    schema: z.object({ id: z.number() }),
+    handler: async p => {
+      const userId = await getTestUserId();
+      return { success: await service.delete(userId, (p as { id: number }).id) };
     },
   };
 }

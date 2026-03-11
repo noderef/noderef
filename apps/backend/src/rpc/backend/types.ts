@@ -28,6 +28,7 @@ import type { NodeHistoryService } from '../../services/nodeHistoryService.js';
 import type { SavedSearchService } from '../../services/savedSearchService.js';
 import type { SearchHistoryService } from '../../services/searchHistoryService.js';
 import type { ServerService } from '../../services/serverService.js';
+import type { InsightGraphService } from '../../services/insightGraphService.js';
 
 /**
  * Type alias for Zod schema
@@ -52,6 +53,7 @@ export interface RpcContext {
   localFileService: LocalFileService;
   jsConsoleHistoryService: JsConsoleHistoryService;
   agentService: AgentService;
+  insightGraphService: InsightGraphService;
 }
 
 /**

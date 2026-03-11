@@ -53,6 +53,8 @@ export async function cleanupTables(): Promise<void> {
   await prisma.nodeHistory.deleteMany();
   await prisma.searchHistory.deleteMany();
   await prisma.savedSearch.deleteMany();
+  await prisma.insightSnapshot.deleteMany();
+  await prisma.insightGraph.deleteMany();
   await prisma.localFile.deleteMany();
   await prisma.userAiSettings.deleteMany();
   await prisma.server.deleteMany();

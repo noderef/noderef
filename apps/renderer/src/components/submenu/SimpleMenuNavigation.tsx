@@ -169,7 +169,8 @@ export function SimpleMenuNavigation() {
             const shouldPreservePage =
               activePage === 'jsconsole' ||
               activePage === 'text-editor' ||
-              activePage === 'agentPage';
+              activePage === 'agentPage' ||
+              activePage === 'insights';
 
             if (!shouldPreservePage) {
               navigate('jsconsole');
@@ -518,11 +519,20 @@ export function SimpleMenuNavigation() {
   // Repository Admin is now in the submenu header dropdown as an external link
 
   // Alfresco top-level items (not in sections)
-  const alfrescoTopLevelItems: MenuItemType[] = [
+  const alfrescoPrimaryTopLevelItems: MenuItemType[] = [
     {
       id: 'jsconsole',
       label: t('submenu:jsConsole'),
       icon: 'code',
+      viewMode: 'monaco',
+    },
+  ];
+
+  const alfrescoSecondaryTopLevelItems: MenuItemType[] = [
+    {
+      id: 'insights',
+      label: t('submenu:insights'),
+      icon: 'chart-area',
       viewMode: 'monaco',
     },
   ];
@@ -553,6 +563,7 @@ export function SimpleMenuNavigation() {
   // Determine which sections to show based on serverType only
   let sections: MenuSectionType[] = [];
   let topLevelItems: MenuItemType[] = [];
+  let secondaryTopLevelItems: MenuItemType[] = [];
 
   if (isNodeRefSpace) {
     sections = [...agentSections, ...alfrescoSections];
@@ -560,13 +571,15 @@ export function SimpleMenuNavigation() {
     // Show all Alfresco menu items for any Alfresco server
     // Feature availability should be handled at runtime, not by hiding menu items
     sections = [...agentSections, ...alfrescoSections];
-    topLevelItems = alfrescoTopLevelItems;
+    topLevelItems = alfrescoPrimaryTopLevelItems;
+    secondaryTopLevelItems = alfrescoSecondaryTopLevelItems;
   }
 
   // Check if we have any items to show (sections or top-level items)
   const hasAnyItems =
     sections.some(s => s.items.length > 0) ||
     topLevelItems.length > 0 ||
+    secondaryTopLevelItems.length > 0 ||
     nodeRefPrimaryMenuItems.length > 0 ||
     nodeRefSecondaryMenuItems.length > 0;
 
@@ -678,7 +691,13 @@ export function SimpleMenuNavigation() {
           {/* JavaScript Console next (server context) */}
           {!isNodeRefSpace && renderMenuItems(topLevelItems)}
 
-          {(isNodeRefSpace || server?.serverType === 'alfresco') && renderSections(sections)}
+          {isNodeRefSpace && renderSections(sections)}
+
+          {!isNodeRefSpace && renderSections(agentSections)}
+
+          {!isNodeRefSpace && renderMenuItems(secondaryTopLevelItems)}
+
+          {!isNodeRefSpace && renderSections(alfrescoSections)}
 
           {/* NodeRef Space secondary navigation */}
           {isNodeRefSpace && renderMenuItems(nodeRefSecondaryMenuItems)}

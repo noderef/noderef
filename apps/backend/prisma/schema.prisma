@@ -30,6 +30,7 @@ model User {
   agentMessages       AgentMessage[]
   agentRuns           AgentRun[]
   agentOperationAudits AgentOperationAudit[]
+  insightGraphs       InsightGraph[]
 
   @@map("user")
 }
@@ -64,6 +65,7 @@ model Server {
   agentChats        AgentChat[]
   agentRuns         AgentRun[]
   agentOperationAudits AgentOperationAudit[]
+  insightGraphs     InsightGraph[]
 
   @@index([userId, displayOrder])
   @@map("server")
@@ -310,4 +312,44 @@ model AgentOperationAudit {
   @@index([userId, createdAt])
   @@index([operation, createdAt])
   @@map("agent_operation_audit")
+}
+
+model InsightGraph {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  serverId     Int
+  title        String
+  type         String   @default("area")
+  isPinned     Boolean  @default(false)
+  pinnedAt     DateTime?
+  filterQuery  String
+  dateField    String
+  color        String   @default("#228be6")
+  displayOrder Int      @default(0)
+  columnSpan   Int      @default(1)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user      User              @relation(fields: [userId], references: [id])
+  server    Server            @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  snapshots InsightSnapshot[]
+
+  @@index([userId, serverId, displayOrder])
+  @@index([userId, isPinned, pinnedAt])
+  @@map("insight_graph")
+}
+
+model InsightSnapshot {
+  id         Int      @id @default(autoincrement())
+  graphId    Int
+  bucketDate String
+  totalItems Int
+  queryHash  String
+  fetchedAt  DateTime @default(now())
+
+  graph InsightGraph @relation(fields: [graphId], references: [id], onDelete: Cascade)
+
+  @@unique([graphId, bucketDate, queryHash])
+  @@index([graphId, bucketDate])
+  @@map("insight_snapshot")
 }

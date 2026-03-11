@@ -1,5 +1,7 @@
 {
   "activity": "Recent activity",
+  "pinnedInsights": "Pinned insights",
+  "pinnedInsightsDescription": "Pinned graphs from your servers, each using that server's selected range.",
   "activityDescription": "Nodes you opened recently grouped by day",
   "noActivity": "No activity yet",
   "noActivityDescription": "Browse nodes to populate your dashboard history.",

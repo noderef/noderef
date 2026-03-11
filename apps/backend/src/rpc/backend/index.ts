@@ -40,6 +40,7 @@ import { SavedSearchService } from '../../services/savedSearchService.js';
 import { SearchHistoryService } from '../../services/searchHistoryService.js';
 import { ServerService } from '../../services/serverService.js';
 import { AgentService } from '../../services/agent/AgentService.js';
+import { InsightGraphService } from '../../services/insightGraphService.js';
 
 // Domain handlers
 import { registerAiHandlers } from './ai.js';
@@ -53,6 +54,7 @@ import { registerServersHandlers } from './servers.js';
 import type { Routes, RpcContext } from './types.js';
 import { registerUserHandlers } from './user.js';
 import { registerWorkspaceHandlers } from './workspace.js';
+import { registerServerInsightsHandlers } from './serverInsights.js';
 
 /**
  * Register all backend data service RPC methods
@@ -78,6 +80,7 @@ export async function registerBackendRpc(
     localFileService: new LocalFileService(prisma),
     jsConsoleHistoryService: new JsConsoleHistoryService(prisma),
     agentService: new AgentService(prisma, serverService),
+    insightGraphService: new InsightGraphService(prisma),
   };
 
   // Register all domain handlers
@@ -91,4 +94,5 @@ export async function registerBackendRpc(
   registerAiHandlers(routes);
   registerUserHandlers(routes);
   registerWorkspaceHandlers(routes, ctx);
+  registerServerInsightsHandlers(routes, ctx);
 }

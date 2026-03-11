@@ -1,5 +1,7 @@
 {
   "activity": "Recente activiteit",
+  "pinnedInsights": "Vastgemaakte grafieken",
+  "pinnedInsightsDescription": "Vastgemaakte grafieken van je servers, elk met het bereik dat op die server is ingesteld.",
   "activityDescription": "Nodes die je onlangs hebt geopend, gegroepeerd per dag",
   "noActivity": "Nog geen activiteit",
   "noActivityDescription": "Blader door nodes om je dashboardgeschiedenis te vullen.",

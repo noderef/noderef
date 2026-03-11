@@ -29,6 +29,7 @@ import { ComponentType, lazy } from 'react';
 // Lazy load Monaco-dependent pages to reduce initial bundle size
 const JsConsolePage = lazy(() => import('@/pages/JsConsolePage'));
 const TextEditorPage = lazy(() => import('@/pages/TextEditorPage'));
+const InsightsPage = lazy(() => import('@/pages/InsightsPage'));
 
 export interface RouteConfig {
   title: string; // Full i18n key
@@ -115,6 +116,12 @@ export const routes: Record<PageKey, RouteConfig> = {
     options: {
       noScroll: true,
     },
+  },
+  insights: {
+    title: 'insights:pageTitle',
+    defaultTitle: 'Insights',
+    icon: 'chart-area',
+    component: InsightsPage,
   },
 };
 

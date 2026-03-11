@@ -23,6 +23,7 @@ export interface SearchDictionary {
   aspects: string[];
   sites: string[];
   properties: string[];
+  propertyDataTypes: Record<string, string>;
 }
 
 const CACHE_KEY = 'search-dictionary-cache';
@@ -43,12 +44,13 @@ export function useSearchDictionary(serverId: number | null) {
     aspects: [],
     sites: [],
     properties: [],
+    propertyDataTypes: {},
   });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!serverId || !server?.baseUrl) {
-      setDictionary({ types: [], aspects: [], sites: [], properties: [] });
+      setDictionary({ types: [], aspects: [], sites: [], properties: [], propertyDataTypes: {} });
       return;
     }
 
@@ -60,7 +62,16 @@ export function useSearchDictionary(serverId: number | null) {
         if (cached) {
           const { data, timestamp } = JSON.parse(cached);
           // Cache valid for 1 hour
-          if (Date.now() - timestamp < 60 * 60 * 1000) {
+          if (
+            Date.now() - timestamp < 60 * 60 * 1000 &&
+            data &&
+            Array.isArray(data.types) &&
+            Array.isArray(data.aspects) &&
+            Array.isArray(data.sites) &&
+            Array.isArray(data.properties) &&
+            data.propertyDataTypes &&
+            typeof data.propertyDataTypes === 'object'
+          ) {
             setDictionary(data);
             setLoading(false);
             return;
@@ -70,11 +81,23 @@ export function useSearchDictionary(serverId: number | null) {
         // Fetch from backend
         const result = await backendRpc.alfresco.search.getDictionary(serverId, server.baseUrl);
 
-        setDictionary(result);
+        setDictionary({
+          ...result,
+          propertyDataTypes: result.propertyDataTypes ?? {},
+        });
 
         // Update cache
         if (cacheKey) {
-          localStorage.setItem(cacheKey, JSON.stringify({ data: result, timestamp: Date.now() }));
+          localStorage.setItem(
+            cacheKey,
+            JSON.stringify({
+              data: {
+                ...result,
+                propertyDataTypes: result.propertyDataTypes ?? {},
+              },
+              timestamp: Date.now(),
+            })
+          );
         }
       } catch (error) {
         console.error('Failed to load search dictionary:', error);

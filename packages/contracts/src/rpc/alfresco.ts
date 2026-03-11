@@ -260,6 +260,7 @@ export const GetSearchDictionaryResSchema = z.object({
   aspects: z.array(z.string()),
   sites: z.array(z.string()),
   properties: z.array(z.string()),
+  propertyDataTypes: z.record(z.string(), z.string()).optional(),
 });
 
 export type GetSearchDictionaryReq = z.infer<typeof GetSearchDictionaryReqSchema>;

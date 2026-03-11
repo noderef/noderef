@@ -704,12 +704,14 @@ export const backendRpc = {
         aspects: string[];
         sites: string[];
         properties: string[];
+        propertyDataTypes?: Record<string, string>;
       }> {
         return rpc<{
           types: string[];
           aspects: string[];
           sites: string[];
           properties: string[];
+          propertyDataTypes?: Record<string, string>;
         }>('alfresco.search.getDictionary', { serverId, baseUrl });
       },
 
@@ -719,6 +721,17 @@ export const backendRpc = {
         prefix: string
       ): Promise<string[]> {
         return rpc<string[]>('alfresco.search.propertiesByPrefix', { serverId, baseUrl, prefix });
+      },
+      async propertyDataTypesByPrefix(
+        serverId: number,
+        baseUrl: string,
+        prefix: string
+      ): Promise<Record<string, string>> {
+        return rpc<Record<string, string>>('alfresco.search.propertyDataTypesByPrefix', {
+          serverId,
+          baseUrl,
+          prefix,
+        });
       },
       async classesByPrefix(
         serverId: number,
@@ -788,6 +801,65 @@ export const backendRpc = {
       },
     },
   },
+
+  /**
+   * Server Insights operations
+   */
+  serverInsights: {
+    async listGraphs(serverId: number): Promise<InsightGraph[]> {
+      return rpc<InsightGraph[]>('backend.serverInsights.listGraphs', { serverId });
+    },
+
+    async createGraph(data: {
+      serverId: number;
+      title: string;
+      type?: 'area';
+      filterQuery: string;
+      dateField: string;
+      color?: string;
+      columnSpan?: number;
+    }): Promise<InsightGraph> {
+      return rpc<InsightGraph>('backend.serverInsights.createGraph', data);
+    },
+
+    async updateGraph(
+      id: number,
+      data: {
+        title?: string;
+        type?: 'area';
+        isPinned?: boolean;
+        filterQuery?: string;
+        dateField?: string;
+        color?: string;
+        displayOrder?: number;
+        columnSpan?: number;
+      }
+    ): Promise<InsightGraph> {
+      return rpc<InsightGraph>('backend.serverInsights.updateGraph', { id, ...data });
+    },
+
+    async deleteGraph(id: number): Promise<{ success: boolean }> {
+      return rpc<{ success: boolean }>('backend.serverInsights.deleteGraph', { id });
+    },
+
+    async getDashboard(
+      serverId: number,
+      rangeDays: number
+    ): Promise<InsightDashboard> {
+      return rpc<InsightDashboard>('backend.serverInsights.getDashboard', {
+        serverId,
+        rangeDays,
+      });
+    },
+
+    async getPinnedDashboard(
+      rangesByServer: Record<number, 7 | 14 | 30 | 90>
+    ): Promise<PinnedInsightDashboard> {
+      return rpc<PinnedInsightDashboard>('backend.serverInsights.getPinnedDashboard', {
+        rangesByServer,
+      });
+    },
+  },
 };
 
 export interface SearchHistory {
@@ -821,6 +893,59 @@ export interface SavedSearch {
   lastDiffCount: number;
   isDefault: boolean;
   createdAt: Date;
+}
+
+export interface InsightGraph {
+  id: number;
+  userId: number;
+  serverId: number;
+  title: string;
+  type: 'area' | string;
+  isPinned: boolean;
+  pinnedAt: Date | null;
+  filterQuery: string;
+  dateField: string;
+  color: string;
+  displayOrder: number;
+  columnSpan: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface InsightSeriesPoint {
+  date: string;
+  count: number;
+}
+
+export interface InsightGraphDashboardItem {
+  graphId: number;
+  title: string;
+  type: 'area' | string;
+  color: string;
+  columnSpan: number;
+  series: InsightSeriesPoint[];
+}
+
+export interface InsightDashboard {
+  graphs: InsightGraphDashboardItem[];
+}
+
+export interface PinnedInsightGraphDashboardItem {
+  graphId: number;
+  serverId: number;
+  serverName: string;
+  serverLabel: string | null;
+  title: string;
+  type: 'area' | string;
+  color: string;
+  columnSpan: number;
+  rangeDays: 7 | 14 | 30 | 90 | number;
+  isPinned: boolean;
+  series: InsightSeriesPoint[];
+}
+
+export interface PinnedInsightDashboard {
+  graphs: PinnedInsightGraphDashboardItem[];
 }
 
 export interface AgentMention {
