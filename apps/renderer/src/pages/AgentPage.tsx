@@ -932,7 +932,7 @@ export function AgentPage() {
     () =>
       servers.map(server => ({
         value: String(server.id),
-        label: server.label || server.name,
+        label: server.label ? `${server.name} (${server.label})` : server.name,
       })),
     [servers]
   );
