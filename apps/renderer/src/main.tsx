@@ -28,6 +28,27 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 
+// Suppress noisy Recharts size warnings from @mantine/charts when containers
+// briefly report invalid dimensions during layout. We already guard our chart
+// rendering on positive container size; this just hides the remaining console noise.
+const originalConsoleError = console.error;
+const originalConsoleWarn = console.warn;
+const CHART_SIZE_WARNING = 'The width(-1) and height(-1) of chart should be greater than 0';
+
+console.error = (...args: Parameters<typeof console.error>) => {
+  if (typeof args[0] === 'string' && args[0].includes(CHART_SIZE_WARNING)) {
+    return;
+  }
+  originalConsoleError(...args);
+};
+
+console.warn = (...args: Parameters<typeof console.warn>) => {
+  if (typeof args[0] === 'string' && args[0].includes(CHART_SIZE_WARNING)) {
+    return;
+  }
+  originalConsoleWarn(...args);
+};
+
 // Kick the backend on startup (as before)
 startBackend().catch(err => {
   console.warn('[Main] startBackend failed, trying ensureBackendStarted:', err);
