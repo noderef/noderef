@@ -76,7 +76,7 @@ function isKnownNamespace(dictionary: SearchDictionary, prefix: string): boolean
  * Parse a colon-query string (e.g. "cm:con") into namespace prefix and local filter.
  * Returns null if the query is not a valid namespace pattern.
  */
-function parseColonQuery(query: string): { prefix: string; localFilter: string } | null {
+export function parseColonQuery(query: string): { prefix: string; localFilter: string } | null {
   const match = query.match(/^([a-zA-Z][a-zA-Z0-9_-]*):(.*)$/);
   if (!match) {
     return null;
