@@ -56,8 +56,8 @@ import {
 
 const DEFAULT_ROLES = ['Consumer', 'Editor', 'Contributor', 'Collaborator', 'Coordinator'] as const;
 const SITE_ROLES = ['SiteManager', 'SiteCollaborator', 'SiteContributor', 'SiteConsumer'] as const;
-type PermissionRole = (typeof DEFAULT_ROLES)[number] | (typeof SITE_ROLES)[number];
 const ALL_PERMISSION_ROLES = [...DEFAULT_ROLES, ...SITE_ROLES] as const;
+const SITE_GROUP_ROLE_REGEX = /^GROUP_site_([^_]+)_(Site.+)$/;
 const PAGE_SIZE = 50;
 
 interface PermissionEntry {
@@ -73,8 +73,9 @@ interface NodePermissionsModalPayload {
   onUpdated?: () => void;
 }
 
-const isPermissionRole = (role: string): role is PermissionRole =>
+const isKnownPermissionRole = (role: string): boolean =>
   (ALL_PERMISSION_ROLES as readonly string[]).includes(role);
+const isSiteRole = (role: string): boolean => role.startsWith('Site');
 
 const normalizePermissionEntry = (entry: any): PermissionEntry => {
   const rawAccessStatus = entry?.accessStatus ?? entry?.rel;
@@ -123,7 +124,7 @@ export function NodePermissionsModal() {
   const [groupsResults, setGroupsResults] = useState<AuthorityResult[]>([]);
 
   const [authorityLoading, setAuthorityLoading] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<PermissionRole | null>(null);
+  const [selectedRole, setSelectedRole] = useState<string | null>(null);
   const [authorityDirectory, setAuthorityDirectory] = useState<Record<string, AuthorityResult>>({});
   const permissionsRequestRef = useRef(0);
   const groupsSearchRequestRef = useRef(0);
@@ -141,19 +142,16 @@ export function NodePermissionsModal() {
     onDropdownClose: () => combobox.resetSelectedOption(),
   });
 
-  const roleOptions = useMemo<PermissionRole[]>(() => {
+  const roleOptions = useMemo<string[]>(() => {
     const inSite = Boolean(siteId);
-    const allowedRoles: PermissionRole[] = inSite
-      ? [...DEFAULT_ROLES, ...SITE_ROLES]
-      : [...DEFAULT_ROLES];
-    const settableRoles: PermissionRole[] =
-      Array.isArray(settable) && settable.length > 0
-        ? settable.filter(isPermissionRole)
-        : allowedRoles;
-    const filtered = settableRoles.filter(role => allowedRoles.includes(role));
-    const roles: PermissionRole[] = filtered.length ? filtered : allowedRoles;
-    const ordered = allowedRoles.filter(role => roles.includes(role));
-    return Array.from(new Set(ordered));
+    const baseRoles = [...DEFAULT_ROLES, ...(inSite ? [...SITE_ROLES] : [])];
+    const settableRoles = Array.isArray(settable)
+      ? settable.filter(role => typeof role === 'string' && (isKnownPermissionRole(role) || (inSite && isSiteRole(role))))
+      : [];
+    const orderedCustomSiteRoles = inSite
+      ? settableRoles.filter(role => isSiteRole(role) && !baseRoles.includes(role))
+      : [];
+    return Array.from(new Set([...baseRoles, ...orderedCustomSiteRoles]));
   }, [siteId, settable]);
 
   const roleLabel = useCallback(
@@ -234,7 +232,7 @@ export function NodePermissionsModal() {
     setMemberResults([]);
   };
 
-  const extractSiteId = (entry: any): string | null => {
+  const extractSiteId = (entry: any, permissions?: any): string | null => {
     const elements = entry?.path?.elements;
     if (Array.isArray(elements)) {
       const siteElement = elements.find((el: any) => {
@@ -244,11 +242,39 @@ export function NodePermissionsModal() {
       if (siteElement?.name) {
         return String(siteElement.name);
       }
+
+      const sitesRootIndex = elements.findIndex(
+        (el: any) => String(el?.nodeType || '').toLowerCase() === 'st:sites'
+      );
+      if (sitesRootIndex >= 0 && elements[sitesRootIndex + 1]?.name) {
+        return String(elements[sitesRootIndex + 1].name);
+      }
+
+      const sitesFolderIndex = elements.findIndex(
+        (el: any) => String(el?.name || '').toLowerCase() === 'sites'
+      );
+      if (sitesFolderIndex >= 0 && elements[sitesFolderIndex + 1]?.name) {
+        return String(elements[sitesFolderIndex + 1].name);
+      }
     }
+
     const nodeType = String(entry?.nodeType || '').toLowerCase();
     if (nodeType === 'st:site' && entry?.name) {
       return String(entry.name);
     }
+
+    const allEntries = [
+      ...(Array.isArray(permissions?.locallySet) ? permissions.locallySet : []),
+      ...(Array.isArray(permissions?.inherited) ? permissions.inherited : []),
+    ];
+    for (const permissionEntry of allEntries) {
+      const authorityId = String(permissionEntry?.authorityId ?? permissionEntry?.authority ?? '');
+      const match = authorityId.match(SITE_GROUP_ROLE_REGEX);
+      if (match?.[1]) {
+        return match[1];
+      }
+    }
+
     return null;
   };
 
@@ -285,7 +311,7 @@ export function NodePermissionsModal() {
       : [];
 
     setNodeLabel(String(entry?.name || modalPayload.nodeName || modalPayload.nodeId));
-    setSiteId(extractSiteId(entry));
+    setSiteId(extractSiteId(entry, permissions));
     setIsInheritanceEnabled(Boolean(permissions.isInheritanceEnabled ?? true));
     setLocallySet(
       localEntries.filter(
@@ -647,7 +673,7 @@ export function NodePermissionsModal() {
 
   const handleAddAuthority = (authority: AuthorityResult, roleOverride?: string) => {
     const role = roleOverride ?? selectedRole;
-    if (!role || !isPermissionRole(role)) return;
+    if (!role) return;
     setLocallySet(prev => {
       const existingIndex = prev.findIndex(entry => entry.authorityId === authority.id);
       if (existingIndex >= 0) {
@@ -678,7 +704,7 @@ export function NodePermissionsModal() {
   };
 
   const handlePermissionChange = (authorityId: string, role: string | null) => {
-    if (!role || !isPermissionRole(role)) return;
+    if (!role) return;
     setLocallySet(prev =>
       prev.map(entry => (entry.authorityId === authorityId ? { ...entry, name: role } : entry))
     );
@@ -791,7 +817,10 @@ export function NodePermissionsModal() {
           <Table.Td>
             {editable && isAllowed ? (
               <Select
-                data={roleOptions.map(role => ({ value: role, label: roleLabel(role) }))}
+                data={Array.from(new Set([...roleOptions, entry.name])).map(role => ({
+                  value: role,
+                  label: roleLabel(role),
+                }))}
                 value={entry.name}
                 onChange={value => handlePermissionChange(entry.authorityId, value)}
                 size="xs"
@@ -931,9 +960,7 @@ export function NodePermissionsModal() {
                       <Select
                         data={roleOptions.map(role => ({ value: role, label: roleLabel(role) }))}
                         value={selectedRole}
-                        onChange={value =>
-                          setSelectedRole(value && isPermissionRole(value) ? value : null)
-                        }
+                        onChange={value => setSelectedRole(value || null)}
                         placeholder={t('nodeBrowser:permissionsRolePlaceholder')}
                         comboboxProps={{ withinPortal: true, position: 'bottom-start', offset: 6 }}
                       />
