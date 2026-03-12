@@ -22,9 +22,17 @@
 
 import type { Express } from 'express';
 import request from 'supertest';
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { InsightGraphService } from '../../src/services/insightGraphService.js';
 import { getTestApp, resetTestUserId, rpc } from '../setup/app';
 import { cleanupTables, ensureTestUser, prisma } from '../setup/database';
+
+function formatDateYmd(date: Date): string {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
 
 describe('backend.serverInsights', () => {
   let app: Express;
@@ -286,6 +294,85 @@ describe('backend.serverInsights', () => {
         where: { graphId: graph.id },
       });
       expect(remainingSnapshots).toHaveLength(0);
+    });
+  });
+
+  describe('dashboard snapshot refresh', () => {
+    it('refreshes today only after 10 minutes while keeping historical buckets cached', async () => {
+      const graph = await prisma.insightGraph.create({
+        data: {
+          userId,
+          serverId,
+          title: 'Daily Content',
+          filterQuery: 'TYPE:"cm:content"',
+          dateField: 'cm:created',
+        },
+      });
+
+      const service = new InsightGraphService(prisma);
+      const today = formatDateYmd(new Date());
+      const yesterday = formatDateYmd(new Date(Date.now() - 24 * 60 * 60 * 1000));
+
+      const totalsByDate = new Map<string, number>([
+        [today, 5],
+        [yesterday, 2],
+      ]);
+
+      const searchFn = vi.fn(async (request: any) => {
+        const query = request?.query?.query ?? '';
+        const match = query.match(/"(\d{4}-\d{2}-\d{2})T00:00:00\.000Z"/);
+        const date = match?.[1];
+        return {
+          list: {
+            pagination: {
+              totalItems: date ? (totalsByDate.get(date) ?? 0) : 0,
+            },
+          },
+        };
+      });
+
+      // First load: all buckets are missing, so range=7 fetches 7 days.
+      const first = await service.getDashboard(userId, serverId, 7, searchFn);
+      expect(first.graphs).toHaveLength(1);
+      expect(searchFn).toHaveBeenCalledTimes(7);
+
+      // Update source data, but immediate second load should still use cache (within 10-minute TTL).
+      totalsByDate.set(today, 9);
+      totalsByDate.set(yesterday, 99);
+      searchFn.mockClear();
+
+      const second = await service.getDashboard(userId, serverId, 7, searchFn);
+      expect(second.graphs).toHaveLength(1);
+      expect(searchFn).toHaveBeenCalledTimes(0);
+
+      const countsByDateWithinTtl = new Map(
+        second.graphs[0].series.map(point => [point.date, point.count])
+      );
+      expect(countsByDateWithinTtl.get(today)).toBe(5);
+      expect(countsByDateWithinTtl.get(yesterday)).toBe(2);
+
+      // Force today's snapshot to be older than TTL, then only today should be re-fetched.
+      await prisma.insightSnapshot.updateMany({
+        where: { graphId: graph.id, bucketDate: today },
+        data: { fetchedAt: new Date(Date.now() - 11 * 60 * 1000) },
+      });
+
+      searchFn.mockClear();
+      const third = await service.getDashboard(userId, serverId, 7, searchFn);
+      expect(third.graphs).toHaveLength(1);
+      expect(searchFn).toHaveBeenCalledTimes(1);
+      expect((searchFn.mock.calls[0]?.[0] as any)?.query?.query).toContain(
+        `${today}T00:00:00.000Z`
+      );
+
+      const countsByDateAfterTtl = new Map(third.graphs[0].series.map(point => [point.date, point.count]));
+      expect(countsByDateAfterTtl.get(today)).toBe(9);
+      expect(countsByDateAfterTtl.get(yesterday)).toBe(2);
+
+      const snapshots = await prisma.insightSnapshot.findMany({
+        where: { graphId: graph.id },
+      });
+      expect(snapshots).toHaveLength(7);
     });
   });
 });

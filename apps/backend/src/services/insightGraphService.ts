@@ -36,9 +36,7 @@ import { executeCountQuery, getDayBounds, type SearchFn } from './insightCountSe
 const log = createLogger('insight.graph');
 const DEFAULT_RANGE_DAYS = 7;
 export const VALID_RANGE_DAYS = new Set([7, 14, 30, 90]);
-
-/** TTL for today's bucket refresh (15 minutes) */
-const TODAY_BUCKET_TTL_MS = 15 * 60 * 1000;
+const TODAY_BUCKET_TTL_MS = 10 * 60 * 1000;
 
 /** A single day data point in a chart series */
 export interface InsightSeriesPoint {
@@ -310,9 +308,8 @@ export class InsightGraphService {
       if (!existing) {
         missingDates.push(date);
       } else if (date === today) {
-        // Refresh today's bucket if stale
-        const age = Date.now() - existing.fetchedAt.getTime();
-        if (age > TODAY_BUCKET_TTL_MS) {
+        const ageMs = Date.now() - existing.fetchedAt.getTime();
+        if (ageMs > TODAY_BUCKET_TTL_MS) {
           staleTodayDates.push(date);
         }
       }
