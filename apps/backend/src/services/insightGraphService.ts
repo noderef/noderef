@@ -51,6 +51,7 @@ export interface InsightGraphDashboardItem {
   graphId: number;
   title: string;
   type: string;
+  dateField: string;
   color: string;
   columnSpan: number;
   series: InsightSeriesPoint[];
@@ -365,6 +366,7 @@ export class InsightGraphService {
       graphId: graph.id,
       title: graph.title,
       type: graph.type,
+      dateField: graph.dateField,
       color: graph.color,
       columnSpan: graph.columnSpan,
       series,

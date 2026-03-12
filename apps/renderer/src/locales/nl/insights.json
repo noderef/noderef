@@ -15,6 +15,7 @@
   "dateFieldDescription": "Datumeigenschap om op te groeperen (bijv. cm:created)",
   "chartType": "Grafiektype",
   "chartTypeArea": "Area",
+  "chartTypeReadOnlyDescription": "Voor nu vastgezet. Extra grafiektypes kunnen later worden toegevoegd.",
   "color": "Kleur",
   "columnSpan": "Breedte",
   "columnSpanFull": "Volledige breedte",
@@ -28,5 +29,6 @@
   "graphUpdated": "Grafiek bijgewerkt",
   "graphDeleted": "Grafiek verwijderd",
   "loadError": "Laden van inzichten mislukt",
-  "dateFieldTypeError": "Het datumveld moet een datum- of datetime-eigenschap gebruiken."
+  "dateFieldTypeError": "Het datumveld moet een datum- of datetime-eigenschap gebruiken.",
+  "tooltipDateField": "Datumveld: {{field}}"
 }

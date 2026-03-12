@@ -15,6 +15,7 @@
   "dateFieldDescription": "Date property to bucket by (e.g. cm:created)",
   "chartType": "Chart type",
   "chartTypeArea": "Area",
+  "chartTypeReadOnlyDescription": "Fixed for now. Additional chart types can be added later.",
   "color": "Color",
   "columnSpan": "Width",
   "columnSpanFull": "Full width",
@@ -28,5 +29,6 @@
   "graphUpdated": "Graph updated",
   "graphDeleted": "Graph deleted",
   "loadError": "Failed to load insights",
-  "dateFieldTypeError": "Date field must use a date or datetime property."
+  "dateFieldTypeError": "Date field must use a date or datetime property.",
+  "tooltipDateField": "Date field: {{field}}"
 }

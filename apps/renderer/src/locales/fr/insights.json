@@ -15,6 +15,7 @@
   "dateFieldDescription": "Propriété de date pour le regroupement (ex. cm:created)",
   "chartType": "Type de graphique",
   "chartTypeArea": "Aire",
+  "chartTypeReadOnlyDescription": "Fixé pour le moment. D'autres types de graphiques pourront être ajoutés plus tard.",
   "color": "Couleur",
   "columnSpan": "Largeur",
   "columnSpanFull": "Pleine largeur",
@@ -28,5 +29,6 @@
   "graphUpdated": "Graphique mis à jour",
   "graphDeleted": "Graphique supprimé",
   "loadError": "Échec du chargement des insights",
-  "dateFieldTypeError": "Le champ date doit utiliser une propriété date ou datetime."
+  "dateFieldTypeError": "Le champ date doit utiliser une propriété date ou datetime.",
+  "tooltipDateField": "Champ date : {{field}}"
 }

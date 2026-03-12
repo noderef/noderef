@@ -15,6 +15,7 @@
   "dateFieldDescription": "Datums-Eigenschaft für die Gruppierung (z.B. cm:created)",
   "chartType": "Diagrammtyp",
   "chartTypeArea": "Fläche",
+  "chartTypeReadOnlyDescription": "Derzeit fest vorgegeben. Weitere Diagrammtypen können später ergänzt werden.",
   "color": "Farbe",
   "columnSpan": "Breite",
   "columnSpanFull": "Volle Breite",
@@ -28,5 +29,6 @@
   "graphUpdated": "Diagramm aktualisiert",
   "graphDeleted": "Diagramm gelöscht",
   "loadError": "Insights konnten nicht geladen werden",
-  "dateFieldTypeError": "Das Datumsfeld muss eine Datum- oder Datetime-Eigenschaft verwenden."
+  "dateFieldTypeError": "Das Datumsfeld muss eine Datum- oder Datetime-Eigenschaft verwenden.",
+  "tooltipDateField": "Datumsfeld: {{field}}"
 }

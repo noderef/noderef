@@ -156,19 +156,35 @@ export function InsightGraphCard({
             withDots={false}
             withTooltip
             tooltipAnimationDuration={150}
-            tooltipProps={{ content: ({ label, payload }) => {
-              if (!payload?.length) return null;
-              const value = payload[0]?.value as number;
-              return (
-                <Paper px="md" py="xs" withBorder shadow="md" radius="md">
-                  <Text size="xs" c="dimmed" mb={4}>{formatDate(String(label))}</Text>
-                  <Group gap="xs">
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: item.color }} />
-                    <Text size="sm" fw={500}>{value?.toLocaleString()}</Text>
-                  </Group>
-                </Paper>
-              );
-            }}}
+            tooltipProps={{
+              content: ({ label, payload }) => {
+                if (!payload?.length) return null;
+                const value = payload[0]?.value as number;
+                return (
+                  <Paper px="md" py="xs" withBorder shadow="md" radius="md">
+                    <Text size="xs" c="dimmed" mb={4}>
+                      {formatDate(String(label))}
+                    </Text>
+                    <Group gap="xs" mb={4}>
+                      <div
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          backgroundColor: item.color,
+                        }}
+                      />
+                      <Text size="sm" fw={500}>
+                        {value?.toLocaleString()}
+                      </Text>
+                    </Group>
+                    <Text size="xs" c="dimmed">
+                      {t('tooltipDateField', { field: item.dateField })}
+                    </Text>
+                  </Paper>
+                );
+              },
+            }}
             withXAxis
             withYAxis
             gridAxis="none"

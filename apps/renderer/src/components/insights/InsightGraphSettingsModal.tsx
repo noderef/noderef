@@ -46,7 +46,7 @@ import {
 } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
-import { IconTrash } from '@tabler/icons-react';
+import { IconLock, IconTrash } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -493,8 +493,17 @@ export function InsightGraphSettingsModal({
 
         <TextInput
           label={t('insights:chartType')}
+          description={t('insights:chartTypeReadOnlyDescription')}
           value={t('insights:chartTypeArea')}
           readOnly
+          leftSection={<IconLock size={14} />}
+          variant="filled"
+          styles={{
+            input: {
+              cursor: 'default',
+              fontWeight: 500,
+            },
+          }}
         />
 
         <ColorInput

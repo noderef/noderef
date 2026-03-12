@@ -921,6 +921,7 @@ export interface InsightGraphDashboardItem {
   graphId: number;
   title: string;
   type: 'area' | string;
+  dateField: string;
   color: string;
   columnSpan: number;
   series: InsightSeriesPoint[];
@@ -937,6 +938,7 @@ export interface PinnedInsightGraphDashboardItem {
   serverLabel: string | null;
   title: string;
   type: 'area' | string;
+  dateField: string;
   color: string;
   columnSpan: number;
   rangeDays: 7 | 14 | 30 | 90 | number;
