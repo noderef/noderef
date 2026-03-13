@@ -31,7 +31,7 @@ import { useUIStore } from '@/core/store/ui';
 import { writeClipboardText } from '@/core/utils/clipboard';
 import { useModal } from '@/hooks/useModal';
 import { useNavigation } from '@/hooks/useNavigation';
-import { useQNameSuggestions } from '@/hooks/useQNameSuggestions';
+import { parseColonQuery, useQNameSuggestions } from '@/hooks/useQNameSuggestions';
 import { useSearchDictionary } from '@/hooks/useSearchDictionary';
 import {
   Accordion,
@@ -939,11 +939,97 @@ export function AgentPage() {
   const modelSelectionServerId = activeChat?.serverId || activeServerId || composerServerId || null;
 
   const [qnameQuery, setQnameQuery] = useState<string | null>(null);
+  const [qnamePropertiesByPrefix, setQNamePropertiesByPrefix] = useState<Record<string, string[]>>(
+    {}
+  );
+  const qnamePropertiesInFlightRef = useRef<Set<string>>(new Set());
+  const qnamePropertiesFetchedRef = useRef<Set<string>>(new Set());
 
   // Load the search dictionary for the active server
   const dictionaryServerId = activeChat?.serverId || activeServerId || servers[0]?.id || null;
+  const dictionaryServer = useMemo(
+    () => (dictionaryServerId ? servers.find(server => server.id === dictionaryServerId) || null : null),
+    [dictionaryServerId, servers]
+  );
   const { dictionary } = useSearchDictionary(dictionaryServerId);
-  const qnameSuggestions = useQNameSuggestions(dictionary, qnameQuery);
+  const qnameSuggestionDictionary = useMemo(() => {
+    const mergedProperties = [...dictionary.properties];
+    const seen = new Set(dictionary.properties.map(property => property.toLowerCase()));
+
+    for (const values of Object.values(qnamePropertiesByPrefix)) {
+      for (const property of values) {
+        const key = property.toLowerCase();
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        mergedProperties.push(property);
+      }
+    }
+
+    return {
+      ...dictionary,
+      properties: mergedProperties,
+    };
+  }, [dictionary, qnamePropertiesByPrefix]);
+  const qnameSuggestions = useQNameSuggestions(qnameSuggestionDictionary, qnameQuery);
+
+  useEffect(() => {
+    setQNamePropertiesByPrefix({});
+    qnamePropertiesInFlightRef.current.clear();
+    qnamePropertiesFetchedRef.current.clear();
+  }, [dictionaryServerId, dictionaryServer?.baseUrl]);
+
+  useEffect(() => {
+    if (!qnameQuery || !dictionaryServerId || !dictionaryServer?.baseUrl) {
+      return;
+    }
+
+    const parsed = parseColonQuery(qnameQuery);
+    if (!parsed) {
+      return;
+    }
+
+    const prefix = parsed.prefix.toLowerCase();
+    const hasDictionaryProperties = dictionary.properties.some(property =>
+      property.toLowerCase().startsWith(prefix)
+    );
+    if (hasDictionaryProperties) {
+      return;
+    }
+    if (
+      qnamePropertiesFetchedRef.current.has(prefix) ||
+      qnamePropertiesInFlightRef.current.has(prefix)
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    qnamePropertiesInFlightRef.current.add(prefix);
+
+    backendRpc.alfresco.search
+      .propertiesByPrefix(dictionaryServerId, dictionaryServer.baseUrl, prefix)
+      .then(properties => {
+        if (cancelled) {
+          return;
+        }
+        qnamePropertiesFetchedRef.current.add(prefix);
+        setQNamePropertiesByPrefix(prev => ({ ...prev, [prefix]: properties }));
+      })
+      .catch(error => {
+        if (cancelled) {
+          return;
+        }
+        console.error('Failed to load QName properties', error);
+      })
+      .finally(() => {
+        qnamePropertiesInFlightRef.current.delete(prefix);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [qnameQuery, dictionaryServerId, dictionaryServer?.baseUrl, dictionary.properties]);
 
   const activeMessages = useMemo(
     () => (activeChatId ? messagesByChat[activeChatId] || [] : []),
