@@ -38,14 +38,16 @@ export function getPort(): number {
 }
 
 /**
- * Get the host to bind to from environment
+ * Get the host to bind to from environment.
+ * Default is loopback (127.0.0.1) so packaged desktop/macOS does not bind to 0.0.0.0.
+ * Set HOST=0.0.0.0 (e.g. in Docker) when the backend must accept external connections.
  */
 export function getHost(): string {
   const fromEnv = process.env.HOST || process.env.BIND_ADDR;
   if (fromEnv) {
     return fromEnv;
   }
-  return isDev ? '127.0.0.1' : '0.0.0.0';
+  return '127.0.0.1';
 }
 
 /**
