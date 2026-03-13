@@ -213,7 +213,8 @@ export function PageView() {
   }, [pageActions.actionIcons, showMultiServerSelector]);
 
   // Determine if this is a lazy-loaded page (Monaco-dependent)
-  const isLazyPage = activePage === 'jsconsole' || activePage === 'text-editor';
+  const isLazyPage =
+    activePage === 'jsconsole' || activePage === 'text-editor' || activePage === 'insights';
 
   return (
     <ContentArea

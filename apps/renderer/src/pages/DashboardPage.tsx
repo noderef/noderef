@@ -15,8 +15,11 @@
  */
 
 import { backendRpc } from '@/core/ipc/backend';
+import type { PinnedInsightDashboard } from '@/core/ipc/backend';
 import type { NodeHistoryActivitySummary, NodeHistoryTimelineItem } from '@app/contracts';
 import { Heatmap } from '@mantine/charts';
+import { InsightGraphCard } from '@/components/insights/InsightGraphCard';
+import { useInsightsStore } from '@/core/store/insightsStore';
 import {
   Alert,
   Anchor,
@@ -27,6 +30,7 @@ import {
   Group,
   Loader,
   Paper,
+  SimpleGrid,
   Stack,
   Text,
   ThemeIcon,
@@ -49,6 +53,7 @@ import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
 import { useFileFolderBrowserTabsStore } from '@/core/store/fileFolderBrowserTabs';
 import { useNavigation } from '@/hooks/useNavigation';
 import { formatRelativeTime } from '@/utils/formatTime';
+import { useToggleInsightPin } from '@/hooks/useToggleInsightPin';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -120,6 +125,7 @@ const TIMELINE_PAGE_SIZE = 20;
 export function DashboardPage() {
   const { t, i18n } = useTranslation('dashboard');
   const locale = i18n.language ?? undefined;
+  const selectedRangeByServer = useInsightsStore(state => state.selectedRangeByServer);
   const theme = useMantineTheme();
   const colorScheme = useComputedColorScheme('light', { getInitialValueInEffect: true });
   const { ref: heatmapRef, width: heatmapWidth } = useElementSize();
@@ -128,6 +134,7 @@ export function DashboardPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const [error, setError] = useState<{ message?: string } | null>(null);
+  const [pinnedInsights, setPinnedInsights] = useState<PinnedInsightDashboard | null>(null);
   const [hasMore, setHasMore] = useState<boolean>(true);
   const [timelineStartDay, setTimelineStartDay] = useState<string | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
@@ -166,6 +173,20 @@ export function DashboardPage() {
       mounted = false;
     };
   }, []);
+
+  const loadPinnedInsights = useCallback(async () => {
+    try {
+      const data = await backendRpc.serverInsights.getPinnedDashboard(selectedRangeByServer);
+      setPinnedInsights(data);
+    } catch (err) {
+      console.error('Failed to load pinned insights dashboard', err);
+      setPinnedInsights({ graphs: [] });
+    }
+  }, [selectedRangeByServer]);
+
+  useEffect(() => {
+    loadPinnedInsights();
+  }, [loadPinnedInsights]);
 
   // Load more timeline items
   const loadMoreTimeline = useCallback(async () => {
@@ -206,7 +227,7 @@ export function DashboardPage() {
     }
   }, [activity, hasMore, loadingMore]);
 
-  const timeline = activity?.timeline ?? [];
+  const timeline = useMemo(() => activity?.timeline ?? [], [activity?.timeline]);
   const hasActivity = timeline.length > 0;
   const shouldShowTimelineSection = hasActivity || loading || loadingMore;
   const visibleTimeline = useMemo(() => {
@@ -296,7 +317,7 @@ export function DashboardPage() {
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [activity, heatmapWidth, hasActivity]);
+  }, [activity, heatmapRef, heatmapWidth, hasActivity]);
 
   const palette = theme.colors.blue ?? theme.colors[theme.primaryColor] ?? theme.colors.green;
   const primaryShadeValue = useMemo(() => {
@@ -534,6 +555,31 @@ export function DashboardPage() {
     [navigate, openFolderTab]
   );
 
+  const handlePinnedOptimisticUpdate = useCallback(
+    (graphId: number, nextPinned: boolean) => {
+      if (!nextPinned) {
+        // Unpinning: remove the graph from the pinned list
+        setPinnedInsights(prev =>
+          prev ? { graphs: prev.graphs.filter(g => g.graphId !== graphId) } : prev
+        );
+      }
+    },
+    []
+  );
+
+  const handlePinnedRollback = useCallback(
+    (_graphId: number, _previousPinned: boolean) => {
+      // Refetch on rollback to restore the correct state
+      loadPinnedInsights();
+    },
+    [loadPinnedInsights]
+  );
+
+  const handleTogglePinnedGraph = useToggleInsightPin(
+    handlePinnedOptimisticUpdate,
+    handlePinnedRollback
+  );
+
   return (
     <Stack h="100%" p="lg" gap="xs" style={{ overflow: 'auto' }}>
       {error && (
@@ -545,6 +591,42 @@ export function DashboardPage() {
         >
           {error.message ?? t('errors.activityLoadFailed')}
         </Alert>
+      )}
+
+      {pinnedInsights && pinnedInsights.graphs.length > 0 && (
+        <Box
+          style={{
+            width: heatmapSvgWidth ? `${heatmapSvgWidth}px` : '100%',
+            maxWidth: '100%',
+            alignSelf: 'center',
+            marginBottom: 'var(--mantine-spacing-sm)',
+          }}
+        >
+          <Stack gap="md">
+            <Stack gap={2}>
+              <Text fw={600} size="lg">
+                {t('pinnedInsights')}
+              </Text>
+              <Text size="sm" c="dimmed">
+                {t('pinnedInsightsDescription')}
+              </Text>
+            </Stack>
+            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+              {pinnedInsights.graphs.map(item => (
+                <div
+                  key={`${item.serverId}-${item.graphId}`}
+                  style={item.columnSpan === 2 ? { gridColumn: '1 / -1' } : undefined}
+                >
+                  <InsightGraphCard
+                    item={item}
+                    isPinned={item.isPinned}
+                    onTogglePin={handleTogglePinnedGraph}
+                  />
+                </div>
+              ))}
+            </SimpleGrid>
+          </Stack>
+        </Box>
       )}
 
       <Box

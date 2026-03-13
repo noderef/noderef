@@ -217,6 +217,30 @@ export function registerAlfrescoRpc(
     },
   };
 
+  routes['alfresco.search.propertyDataTypesByPrefix'] = {
+    schema: z.object({
+      serverId: z.number(),
+      baseUrl: z.string().url(),
+      prefix: z.string().min(1),
+    }),
+    handler: async params => {
+      const { serverId, baseUrl, prefix } = params as {
+        serverId: number;
+        baseUrl: string;
+        prefix: string;
+      };
+      const { getPropertyDataTypesByPrefix } = await import(
+        '../../services/alfresco/dictionaryService.js'
+      );
+
+      const api = await authenticateWithStoredCredentials(serverId, baseUrl);
+      if (!api) {
+        AppErrors.unauthorized('Failed to authenticate');
+      }
+      return getPropertyDataTypesByPrefix(api!, serverId, prefix);
+    },
+  };
+
   routes['alfresco.search.classesByPrefix'] = {
     schema: z.object({
       serverId: z.number(),

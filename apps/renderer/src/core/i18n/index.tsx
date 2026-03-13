@@ -18,6 +18,7 @@ import addServerDe from '@/locales/de/addServer.json';
 import agentDe from '@/locales/de/agent.json';
 import commonDe from '@/locales/de/common.json';
 import dashboardDe from '@/locales/de/dashboard.json';
+import insightsDe from '@/locales/de/insights.json';
 import fileFolderBrowserDe from '@/locales/de/fileFolderBrowser.json';
 import jsConsoleDe from '@/locales/de/jsConsole.json';
 import localFilesDe from '@/locales/de/localFiles.json';
@@ -35,6 +36,7 @@ import addServerEn from '@/locales/en/addServer.json';
 import agentEn from '@/locales/en/agent.json';
 import commonEn from '@/locales/en/common.json';
 import dashboardEn from '@/locales/en/dashboard.json';
+import insightsEn from '@/locales/en/insights.json';
 import fileFolderBrowserEn from '@/locales/en/fileFolderBrowser.json';
 import jsConsoleEn from '@/locales/en/jsConsole.json';
 import localFilesEn from '@/locales/en/localFiles.json';
@@ -52,6 +54,7 @@ import addServerFr from '@/locales/fr/addServer.json';
 import agentFr from '@/locales/fr/agent.json';
 import commonFr from '@/locales/fr/common.json';
 import dashboardFr from '@/locales/fr/dashboard.json';
+import insightsFr from '@/locales/fr/insights.json';
 import fileFolderBrowserFr from '@/locales/fr/fileFolderBrowser.json';
 import jsConsoleFr from '@/locales/fr/jsConsole.json';
 import localFilesFr from '@/locales/fr/localFiles.json';
@@ -69,6 +72,7 @@ import addServerNl from '@/locales/nl/addServer.json';
 import agentNl from '@/locales/nl/agent.json';
 import commonNl from '@/locales/nl/common.json';
 import dashboardNl from '@/locales/nl/dashboard.json';
+import insightsNl from '@/locales/nl/insights.json';
 import fileFolderBrowserNl from '@/locales/nl/fileFolderBrowser.json';
 import jsConsoleNl from '@/locales/nl/jsConsole.json';
 import localFilesNl from '@/locales/nl/localFiles.json';
@@ -109,6 +113,7 @@ const resources: Resource = {
     notFound: notFoundEn,
     jsConsole: jsConsoleEn,
     usersGroups: usersGroupsEn,
+    insights: insightsEn,
   },
   nl: {
     common: commonNl,
@@ -128,6 +133,7 @@ const resources: Resource = {
     notFound: notFoundNl,
     jsConsole: jsConsoleNl,
     usersGroups: usersGroupsNl,
+    insights: insightsNl,
   },
   de: {
     common: commonDe,
@@ -147,6 +153,7 @@ const resources: Resource = {
     notFound: notFoundDe,
     jsConsole: jsConsoleDe,
     usersGroups: usersGroupsDe,
+    insights: insightsDe,
   },
   fr: {
     common: commonFr,
@@ -166,6 +173,7 @@ const resources: Resource = {
     notFound: notFoundFr,
     jsConsole: jsConsoleFr,
     usersGroups: usersGroupsFr,
+    insights: insightsFr,
   },
 };
 
@@ -238,6 +246,7 @@ if (!i18n.isInitialized) {
       'notFound',
       'jsConsole',
       'usersGroups',
+      'insights',
     ],
     returnNull: false,
   });

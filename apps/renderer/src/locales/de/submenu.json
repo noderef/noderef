@@ -91,5 +91,6 @@
   "thumbnailReadError": "Bilddatei konnte nicht gelesen werden",
   "usersAndGroups": "Benutzer und Gruppen",
   "showMore": "Mehr anzeigen ({{count}})",
-  "showLess": "Weniger anzeigen"
+  "showLess": "Weniger anzeigen",
+  "insights": "Insights"
 }

@@ -25,6 +25,7 @@ interface DictionaryData {
   aspects: string[];
   sites: string[];
   propertiesByPrefix: Record<string, string[]>;
+  propertyDataTypesByPrefix: Record<string, Record<string, string>>;
   classesByPrefix: Record<string, { types: string[]; aspects: string[]; containers: string[] }>;
   fetchedAt: number;
 }
@@ -117,12 +118,40 @@ async function fetchSites(api: AlfrescoApi): Promise<string[]> {
   return sites.sort();
 }
 
+function extractPropertyDataType(propertyDef: any): string | null {
+  if (!propertyDef || typeof propertyDef !== 'object') {
+    return null;
+  }
+
+  const candidates = [
+    propertyDef.dataType,
+    propertyDef.dataType?.name,
+    propertyDef.dataType?.prefixedName,
+    propertyDef.dataTypeQName,
+    propertyDef.type,
+    propertyDef.type?.name,
+    propertyDef.type?.prefixedName,
+    propertyDef.propertyType,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim().length > 0) {
+      return candidate.trim();
+    }
+  }
+
+  return null;
+}
+
 async function ensureDictionary(api: AlfrescoApi, serverId: number): Promise<DictionaryData> {
   const cached = cache.get(serverId);
   if (cached && Date.now() - cached.fetchedAt < CACHE_TTL) {
     // In case cache was created before classesByPrefix was introduced
     if (!cached.classesByPrefix) {
       cached.classesByPrefix = {};
+    }
+    if (!cached.propertyDataTypesByPrefix) {
+      cached.propertyDataTypesByPrefix = {};
     }
     return cached;
   }
@@ -141,6 +170,7 @@ async function ensureDictionary(api: AlfrescoApi, serverId: number): Promise<Dic
       aspects,
       sites,
       propertiesByPrefix: {},
+      propertyDataTypesByPrefix: {},
       classesByPrefix: {},
       fetchedAt: Date.now(),
     };
@@ -149,6 +179,7 @@ async function ensureDictionary(api: AlfrescoApi, serverId: number): Promise<Dic
     const commonPrefixes = ['cm:', 'sys:', 'app:', 'fm:', 'rna:', 'audio:'];
     for (const p of commonPrefixes) {
       entry.propertiesByPrefix[p.toLowerCase()] = [];
+      entry.propertyDataTypesByPrefix[p.toLowerCase()] = {};
       entry.classesByPrefix[p.toLowerCase()] = { types: [], aspects: [], containers: [] };
     }
 
@@ -159,6 +190,7 @@ async function ensureDictionary(api: AlfrescoApi, serverId: number): Promise<Dic
     if (cached) {
       return {
         ...cached,
+        propertyDataTypesByPrefix: cached.propertyDataTypesByPrefix ?? {},
         classesByPrefix: cached.classesByPrefix ?? {},
       };
     }
@@ -167,6 +199,7 @@ async function ensureDictionary(api: AlfrescoApi, serverId: number): Promise<Dic
       aspects: [],
       sites: [],
       propertiesByPrefix: {},
+      propertyDataTypesByPrefix: {},
       classesByPrefix: {},
       fetchedAt: Date.now(),
     };
@@ -181,6 +214,7 @@ export async function getSearchDictionary(
   aspects: string[];
   sites: string[];
   properties: string[];
+  propertyDataTypes: Record<string, string>;
 }> {
   const cacheEntry = await ensureDictionary(api, serverId);
 
@@ -214,6 +248,7 @@ export async function getSearchDictionary(
     aspects: cacheEntry.aspects,
     sites: cacheEntry.sites,
     properties,
+    propertyDataTypes: cacheEntry.propertyDataTypesByPrefix['cm:'] ?? {},
   };
 }
 
@@ -234,6 +269,7 @@ export async function getPropertiesByPrefix(
   log.info({ serverId, prefix }, 'Fetching properties for prefix using /s/api/classes endpoint');
 
   const propertySet = new Set<string>();
+  const propertyDataTypes: Record<string, string> = {};
   const typeSet = new Set<string>();
   const aspectSet = new Set<string>();
   const containerSet = new Set<string>();
@@ -289,13 +325,17 @@ export async function getPropertiesByPrefix(
 
       if (classDef?.properties && typeof classDef.properties === 'object') {
         // Properties is an object with property names as keys
-        for (const propName of Object.keys(classDef.properties)) {
+        for (const [propName, propertyDef] of Object.entries(classDef.properties)) {
           if (
             propName &&
             typeof propName === 'string' &&
             propName.toLowerCase().startsWith(normalizedPrefix)
           ) {
             propertySet.add(propName);
+            const dataType = extractPropertyDataType(propertyDef);
+            if (dataType) {
+              propertyDataTypes[propName] = dataType;
+            }
           }
         }
       }
@@ -320,7 +360,26 @@ export async function getPropertiesByPrefix(
     containers: Array.from(containerSet).sort(),
   };
   cacheEntry.propertiesByPrefix[normalizedPrefix] = properties;
+  cacheEntry.propertyDataTypesByPrefix[normalizedPrefix] = propertyDataTypes;
   return properties;
+}
+
+export async function getPropertyDataTypesByPrefix(
+  api: AlfrescoApi,
+  serverId: number,
+  prefix: string
+): Promise<Record<string, string>> {
+  const normalizedPrefix = prefix.toLowerCase();
+  const cacheEntry = await ensureDictionary(api, serverId);
+
+  const cachedProperties = cacheEntry.propertiesByPrefix[normalizedPrefix];
+  const cachedDataTypes = cacheEntry.propertyDataTypesByPrefix[normalizedPrefix];
+  if (cachedProperties && cachedProperties.length > 0 && cachedDataTypes) {
+    return cachedDataTypes;
+  }
+
+  await getPropertiesByPrefix(api, serverId, normalizedPrefix);
+  return cacheEntry.propertyDataTypesByPrefix[normalizedPrefix] ?? {};
 }
 
 export async function getClassNamesByPrefix(

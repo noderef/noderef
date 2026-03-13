@@ -69,10 +69,11 @@ describe('applyPendingPrismaMigrations', () => {
       expect(result.applied).toEqual([
         '20251105220620_init',
         '20260216213900_agent',
+        '20260311161342_insight',
       ]);
 
       const tables = await prisma.$queryRawUnsafe<Array<{ name: string }>>(
-        `SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'agent_%' ORDER BY name`
+        `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('agent_chat', 'agent_message', 'agent_operation_audit', 'agent_run', 'agent_run_event', 'agent_run_step', 'insight_graph', 'insight_snapshot') ORDER BY name`
       );
       expect(tables.map(row => row.name)).toEqual([
         'agent_chat',
@@ -81,6 +82,8 @@ describe('applyPendingPrismaMigrations', () => {
         'agent_run',
         'agent_run_event',
         'agent_run_step',
+        'insight_graph',
+        'insight_snapshot',
       ]);
 
       const appliedMigrations = await prisma.$queryRawUnsafe<Array<{ migration_name: string }>>(
@@ -89,6 +92,7 @@ describe('applyPendingPrismaMigrations', () => {
       expect(appliedMigrations.map(row => row.migration_name)).toEqual([
         '20251105220620_init',
         '20260216213900_agent',
+        '20260311161342_insight',
       ]);
     } finally {
       await prisma.$disconnect();

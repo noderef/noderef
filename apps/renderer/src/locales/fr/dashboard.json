@@ -1,5 +1,7 @@
 {
   "activity": "Activité récente",
+  "pinnedInsights": "Graphiques épinglés",
+  "pinnedInsightsDescription": "Graphiques épinglés de vos serveurs, chacun utilisant la plage définie sur ce serveur.",
   "activityDescription": "Nœuds consultés récemment, regroupés par jour",
   "noActivity": "Aucune activité",
   "noActivityDescription": "Parcourez des nœuds pour alimenter l'historique du tableau de bord.",

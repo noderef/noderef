@@ -91,5 +91,6 @@
   "thumbnailReadError": "Afbeelding kan niet worden gelezen",
   "usersAndGroups": "Gebruikers en groepen",
   "showMore": "Meer tonen ({{count}})",
-  "showLess": "Minder tonen"
+  "showLess": "Minder tonen",
+  "insights": "Insights"
 }
