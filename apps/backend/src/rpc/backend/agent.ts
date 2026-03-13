@@ -165,10 +165,23 @@ export function registerAgentHandlers(routes: Routes, ctx: RpcContext): void {
       confirmationToken: z.string().min(1),
       approved: z.boolean(),
       confirmationText: z.string().optional(),
+      enableAutoApproveConfirmations: z.boolean().optional(),
     }),
     handler: async params => {
       const userId = await getCurrentUserId();
       return agentService.confirmStep(userId, params as any);
+    },
+  };
+
+  routes['backend.agent.setChatAutoApproveConfirmations'] = {
+    schema: z.object({
+      chatId: z.number().int().positive(),
+      enabled: z.boolean(),
+    }),
+    handler: async params => {
+      const userId = await getCurrentUserId();
+      const { chatId, enabled } = params as { chatId: number; enabled: boolean };
+      return agentService.setChatAutoApproveConfirmations(userId, chatId, enabled);
     },
   };
 
