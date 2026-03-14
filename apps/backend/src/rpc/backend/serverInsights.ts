@@ -146,19 +146,16 @@ export function registerServerInsightsHandlers(routes: Routes, ctx: RpcContext):
         Object.entries(rangesByServer).map(([serverId, rangeDays]) => [Number(serverId), rangeDays])
       ) as Record<number, number>;
 
-      return insightGraphService.getPinnedDashboard(
-        userId,
-        normalizedRanges,
-        async serverId =>
-          withAuth(ctx, serverId, async (api, server) => {
-            const { SearchApi } = await import('@alfresco/js-api');
-            const searchApi = new SearchApi(api);
-            return {
-              searchFn: searchApi.search.bind(searchApi) as any,
-              serverName: server.name,
-              serverLabel: server.label ?? null,
-            };
-          })
+      return insightGraphService.getPinnedDashboard(userId, normalizedRanges, async serverId =>
+        withAuth(ctx, serverId, async (api, server) => {
+          const { SearchApi } = await import('@alfresco/js-api');
+          const searchApi = new SearchApi(api);
+          return {
+            searchFn: searchApi.search.bind(searchApi) as any,
+            serverName: server.name,
+            serverLabel: server.label ?? null,
+          };
+        })
       );
     },
   };

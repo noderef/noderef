@@ -146,7 +146,11 @@ export function NodePermissionsModal() {
     const inSite = Boolean(siteId);
     const baseRoles = [...DEFAULT_ROLES, ...(inSite ? [...SITE_ROLES] : [])];
     const settableRoles = Array.isArray(settable)
-      ? settable.filter(role => typeof role === 'string' && (isKnownPermissionRole(role) || (inSite && isSiteRole(role))))
+      ? settable.filter(
+          role =>
+            typeof role === 'string' &&
+            (isKnownPermissionRole(role) || (inSite && isSiteRole(role)))
+        )
       : [];
     const orderedCustomSiteRoles = inSite
       ? settableRoles.filter(role => isSiteRole(role) && !baseRoles.includes(role))

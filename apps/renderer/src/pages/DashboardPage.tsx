@@ -555,17 +555,14 @@ export function DashboardPage() {
     [navigate, openFolderTab]
   );
 
-  const handlePinnedOptimisticUpdate = useCallback(
-    (graphId: number, nextPinned: boolean) => {
-      if (!nextPinned) {
-        // Unpinning: remove the graph from the pinned list
-        setPinnedInsights(prev =>
-          prev ? { graphs: prev.graphs.filter(g => g.graphId !== graphId) } : prev
-        );
-      }
-    },
-    []
-  );
+  const handlePinnedOptimisticUpdate = useCallback((graphId: number, nextPinned: boolean) => {
+    if (!nextPinned) {
+      // Unpinning: remove the graph from the pinned list
+      setPinnedInsights(prev =>
+        prev ? { graphs: prev.graphs.filter(g => g.graphId !== graphId) } : prev
+      );
+    }
+  }, []);
 
   const handlePinnedRollback = useCallback(
     (_graphId: number, _previousPinned: boolean) => {

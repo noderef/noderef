@@ -35,7 +35,9 @@ describe('applyPendingPrismaMigrations', () => {
   const cleanupPaths: string[] = [];
 
   afterEach(async () => {
-    await Promise.all(cleanupPaths.splice(0).map(target => fs.rm(target, { recursive: true, force: true })));
+    await Promise.all(
+      cleanupPaths.splice(0).map(target => fs.rm(target, { recursive: true, force: true }))
+    );
   });
 
   it('upgrades a legacy database that has schema tables but no _prisma_migrations rows', async () => {

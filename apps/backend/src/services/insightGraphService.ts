@@ -151,11 +151,7 @@ export class InsightGraphService {
     return this.repository.create({ userId, ...data });
   }
 
-  async update(
-    userId: number,
-    id: number,
-    data: UpdateInsightGraph
-  ): Promise<InsightGraph | null> {
+  async update(userId: number, id: number, data: UpdateInsightGraph): Promise<InsightGraph | null> {
     const existing = await this.repository.findById(userId, id);
     if (!existing) return null;
 
@@ -287,11 +283,7 @@ export class InsightGraphService {
     const queryHash = computeQueryHash(graph.filterQuery, graph.dateField);
 
     // Get existing snapshots for matching hash
-    const existingSnapshots = await this.repository.findSnapshots(
-      graph.id,
-      queryHash,
-      bucketDates
-    );
+    const existingSnapshots = await this.repository.findSnapshots(graph.id, queryHash, bucketDates);
 
     // Build a lookup map
     const snapshotMap = new Map<string, InsightSnapshot>();
@@ -345,10 +337,7 @@ export class InsightGraphService {
           );
           snapshotMap.set(date, snapshot);
         } else {
-          log.warn(
-            { graphId: graph.id, error: result.reason },
-            'Failed to fetch count for bucket'
-          );
+          log.warn({ graphId: graph.id, error: result.reason }, 'Failed to fetch count for bucket');
         }
       }
     }

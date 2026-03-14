@@ -260,8 +260,7 @@ const isProd =
       (window as any).NL_PATH.includes('/Contents/')));
 
 /** Frontend app version (injected at build). Used to reject backends from a different release. */
-const EXPECTED_BACKEND_VERSION =
-  typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
+const EXPECTED_BACKEND_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
 
 /**
  * Returns true if the backend's reported version is acceptable (same release or dev).
@@ -432,10 +431,10 @@ async function discoverPort(): Promise<number> {
 
             // Require version match so we don't reconnect to a backend from a previous release
             if (!isBackendVersionAcceptable(info?.version)) {
-              debugWarn(
-                '[RPC] Portfile port rejected: backend version mismatch',
-                { backend: info?.version, expected: EXPECTED_BACKEND_VERSION }
-              );
+              debugWarn('[RPC] Portfile port rejected: backend version mismatch', {
+                backend: info?.version,
+                expected: EXPECTED_BACKEND_VERSION,
+              });
             } else if (xNodeRef?.startsWith('backend@')) {
               debugLog(`[RPC] Found valid backend on port ${published} (X-NodeRef: ${xNodeRef})`);
               return published;

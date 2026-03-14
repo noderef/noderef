@@ -56,7 +56,9 @@ function InsightsPage() {
   const { t } = useTranslation(['insights', 'common']);
   const activeServerId = useActiveServerId();
   const selectedRange = useInsightsStore(state =>
-    activeServerId ? state.selectedRangeByServer[activeServerId] ?? DEFAULT_INSIGHT_RANGE : DEFAULT_INSIGHT_RANGE
+    activeServerId
+      ? (state.selectedRangeByServer[activeServerId] ?? DEFAULT_INSIGHT_RANGE)
+      : DEFAULT_INSIGHT_RANGE
   );
   const setSelectedRange = useInsightsStore(state => state.setSelectedRange);
 
@@ -116,12 +118,9 @@ function InsightsPage() {
     loadDashboard();
   }, [loadDashboard]);
 
-  const updateGraphPinState = useCallback(
-    (graphId: number, isPinned: boolean) => {
-      setGraphs(prev => prev.map(g => (g.id === graphId ? { ...g, isPinned } : g)));
-    },
-    []
-  );
+  const updateGraphPinState = useCallback((graphId: number, isPinned: boolean) => {
+    setGraphs(prev => prev.map(g => (g.id === graphId ? { ...g, isPinned } : g)));
+  }, []);
 
   const handleTogglePin = useToggleInsightPin(updateGraphPinState, updateGraphPinState);
 
@@ -152,7 +151,12 @@ function InsightsPage() {
           size="xs"
         />
         <Tooltip label={t('insights:addGraph')} withArrow>
-          <ActionIcon variant="subtle" size="lg" onClick={handleAddGraph} aria-label={t('insights:addGraph')}>
+          <ActionIcon
+            variant="subtle"
+            size="lg"
+            onClick={handleAddGraph}
+            aria-label={t('insights:addGraph')}
+          >
             <IconPlus size={18} />
           </ActionIcon>
         </Tooltip>

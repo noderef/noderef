@@ -73,10 +73,7 @@ export function InsightGraphCard({
     [item.series]
   );
 
-  const formatDate = useMemo(
-    () => (value: string) => formatChartDate(value, locale),
-    [locale]
-  );
+  const formatDate = useMemo(() => (value: string) => formatChartDate(value, locale), [locale]);
 
   return (
     <Paper withBorder radius="md" p="md" style={{ height: '100%' }}>
@@ -113,11 +110,7 @@ export function InsightGraphCard({
           </Stack>
           <Group gap={4} wrap="nowrap">
             {onTogglePin && (
-              <Tooltip
-                label={isPinned ? t('unpinGraph') : t('pinGraph')}
-                position="left"
-                withArrow
-              >
+              <Tooltip label={isPinned ? t('unpinGraph') : t('pinGraph')} position="left" withArrow>
                 <ActionIcon
                   variant="subtle"
                   color={isPinned ? 'blue' : 'gray'}

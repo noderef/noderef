@@ -850,10 +850,7 @@ export const backendRpc = {
       return rpc<{ success: boolean }>('backend.serverInsights.deleteGraph', { id });
     },
 
-    async getDashboard(
-      serverId: number,
-      rangeDays: number
-    ): Promise<InsightDashboard> {
+    async getDashboard(serverId: number, rangeDays: number): Promise<InsightDashboard> {
       return rpc<InsightDashboard>('backend.serverInsights.getDashboard', {
         serverId,
         rangeDays,

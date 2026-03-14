@@ -86,4 +86,3 @@ export function getDayBounds(bucketDate: string): { start: string; end: string }
     end: `${bucketDate}T23:59:59.999Z`,
   };
 }
-

@@ -75,8 +75,12 @@ export function InsightGraphSettingsModal({
   const [color, setColor] = useState(graph?.color ?? '#228be6');
   const [columnSpan, setColumnSpan] = useState(String(graph?.columnSpan ?? 1));
   const [saving, setSaving] = useState(false);
-  const propertyDataTypesCacheRef = useRef<Record<string, { values: Record<string, string>; timestamp: number }>>({});
-  const [currentPropertyDataTypes, setCurrentPropertyDataTypes] = useState<Record<string, string>>({});
+  const propertyDataTypesCacheRef = useRef<
+    Record<string, { values: Record<string, string>; timestamp: number }>
+  >({});
+  const [currentPropertyDataTypes, setCurrentPropertyDataTypes] = useState<Record<string, string>>(
+    {}
+  );
   const [isLoadingDynamicProps, setIsLoadingDynamicProps] = useState(false);
   const modalContentRef = useRef<HTMLDivElement | null>(null);
   const isDesktopMode = useMemo(
@@ -90,7 +94,10 @@ export function InsightGraphSettingsModal({
   const handleInsertText = useCallback(
     (editableTarget: EditableTarget, text: string) => {
       if (
-        !(editableTarget instanceof HTMLInputElement || editableTarget instanceof HTMLTextAreaElement)
+        !(
+          editableTarget instanceof HTMLInputElement ||
+          editableTarget instanceof HTMLTextAreaElement
+        )
       ) {
         if (editableTarget.isContentEditable) {
           document.execCommand('insertText', false, text);
@@ -225,19 +232,22 @@ export function InsightGraphSettingsModal({
       .slice(0, 50);
   }, [combinedPropertyDataTypes, dateFieldInput, isDateDataType, propertyPrefix]);
 
-  const findMatchingDateProperty = useCallback((input: string): string | null => {
-    const value = input.trim();
-    if (!value) return null;
-    const lower = value.toLowerCase();
-    const allDateProperties = Object.entries(combinedPropertyDataTypes)
-      .filter(([, dataType]) => isDateDataType(dataType))
-      .map(([prop]) => prop);
-    const exact = allDateProperties.find(prop => prop.toLowerCase() === lower);
-    if (exact) return exact;
-    const startsWith = allDateProperties.find(prop => prop.toLowerCase().startsWith(lower));
-    if (startsWith) return startsWith;
-    return null;
-  }, [combinedPropertyDataTypes, isDateDataType]);
+  const findMatchingDateProperty = useCallback(
+    (input: string): string | null => {
+      const value = input.trim();
+      if (!value) return null;
+      const lower = value.toLowerCase();
+      const allDateProperties = Object.entries(combinedPropertyDataTypes)
+        .filter(([, dataType]) => isDateDataType(dataType))
+        .map(([prop]) => prop);
+      const exact = allDateProperties.find(prop => prop.toLowerCase() === lower);
+      if (exact) return exact;
+      const startsWith = allDateProperties.find(prop => prop.toLowerCase().startsWith(lower));
+      if (startsWith) return startsWith;
+      return null;
+    },
+    [combinedPropertyDataTypes, isDateDataType]
+  );
 
   const handleSelectDateField = (prop: string) => {
     const match = findMatchingDateProperty(prop);
@@ -322,9 +332,7 @@ export function InsightGraphSettingsModal({
 
     modals.openConfirmModal({
       title: t('insights:deleteGraph'),
-      children: (
-        <Text size="sm">{t('insights:deleteGraphConfirm', { name: graph.title })}</Text>
-      ),
+      children: <Text size="sm">{t('insights:deleteGraphConfirm', { name: graph.title })}</Text>,
       labels: {
         confirm: t('common:delete'),
         cancel: t('common:cancel'),
@@ -392,7 +400,10 @@ export function InsightGraphSettingsModal({
 
         <div>
           <Text size="sm" fw={500} mb={4}>
-            {t('insights:dateField')} <Text component="span" c="red">*</Text>
+            {t('insights:dateField')}{' '}
+            <Text component="span" c="red">
+              *
+            </Text>
           </Text>
           <Text size="xs" c="dimmed" mb="xs">
             {t('insights:dateFieldDescription')}
@@ -473,7 +484,9 @@ export function InsightGraphSettingsModal({
                   !isLoadingDynamicProps &&
                   availableDateFields.length === 0 && (
                     <Combobox.Empty>
-                      {selectedServer ? t('search:noProperties') : t('search:selectServerToLoadProps')}
+                      {selectedServer
+                        ? t('search:noProperties')
+                        : t('search:selectServerToLoadProps')}
                     </Combobox.Empty>
                   )}
                 {availableDateFields.map(prop => (
@@ -511,9 +524,18 @@ export function InsightGraphSettingsModal({
           value={color}
           onChange={setColor}
           swatches={[
-            '#228be6', '#15aabf', '#12b886', '#40c057', '#82c91e',
-            '#fab005', '#fd7e14', '#fa5252', '#e64980', '#be4bdb',
-            '#7950f2', '#4c6ef5',
+            '#228be6',
+            '#15aabf',
+            '#12b886',
+            '#40c057',
+            '#82c91e',
+            '#fab005',
+            '#fd7e14',
+            '#fa5252',
+            '#e64980',
+            '#be4bdb',
+            '#7950f2',
+            '#4c6ef5',
           ]}
         />
 

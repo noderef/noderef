@@ -948,7 +948,8 @@ export function AgentPage() {
   // Load the search dictionary for the active server
   const dictionaryServerId = activeChat?.serverId || activeServerId || servers[0]?.id || null;
   const dictionaryServer = useMemo(
-    () => (dictionaryServerId ? servers.find(server => server.id === dictionaryServerId) || null : null),
+    () =>
+      dictionaryServerId ? servers.find(server => server.id === dictionaryServerId) || null : null,
     [dictionaryServerId, servers]
   );
   const { dictionary } = useSearchDictionary(dictionaryServerId);

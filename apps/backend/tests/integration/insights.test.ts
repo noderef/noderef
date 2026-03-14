@@ -365,7 +365,9 @@ describe('backend.serverInsights', () => {
         `${today}T00:00:00.000Z`
       );
 
-      const countsByDateAfterTtl = new Map(third.graphs[0].series.map(point => [point.date, point.count]));
+      const countsByDateAfterTtl = new Map(
+        third.graphs[0].series.map(point => [point.date, point.count])
+      );
       expect(countsByDateAfterTtl.get(today)).toBe(9);
       expect(countsByDateAfterTtl.get(yesterday)).toBe(2);
 

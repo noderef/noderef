@@ -363,7 +363,9 @@ export async function applyPendingPrismaMigrations(
         logs.slice(0, 1000000),
         id
       );
-      throw new Error(`Failed to apply migration "${migration.name}" (${migration.filePath}): ${logs}`);
+      throw new Error(
+        `Failed to apply migration "${migration.name}" (${migration.filePath}): ${logs}`
+      );
     }
   }
 

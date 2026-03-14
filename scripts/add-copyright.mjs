@@ -47,7 +47,10 @@ const IGNORE_DIRS = [
 // Folders to specifically target for source code
 const TARGET_ROOT_DIRS = ['apps', 'packages', 'scripts'];
 
+const AI_LIBS_SEGMENT = path.sep + path.join('ai', 'libs') + path.sep;
+
 function shouldIgnore(filePath) {
+  if (filePath.includes(AI_LIBS_SEGMENT)) return true;
   return IGNORE_DIRS.some(dir => filePath.includes(`${path.sep}${dir}${path.sep}`));
 }
 
@@ -102,7 +105,7 @@ function walkDir(dir) {
       }
     } else {
       const ext = path.extname(file);
-      if (EXTENSIONS.includes(ext)) {
+      if (EXTENSIONS.includes(ext) && !shouldIgnore(fullPath)) {
         processFile(fullPath);
       }
     }
