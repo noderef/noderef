@@ -23,6 +23,16 @@ Use this tool for global counts, filtered listings, and field projection.
 - `returnFields` (optional, max 20): projected field paths like `name`, `properties.cm:title`.
 - `includeProperties` (default `false`): include properties; auto-enabled when `returnFields` asks for properties.
 
+## AFTS field rules (strict)
+- Use explicit property fields with `@...` for metadata filters.
+- For MIME type, use `@cm:content.mimetype:"..."`.
+- Do not use `MIMETYPE:"..."`.
+
+Valid example:
+```text
+TYPE:"cm:content" AND @cm:content.mimetype:"application/pdf" AND @cm:created:["2026-02-01T00:00:00" TO "2026-02-28T23:59:59"]
+```
+
 ## Output reading rules (critical)
 - Use `pagination.totalCount` as the true repository total.
 - Never use `sample.length` to answer total count questions.
