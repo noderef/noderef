@@ -144,7 +144,7 @@ export function NodePermissionsModal() {
 
   const roleOptions = useMemo<string[]>(() => {
     const inSite = Boolean(siteId);
-    const baseRoles = [...DEFAULT_ROLES, ...(inSite ? [...SITE_ROLES] : [])];
+    const baseRoles: string[] = [...DEFAULT_ROLES, ...(inSite ? [...SITE_ROLES] : [])];
     const settableRoles = Array.isArray(settable)
       ? settable.filter(
           role =>
