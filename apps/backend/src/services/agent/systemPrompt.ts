@@ -26,6 +26,36 @@ import { loadToolSkill } from './tools/skills.js';
 const LANGUAGE_CODE_PATTERN = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})?$/i;
 const MAX_TOOL_SKILLS_CHARS = 60_000;
 
+function buildTemporalDirective(): string {
+  const now = new Date();
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+  const parts = Object.fromEntries(
+    formatter.formatToParts(now).filter(part => part.type !== 'literal').map(part => [part.type, part.value])
+  ) as Record<string, string>;
+
+  const localDateTime = `${parts.year ?? '0000'}-${parts.month ?? '01'}-${parts.day ?? '01'}T${
+    parts.hour ?? '00'
+  }:${parts.minute ?? '00'}:${parts.second ?? '00'}`;
+  const currentYear = parts.year ?? String(now.getUTCFullYear());
+
+  return `Temporal directive:
+- Current local date-time is ${localDateTime} (${timeZone}).
+- Current UTC timestamp is ${now.toISOString()}.
+- Current calendar year is ${currentYear}.
+- Resolve relative temporal phrases (e.g., "today", "yesterday", "this year", "last month") from this context unless the user explicitly provides another reference date.
+`;
+}
+
 function normalizeLanguageCode(input: string | undefined): string | null {
   const trimmed = input?.trim();
   if (!trimmed) {
@@ -101,6 +131,7 @@ export async function buildSystemPrompt(
     : `Language directive:
 - Respond in the same language the user used.
 `;
+  const temporalDirective = buildTemporalDirective();
   const mentionBlock = mentionContext.trim()
     ? `\n<mentioned_nodes>\n${mentionContext.trim()}\n</mentioned_nodes>\n`
     : '';
@@ -112,13 +143,14 @@ You help users search, browse, and manage content in their Alfresco repository.
 Before calling any tool, write ONE short sentence explaining what you are about to do (in the language from the Language directive).
 Then call the tool. After all tools are done, write your final answer.
 ${languageDirective}
+${temporalDirective}
 
 CRITICAL RULES — you MUST follow these:
 1. For count/total questions: always read result.pagination.totalCount — that is the TRUE repository total.
    NEVER count the items in result.sample[] — sample is a preview only.
 2. Only use node IDs you have received from tool results or <mentioned_nodes>.
    Never fabricate or guess node IDs.
-3. Follow the Language directive.
+3. Follow the Language directive and Temporal directive.
 4. Be concise. Use markdown: bold for numbers, bullet lists for items, tables for comparisons.
    When using tables, always use valid markdown table syntax with a header row and separator line.
    Formatting constraints:
