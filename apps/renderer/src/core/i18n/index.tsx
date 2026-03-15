@@ -86,13 +86,31 @@ import settingsNl from '@/locales/nl/settings.json';
 import spotlightNl from '@/locales/nl/spotlight.json';
 import submenuNl from '@/locales/nl/submenu.json';
 import usersGroupsNl from '@/locales/nl/usersGroups.json';
+import addServerEs from '@/locales/es/addServer.json';
+import agentEs from '@/locales/es/agent.json';
+import commonEs from '@/locales/es/common.json';
+import dashboardEs from '@/locales/es/dashboard.json';
+import insightsEs from '@/locales/es/insights.json';
+import fileFolderBrowserEs from '@/locales/es/fileFolderBrowser.json';
+import jsConsoleEs from '@/locales/es/jsConsole.json';
+import localFilesEs from '@/locales/es/localFiles.json';
+import logsEs from '@/locales/es/logs.json';
+import menuEs from '@/locales/es/menu.json';
+import nodeBrowserEs from '@/locales/es/nodeBrowser.json';
+import notFoundEs from '@/locales/es/notFound.json';
+import searchEs from '@/locales/es/search.json';
+import serverEs from '@/locales/es/server.json';
+import settingsEs from '@/locales/es/settings.json';
+import spotlightEs from '@/locales/es/spotlight.json';
+import submenuEs from '@/locales/es/submenu.json';
+import usersGroupsEs from '@/locales/es/usersGroups.json';
 import i18n, { Resource } from 'i18next';
 import { ReactNode } from 'react';
 import { I18nextProvider, initReactI18next } from 'react-i18next';
 
 const DEFAULT_LANGUAGE = 'en';
 const UI_STORE_KEY = 'ui-store';
-const SUPPORTED_LANGUAGES = ['en', 'nl', 'de', 'fr'];
+const SUPPORTED_LANGUAGES = ['en', 'nl', 'de', 'es', 'fr'];
 
 const resources: Resource = {
   en: {
@@ -174,6 +192,26 @@ const resources: Resource = {
     jsConsole: jsConsoleFr,
     usersGroups: usersGroupsFr,
     insights: insightsFr,
+  },
+  es: {
+    common: commonEs,
+    agent: agentEs,
+    dashboard: dashboardEs,
+    addServer: addServerEs,
+    submenu: submenuEs,
+    menu: menuEs,
+    server: serverEs,
+    settings: settingsEs,
+    nodeBrowser: nodeBrowserEs,
+    fileFolderBrowser: fileFolderBrowserEs,
+    localFiles: localFilesEs,
+    logs: logsEs,
+    search: searchEs,
+    spotlight: spotlightEs,
+    notFound: notFoundEs,
+    jsConsole: jsConsoleEs,
+    usersGroups: usersGroupsEs,
+    insights: insightsEs,
   },
 };
 

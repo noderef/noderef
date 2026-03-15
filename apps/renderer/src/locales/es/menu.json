@@ -1,0 +1,16 @@
+{
+  "file": "Archivo",
+  "edit": "Editar",
+  "view": "Ver",
+  "help": "Ayuda",
+  "newFile": "Nuevo archivo",
+  "save": "Guardar",
+  "cut": "Cortar",
+  "copy": "Copiar",
+  "formatCode": "Formatear código",
+  "saveScript": "Guardar script",
+  "loadScript": "Cargar script",
+  "clearEditor": "Limpiar editor",
+  "enableWordWrap": "Activar ajuste de línea",
+  "disableWordWrap": "Desactivar ajuste de línea"
+}
