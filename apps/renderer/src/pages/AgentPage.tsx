@@ -14,13 +14,11 @@
  * limitations under the License.
  */
 
-import { getAiSettings, listAiModels, listAiProviders } from '@/core/ipc/aiSettings';
 import {
   backendRpc,
   type AgentMention,
   type AgentMentionSuggestion,
   type AgentMessage,
-  type AgentRunEvent,
   type AgentRunSummary,
 } from '@/core/ipc/backend';
 import { useAgentStore } from '@/core/store/agent';
@@ -34,12 +32,9 @@ import { useNavigation } from '@/hooks/useNavigation';
 import { parseColonQuery, useQNameSuggestions } from '@/hooks/useQNameSuggestions';
 import { useSearchDictionary } from '@/hooks/useSearchDictionary';
 import {
-  Accordion,
   ActionIcon,
-  Badge,
   Box,
   Button,
-  CopyButton,
   Group,
   Loader,
   Paper,
@@ -53,320 +48,29 @@ import { useDebouncedValue } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import {
   IconArrowUp,
-  IconCheck,
   IconChevronDown,
   IconCpu,
-  IconCopy,
   IconPlayerStop,
   IconServer2,
   IconShield,
   IconShieldCheck,
 } from '@tabler/icons-react';
-import { marked } from 'marked';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AgentChatInput, AgentChatInputRef } from '../components/agent/AgentChatInput';
 import { AgentEmptyState } from '../components/agent/AgentEmptyState';
-import { mentionChipBadgeProps, mentionChipStyle } from '../components/agent/mentionChip';
+import { AgentMessageBubble, parseNodeBrowserLink } from '../components/agent/AgentMessageBubble';
+import { AgentRunTimelineItem } from '../components/agent/AgentRunTimeline';
+import {
+  buildContextWindowSnapshot,
+  resolveContextWindowFromModel,
+  type ContextWindowDisplayState,
+  type ContextWindowSnapshot,
+} from '../components/agent/agentRunActivity';
+import { useAgentModelSelection, writeStoredModelSelection } from '../hooks/useAgentModelSelection';
 
 const ACTIVE_RUN_STATUSES = new Set(['queued', 'running', 'waiting_confirmation']);
 const THREAD_AUTO_CONFIRM_ACCEPT_PATTERN = /^\s*(i accept|ik accepteer)\s*[.!]*\s*$/i;
-const NODE_BROWSER_LINK_PROTOCOL = 'nodebrowser:';
-const NODE_BROWSER_LINK_HOST = 'node';
-
-const parseNodeBrowserLink = (href: string): { nodeId: string; nodeName: string | null } | null => {
-  try {
-    const parsed = new URL(href);
-    if (
-      parsed.protocol !== NODE_BROWSER_LINK_PROTOCOL ||
-      parsed.hostname !== NODE_BROWSER_LINK_HOST
-    ) {
-      return null;
-    }
-
-    const nodeId = decodeURIComponent(parsed.pathname.replace(/^\/+/, '').trim());
-    if (!nodeId) {
-      return null;
-    }
-
-    const nodeNameRaw = parsed.searchParams.get('name');
-    const nodeName = nodeNameRaw && nodeNameRaw.trim() ? nodeNameRaw.trim() : null;
-    return { nodeId, nodeName };
-  } catch {
-    return null;
-  }
-};
-
-const escapeHtml = (value: string): string =>
-  value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-
-const normalizeFenceLanguage = (langRaw: string | undefined): string => {
-  const lang = (langRaw || '').trim().toLowerCase();
-  if (!lang) return 'text';
-  if (lang === 'js') return 'javascript';
-  if (lang === 'ts') return 'typescript';
-  if (lang === 'md') return 'markdown';
-  if (lang === 'yml') return 'yaml';
-  if (lang === 'sh' || lang === 'shell') return 'bash';
-  if (lang === 'freemarker' || lang === 'freemarker2' || lang === 'ftl') return 'xml';
-  if (lang === 'plaintext' || lang === 'plain' || lang === 'txt') return 'text';
-  return lang;
-};
-
-const detectCodeLanguageFromContent = (code: string): string => {
-  const sample = code.slice(0, 2000);
-
-  if (/^\s*<!doctype html>/i.test(sample) || /<html[\s>]/i.test(sample)) {
-    return 'html';
-  }
-  if (/^\s*<\?xml\b/i.test(sample) || /^\s*<\/?[a-zA-Z_][\w:.-]*[\s>]/m.test(sample)) {
-    return 'xml';
-  }
-
-  if (/^\s*[{[]/.test(sample)) {
-    try {
-      JSON.parse(sample);
-      return 'json';
-    } catch {
-      // ignore
-    }
-  }
-
-  if (
-    /\b(?:const|let|var|function|return|if|else|new|try|catch|throw|async|await)\b/.test(sample) ||
-    /=>/.test(sample)
-  ) {
-    if (/\b(?:interface|type|implements|readonly|public|private|protected)\b/.test(sample)) {
-      return 'typescript';
-    }
-    return 'javascript';
-  }
-
-  if (/\b(?:select|from|where|join|insert|update|delete|create\s+table)\b/i.test(sample)) {
-    return 'sql';
-  }
-
-  if (/^\s*[-\w.]+\s*:\s*.+$/m.test(sample) && !/[;{}]/.test(sample)) {
-    return 'yaml';
-  }
-
-  if (/^\s*#!\/bin\/(ba)?sh/m.test(sample) || /\b(?:echo|fi|done|esac)\b/.test(sample)) {
-    return 'bash';
-  }
-
-  return 'text';
-};
-
-const highlightWithPattern = (
-  code: string,
-  pattern: RegExp,
-  classifier: (match: RegExpExecArray) => string | null
-): string => {
-  const tokenInlineStyles: Record<string, string> = {
-    comment: 'color: var(--agent-code-comment, #6b7280);',
-    keyword: 'color: var(--agent-code-keyword, #6d28d9); font-weight: 600;',
-    string: 'color: var(--agent-code-string, #047857);',
-    number: 'color: var(--agent-code-number, #1d4ed8);',
-    property: 'color: var(--agent-code-property, #b45309);',
-    tag: 'color: var(--agent-code-tag, #be123c);',
-  };
-
-  const parts: string[] = [];
-  let lastIndex = 0;
-  let match: RegExpExecArray | null = null;
-
-  while ((match = pattern.exec(code)) !== null) {
-    const start = match.index;
-    const end = start + match[0].length;
-    if (start > lastIndex) {
-      parts.push(escapeHtml(code.slice(lastIndex, start)));
-    }
-
-    const tokenClass = classifier(match);
-    const escaped = escapeHtml(match[0]);
-    if (tokenClass) {
-      const inlineStyle = tokenInlineStyles[tokenClass] || '';
-      parts.push(
-        `<span class="agent-code-${tokenClass}"${inlineStyle ? ` style="${inlineStyle}"` : ''}>${escaped}</span>`
-      );
-    } else {
-      parts.push(escaped);
-    }
-    lastIndex = end;
-  }
-
-  if (lastIndex < code.length) {
-    parts.push(escapeHtml(code.slice(lastIndex)));
-  }
-  return parts.join('');
-};
-
-const highlightCode = (code: string, language: string): string => {
-  const lang = normalizeFenceLanguage(language);
-
-  if (lang === 'javascript' || lang === 'typescript') {
-    const pattern =
-      /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)|\b(?:const|let|var|if|else|return|function|for|while|switch|case|break|continue|new|try|catch|throw|class|extends|import|from|export|default|async|await|true|false|null|undefined|typeof|instanceof)\b|\b\d+(?:\.\d+)?\b/gm;
-    return highlightWithPattern(code, pattern, m => {
-      if (m[1]) return 'comment';
-      if (m[2]) return 'string';
-      if (/^\d/.test(m[0])) return 'number';
-      return 'keyword';
-    });
-  }
-
-  if (lang === 'json') {
-    const pattern =
-      /("(?:\\.|[^"\\])*")(?=\s*:)|("(?:\\.|[^"\\])*")|\b(?:true|false|null)\b|\b\d+(?:\.\d+)?\b/gm;
-    return highlightWithPattern(code, pattern, m => {
-      if (m[1]) return 'property';
-      if (m[2]) return 'string';
-      if (/^(true|false|null)$/.test(m[0])) return 'keyword';
-      return 'number';
-    });
-  }
-
-  if (lang === 'xml' || lang === 'html') {
-    const pattern = /(<\/?[a-zA-Z][^>]*>)|("(?:\\.|[^"\\])*")/gm;
-    return highlightWithPattern(code, pattern, m => {
-      if (m[1]) return 'tag';
-      if (m[2]) return 'string';
-      return null;
-    });
-  }
-
-  if (lang === 'yaml' || lang === 'properties' || lang === 'ini') {
-    const pattern =
-      /(^\s*[#;][^\n]*$)|(^\s*[a-zA-Z0-9_.-]+\s*[:=])|("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|\b\d+(?:\.\d+)?\b/gm;
-    return highlightWithPattern(code, pattern, m => {
-      if (m[1]) return 'comment';
-      if (m[2]) return 'property';
-      if (m[3]) return 'string';
-      return 'number';
-    });
-  }
-
-  if (lang === 'css' || lang === 'scss' || lang === 'less') {
-    const pattern =
-      /(\/\*[\s\S]*?\*\/)|([.#]?[a-zA-Z_-][a-zA-Z0-9_-]*\s*(?=\{))|([a-zA-Z-]+\s*:)|("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|\b\d+(?:\.\d+)?(?:px|em|rem|%)?\b/gm;
-    return highlightWithPattern(code, pattern, m => {
-      if (m[1]) return 'comment';
-      if (m[2]) return 'tag';
-      if (m[3]) return 'property';
-      if (m[4]) return 'string';
-      return 'number';
-    });
-  }
-
-  if (lang === 'sql') {
-    const pattern =
-      /(--[^\n]*|\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|\b(?:select|from|where|group|by|order|limit|insert|into|values|update|set|delete|create|table|alter|join|left|right|inner|outer|on|and|or|not|null|as|distinct)\b|\b\d+(?:\.\d+)?\b/gim;
-    return highlightWithPattern(code, pattern, m => {
-      if (m[1]) return 'comment';
-      if (m[2]) return 'string';
-      if (/^\d/.test(m[0])) return 'number';
-      return 'keyword';
-    });
-  }
-
-  if (lang === 'bash') {
-    const pattern =
-      /(#.*$)|("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|\$\{?[a-zA-Z_][a-zA-Z0-9_]*\}?|\b(?:if|then|else|fi|for|in|do|done|case|esac|while|function|export)\b/gm;
-    return highlightWithPattern(code, pattern, m => {
-      if (m[1]) return 'comment';
-      if (m[2]) return 'string';
-      if (m[0].startsWith('$')) return 'property';
-      return 'keyword';
-    });
-  }
-
-  // markdown/text/csv/tsv fallback
-  return escapeHtml(code);
-};
-
-const renderMarkdown = (
-  md: string,
-  options?: { copyLabel?: string; copiedLabel?: string }
-): string => {
-  const copyLabelRaw = options?.copyLabel?.trim() || 'Copy';
-  const copiedLabelRaw = options?.copiedLabel?.trim() || 'Copied';
-  const copyLabel = escapeHtml(copyLabelRaw);
-  const copiedLabel = escapeHtml(copiedLabelRaw);
-
-  try {
-    const renderer = new marked.Renderer();
-    renderer.code = ({ text, lang }) => {
-      const normalizedLang = normalizeFenceLanguage(lang);
-      const effectiveLang =
-        normalizedLang === 'text' ? detectCodeLanguageFromContent(text) : normalizedLang;
-      const highlighted = highlightCode(text, effectiveLang);
-      return [
-        '<div class="agent-code-block">',
-        `<button type="button" class="agent-code-copy-btn" data-agent-code-copy data-copy-label="${copyLabel}" data-copied-label="${copiedLabel}" aria-label="${copyLabel}" title="${copyLabel}">`,
-        '<span class="agent-code-copy-icon" aria-hidden="true">',
-        '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
-        '<rect x="9" y="9" width="13" height="13" rx="3" ry="3"></rect>',
-        '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>',
-        '</svg>',
-        '</span>',
-        '<span class="agent-code-copy-icon-check" aria-hidden="true">',
-        '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">',
-        '<path d="M20 6 9 17l-5-5"></path>',
-        '</svg>',
-        '</span>',
-        '</button>',
-        `<pre><code class="language-${effectiveLang}">${highlighted}</code></pre>`,
-        '</div>',
-      ].join('');
-    };
-    return marked.parse(md, { async: false, breaks: true, gfm: true, renderer }) as string;
-  } catch {
-    return md;
-  }
-};
-
-const QNAME_TOKEN_PATTERN = '[a-zA-Z][a-zA-Z0-9_-]*:[a-zA-Z0-9_-]+';
-const QNAME_TOKEN_REGEX = new RegExp(`^${QNAME_TOKEN_PATTERN}$`);
-
-const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-function buildMessageTokenRegex(mentionLabels: string[]): RegExp {
-  const mentionParts = mentionLabels.map(label => escapeRegExp(`@${label}`));
-  const splitPattern = mentionParts.length
-    ? `${mentionParts.join('|')}|${QNAME_TOKEN_PATTERN}`
-    : QNAME_TOKEN_PATTERN;
-  return new RegExp(`(${splitPattern})`, 'g');
-}
-
-function renderUserMessageContent(content: string, mentions: AgentMention[] = []) {
-  if (!content) return content;
-
-  try {
-    const sortedMentions = [...mentions].sort((a, b) => b.label.length - a.label.length);
-    const regex = buildMessageTokenRegex(sortedMentions.map(m => m.label));
-    const mentionTokenSet = new Set(sortedMentions.map(m => `@${m.label}`));
-
-    const parts = content.split(regex);
-
-    return parts.map((part, index) => {
-      if (mentionTokenSet.has(part) || QNAME_TOKEN_REGEX.test(part)) {
-        return (
-          <Badge key={index} {...mentionChipBadgeProps} style={mentionChipStyle}>
-            {part}
-          </Badge>
-        );
-      }
-      return <span key={index}>{part}</span>;
-    });
-  } catch {
-    return content;
-  }
-}
 
 type ConversationTimelineItem =
   | {
@@ -382,22 +86,6 @@ type ConversationTimelineItem =
       run: AgentRunSummary;
     };
 
-interface AiProviderOption {
-  value: string;
-  label: string;
-  defaultModel: string;
-}
-
-interface AiModelChoice {
-  value: string;
-  label: string;
-  provider: string;
-  model: string;
-}
-
-const AGENT_MODEL_SELECTION_STORAGE_KEY = 'agent.selected.model.v1';
-
-const MODEL_SELECTION_GLOBAL_SCOPE = 'global';
 const MODEL_SELECT_WIDTH = 260;
 const MODEL_DROPDOWN_WIDTH = 300;
 const SERVER_SELECT_WIDTH = 160;
@@ -418,439 +106,6 @@ const COMPOSER_SELECT_STYLES = {
     pointerEvents: 'none',
   },
 } as const;
-
-const readModelSelectionStore = (): Record<string, { provider: string; model: string }> => {
-  try {
-    const raw = window.localStorage.getItem(AGENT_MODEL_SELECTION_STORAGE_KEY);
-    if (!raw) {
-      return {};
-    }
-
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== 'object') {
-      return {};
-    }
-
-    const legacyProvider = (parsed as { provider?: unknown }).provider;
-    const legacyModel = (parsed as { model?: unknown }).model;
-    if (typeof legacyProvider === 'string' && typeof legacyModel === 'string') {
-      return {
-        [MODEL_SELECTION_GLOBAL_SCOPE]: {
-          provider: legacyProvider,
-          model: legacyModel,
-        },
-      };
-    }
-
-    const result: Record<string, { provider: string; model: string }> = {};
-    for (const [scope, value] of Object.entries(parsed as Record<string, unknown>)) {
-      if (!value || typeof value !== 'object') {
-        continue;
-      }
-      const provider = (value as { provider?: unknown }).provider;
-      const model = (value as { model?: unknown }).model;
-      if (typeof provider === 'string' && typeof model === 'string') {
-        result[scope] = { provider, model };
-      }
-    }
-
-    return result;
-  } catch {
-    return {};
-  }
-};
-
-const buildModelSelectionScopes = (serverId: number | null, chatId: number | null): string[] => {
-  const scopes: string[] = [];
-  if (serverId !== null && chatId !== null) {
-    scopes.push(`server:${serverId}:chat:${chatId}`);
-  }
-  if (serverId !== null) {
-    scopes.push(`server:${serverId}`);
-  }
-  scopes.push(MODEL_SELECTION_GLOBAL_SCOPE);
-  return scopes;
-};
-
-const readStoredModelSelection = (
-  serverId: number | null,
-  chatId: number | null
-): { provider: string; model: string } | null => {
-  const store = readModelSelectionStore();
-  for (const scope of buildModelSelectionScopes(serverId, chatId)) {
-    const match = store[scope];
-    if (match) {
-      return match;
-    }
-  }
-  return null;
-};
-
-const writeStoredModelSelection = (
-  serverId: number | null,
-  chatId: number | null,
-  provider: string,
-  model: string
-) => {
-  try {
-    const nextStore = readModelSelectionStore();
-
-    if (serverId !== null && chatId !== null) {
-      // Chat-scoped selection must stay isolated per thread.
-      nextStore[`server:${serverId}:chat:${chatId}`] = { provider, model };
-    } else if (serverId !== null) {
-      // Fallback for pre-chat composer state on a given server.
-      nextStore[`server:${serverId}`] = { provider, model };
-    } else {
-      nextStore[MODEL_SELECTION_GLOBAL_SCOPE] = { provider, model };
-    }
-
-    window.localStorage.setItem(AGENT_MODEL_SELECTION_STORAGE_KEY, JSON.stringify(nextStore));
-  } catch {
-    // ignore storage failures
-  }
-};
-
-const RunTimer = ({ createdAt }: { createdAt: string | Date }) => {
-  const [duration, setDuration] = useState(0);
-
-  useEffect(() => {
-    const start = new Date(createdAt).getTime();
-    const update = () => setDuration(Math.floor((Date.now() - start) / 1000));
-    update();
-    const interval = setInterval(update, 1000);
-    return () => clearInterval(interval);
-  }, [createdAt]);
-
-  return <>{duration}s</>;
-};
-
-const StepDetailAccordion = ({
-  label,
-  color,
-  detail,
-}: {
-  label: string;
-  color?: string;
-  detail: string;
-}) => (
-  <Accordion
-    variant="default"
-    chevronPosition="right"
-    chevronSize={14}
-    styles={{
-      root: { border: 'none', width: 'fit-content' },
-      item: { border: 'none' },
-      control: {
-        padding: '2px 0',
-        minHeight: 'unset',
-        width: 'fit-content',
-      },
-      label: { padding: 0 },
-      chevron: { marginLeft: 6, margin: 0 },
-      panel: { padding: '4px 0', width: '100%' },
-      content: { padding: 0 },
-    }}
-  >
-    <Accordion.Item value="detail">
-      <Accordion.Control>
-        <Text size="sm" c={color}>
-          {label}
-        </Text>
-      </Accordion.Control>
-      <Accordion.Panel>
-        <Box
-          className="agent-markdown"
-          dangerouslySetInnerHTML={{ __html: renderMarkdown(detail) }}
-          style={{
-            margin: 0,
-            padding: '8px 10px',
-            fontSize: 12,
-            lineHeight: 1.5,
-            borderRadius: 'var(--mantine-radius-xs)',
-            backgroundColor: 'var(--mantine-color-gray-1)',
-            maxHeight: 300,
-            overflow: 'auto',
-            width: 'calc(100vw - 80px)',
-            maxWidth: 800,
-          }}
-        />
-      </Accordion.Panel>
-    </Accordion.Item>
-  </Accordion>
-);
-
-interface RunActivityItem {
-  kind: 'note' | 'execution';
-  label: string;
-  detail: string | null;
-  level: 'info' | 'warn' | 'error';
-  operation?: string;
-}
-
-const humanizeOperation = (operation: string): string =>
-  operation.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
-
-const EXECUTION_EVENT_KEYS: Record<string, string> = {
-  'step.completed': 'stepCompleted',
-  'step.failed': 'stepFailed',
-  'step.waiting_confirmation': 'stepAwaitingConfirmation',
-  'step.confirmed': 'stepConfirmed',
-  'step.rejected': 'stepRejected',
-  'run.failed': 'stepFailed',
-};
-
-const SKIP_EVENT_TYPES = new Set([
-  'run.queued',
-  'run.executing',
-  'run.summarizing',
-  'run.completed',
-  'run.cancelled',
-  'run.context',
-]);
-const MAX_EVENT_DETAIL_CHARS = 12_000;
-
-interface ContextWindowSnapshot {
-  eventId: number;
-  runId: number;
-  provider: string;
-  model: string;
-  contextWindowSource: 'known' | 'default';
-  contextWindowTokens: number;
-  promptTokens: number;
-  outputTokens: number | null;
-  totalTokens: number;
-  utilizationPctPrompt: number;
-  utilizationPctTotal: number;
-  remainingTokens: number;
-  nearLimit: boolean;
-  criticalLimit: boolean;
-  removedHistoryMessages: number;
-  trimmedToolResultBlocks: number;
-}
-
-interface ContextWindowDisplayState {
-  provider: string | null;
-  model: string | null;
-  source: 'known' | 'default';
-  usedTokens: number;
-  totalTokens: number;
-  promptTokens: number;
-  outputTokens: number | null;
-  percentage: number;
-  nearLimit: boolean;
-  criticalLimit: boolean;
-  removedHistoryMessages: number;
-  trimmedToolResultBlocks: number;
-}
-
-const DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000;
-
-const resolveContextWindowFromModel = (
-  model: string | null | undefined
-): { tokens: number; source: 'known' | 'default' } => {
-  const normalized = (model || '').toLowerCase();
-  if (normalized.includes('claude')) {
-    return { tokens: 200_000, source: 'known' };
-  }
-  return { tokens: DEFAULT_CONTEXT_WINDOW_TOKENS, source: 'default' };
-};
-
-const asNumber = (value: unknown): number | null => (typeof value === 'number' ? value : null);
-
-const asString = (value: unknown): string | null => (typeof value === 'string' ? value : null);
-
-const buildContextWindowSnapshot = (
-  event: AgentRunEvent,
-  runId: number
-): ContextWindowSnapshot | null => {
-  if (event.type !== 'run.context' || !event.payload) {
-    return null;
-  }
-
-  const payload = event.payload;
-  const phase = asString(payload.phase);
-  if (phase !== 'post_call' && phase !== 'call_failed') {
-    return null;
-  }
-
-  const provider = asString(payload.provider) ?? 'unknown';
-  const model = asString(payload.model) ?? 'unknown';
-  const contextWindowTokens = asNumber(payload.contextWindowTokens);
-  if (!contextWindowTokens || contextWindowTokens <= 0) {
-    return null;
-  }
-  const contextWindowSource =
-    asString(payload.contextWindowSource) === 'known' ? 'known' : 'default';
-
-  const promptTokensRaw = asNumber(payload.promptTokens);
-  const estimatedPromptTokens = asNumber(
-    (payload.estimated as Record<string, unknown> | undefined)?.promptTokens
-  );
-  const promptTokens = promptTokensRaw ?? estimatedPromptTokens ?? 0;
-
-  const outputTokens = asNumber(payload.outputTokens);
-  const totalTokensRaw = asNumber(payload.totalTokens);
-  const totalTokens = totalTokensRaw ?? promptTokens + (outputTokens ?? 0);
-  const utilizationPctPromptRaw = asNumber(payload.utilizationPctPrompt);
-  const utilizationPctTotalRaw = asNumber(payload.utilizationPctTotal);
-  const utilizationPctPrompt =
-    utilizationPctPromptRaw ?? Math.round((promptTokens / contextWindowTokens) * 1000) / 10;
-  const utilizationPctTotal =
-    utilizationPctTotalRaw ?? Math.round((totalTokens / contextWindowTokens) * 1000) / 10;
-  const remainingTokensRaw = asNumber(payload.remainingTokens);
-  const remainingTokens = remainingTokensRaw ?? Math.max(0, contextWindowTokens - totalTokens);
-  const compaction = payload.compaction as Record<string, unknown> | undefined;
-
-  return {
-    eventId: event.id,
-    runId,
-    provider,
-    model,
-    contextWindowSource,
-    contextWindowTokens,
-    promptTokens,
-    outputTokens,
-    totalTokens,
-    utilizationPctPrompt,
-    utilizationPctTotal,
-    remainingTokens,
-    nearLimit: Boolean(payload.nearLimit),
-    criticalLimit: Boolean(payload.criticalLimit),
-    removedHistoryMessages: asNumber(compaction?.removedHistoryMessages) ?? 0,
-    trimmedToolResultBlocks: asNumber(compaction?.trimmedToolResultBlocks) ?? 0,
-  };
-};
-
-const stringifyTruncated = (value: unknown): string | null => {
-  try {
-    const serialized = JSON.stringify(value, null, 2);
-    if (serialized.length <= MAX_EVENT_DETAIL_CHARS) {
-      return serialized;
-    }
-    return `${serialized.slice(0, MAX_EVENT_DETAIL_CHARS)}\n... [truncated ${serialized.length - MAX_EVENT_DETAIL_CHARS} chars]`;
-  } catch {
-    return null;
-  }
-};
-
-const buildMarkdownDetail = (
-  summaryLines: string[],
-  sections: Array<{ title: string; value: unknown }>
-): string => {
-  const lines: string[] = [];
-  if (summaryLines.length) {
-    lines.push(...summaryLines, '');
-  }
-  for (const section of sections) {
-    const json = stringifyTruncated(section.value);
-    if (!json) continue;
-    lines.push(`### ${section.title}`);
-    lines.push('```json');
-    lines.push(json);
-    lines.push('```');
-    lines.push('');
-  }
-  return lines.join('\n').trim();
-};
-
-const formatEventDetail = (event: AgentRunEvent): string | null => {
-  const payload = event.payload;
-  if (!payload) return null;
-
-  if (event.type === 'step.completed' || event.type === 'step.failed') {
-    const output = payload.output as Record<string, unknown> | undefined;
-    const toolName = typeof payload.operation === 'string' ? payload.operation : null;
-    const durationMs = typeof payload.durationMs === 'number' ? payload.durationMs : null;
-    const status =
-      typeof payload.status === 'string'
-        ? payload.status
-        : event.type === 'step.failed'
-          ? 'failed'
-          : 'completed';
-    if (!output && !payload.error && !toolName && durationMs === null) return null;
-
-    const summaryLines = [
-      `**Tool:** ${toolName || 'unknown'}`,
-      `**Status:** ${status}`,
-      ...(durationMs !== null ? [`**Duration:** ${durationMs} ms`] : []),
-    ];
-
-    const sections: Array<{ title: string; value: unknown }> = [];
-    if (output) {
-      sections.push({ title: 'Result', value: output });
-    } else if (payload.error) {
-      sections.push({ title: 'Result', value: { error: String(payload.error) } });
-    }
-
-    return buildMarkdownDetail(summaryLines, sections);
-  }
-
-  if (event.type === 'step.waiting_confirmation') {
-    const args = (payload.output as Record<string, unknown> | undefined)?.args;
-    const summary =
-      typeof payload.summary === 'string' && payload.summary.trim()
-        ? payload.summary.trim()
-        : typeof payload.operation === 'string'
-          ? humanizeOperation(payload.operation)
-          : null;
-    return buildMarkdownDetail(
-      ['**Status:** awaiting confirmation', `**Action:** ${summary || 'unknown'}`],
-      args ? [{ title: 'Arguments', value: args }] : []
-    );
-  }
-
-  if (event.type === 'run.failed') {
-    return buildMarkdownDetail(
-      ['**Status:** failed'],
-      [
-        {
-          title: 'Error',
-          value: { error: payload.error ? String(payload.error) : 'Unknown run failure' },
-        },
-      ]
-    );
-  }
-
-  if (payload.error) {
-    return buildMarkdownDetail(
-      ['**Status:** error'],
-      [{ title: 'Error', value: { error: String(payload.error) } }]
-    );
-  }
-
-  return null;
-};
-
-const buildRunActivity = (events: AgentRunEvent[]): RunActivityItem[] => {
-  const items: RunActivityItem[] = [];
-
-  for (const event of events) {
-    if (SKIP_EVENT_TYPES.has(event.type)) continue;
-
-    if (event.type === 'run.note') {
-      const text = (event.payload?.text as string) || '';
-      if (text) {
-        items.push({ kind: 'note', label: text, detail: null, level: 'info' });
-      }
-      continue;
-    }
-
-    const key = EXECUTION_EVENT_KEYS[event.type];
-    const label = key ? `__i18n:${key}` : event.type;
-    const detail = formatEventDetail(event);
-    const level = event.level === 'error' ? 'error' : event.level === 'warn' ? 'warn' : 'info';
-    const operation =
-      typeof event.payload?.summary === 'string' && event.payload.summary.trim()
-        ? event.payload.summary.trim()
-        : typeof event.payload?.operation === 'string'
-          ? humanizeOperation(event.payload.operation)
-          : undefined;
-    items.push({ kind: 'execution', label, detail, level, operation });
-  }
-
-  return items;
-};
 
 export function AgentPage() {
   const { t } = useTranslation('agent');
@@ -894,27 +149,6 @@ export function AgentPage() {
   const [mentionHasMore, setMentionHasMore] = useState(false);
   const [mentionLoading, setMentionLoading] = useState(false);
 
-  const [aiModelOptions, setAiModelOptions] = useState<AiModelChoice[]>([]);
-  const [selectedAiModelOption, setSelectedAiModelOption] = useState<string | null>(null);
-  const [aiProvider, setAiProvider] = useState<string | null>(null);
-  const [aiModel, setAiModel] = useState<string | null>(null);
-  const [aiAssistantEnabled, setAiAssistantEnabled] = useState(false);
-  const [defaultAiSelection, setDefaultAiSelection] = useState<{
-    provider: string | null;
-    model: string | null;
-  }>({
-    provider: null,
-    model: null,
-  });
-  const [aiModelsLoading, setAiModelsLoading] = useState(false);
-  const [aiConfigInitialized, setAiConfigInitialized] = useState(false);
-  const canSendMessages = Boolean(
-    aiAssistantEnabled && aiProvider && aiModel && aiModelOptions.length > 0
-  );
-  const aiSelectionResolved =
-    !aiAssistantEnabled || aiModelOptions.length === 0 || Boolean(aiProvider && aiModel);
-  const showAiUnavailableState = aiConfigInitialized && aiSelectionResolved && !canSendMessages;
-
   const chatInputRef = useRef<AgentChatInputRef>(null);
   const conversationViewportRef = useRef<HTMLDivElement | null>(null);
   const loadChatsRequestIdRef = useRef(0);
@@ -937,6 +171,22 @@ export function AgentPage() {
     [servers]
   );
   const modelSelectionServerId = activeChat?.serverId || activeServerId || composerServerId || null;
+  const {
+    aiModelOptions,
+    selectedAiModelOption,
+    setSelectedAiModelOption,
+    aiProvider,
+    setAiProvider,
+    aiModel,
+    setAiModel,
+    canSendMessages,
+    showAiUnavailableState,
+    aiModelsLoading,
+  } = useAgentModelSelection({
+    modelSelectionServerId,
+    activeChatId,
+    isSettingsOpen,
+  });
 
   const [qnameQuery, setQnameQuery] = useState<string | null>(null);
   const [qnamePropertiesByPrefix, setQNamePropertiesByPrefix] = useState<Record<string, string[]>>(
@@ -1388,122 +638,6 @@ export function AgentPage() {
   }, [loadChats]);
 
   useEffect(() => {
-    if (isSettingsOpen) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const loadAiOptions = async () => {
-      setAiModelsLoading(true);
-      try {
-        const [providerCatalog, currentSettings] = await Promise.all([
-          listAiProviders(),
-          getAiSettings(),
-        ]);
-
-        if (cancelled) {
-          return;
-        }
-
-        setAiAssistantEnabled(Boolean(currentSettings.enabled));
-
-        const configuredProviders: AiProviderOption[] = (providerCatalog.providers || [])
-          .filter(provider => provider.hasToken)
-          .map(provider => ({
-            value: provider.id,
-            label: provider.label,
-            defaultModel: provider.defaultModel,
-          }));
-
-        if (!configuredProviders.length) {
-          setAiModelOptions([]);
-          setSelectedAiModelOption(null);
-          setAiProvider(null);
-          setAiModel(null);
-          return;
-        }
-
-        const optionGroups = await Promise.all(
-          configuredProviders.map(async provider => {
-            const remote = await listAiModels({ provider: provider.value }).catch(() => null);
-            const models = remote?.models?.length
-              ? remote.models
-              : [{ id: provider.defaultModel, displayName: provider.defaultModel }];
-            return models.map(model => ({
-              value: `${provider.value}::${model.id}`,
-              label: `${provider.label} · ${model.displayName || model.id}`,
-              provider: provider.value,
-              model: model.id,
-            }));
-          })
-        );
-
-        if (cancelled) {
-          return;
-        }
-
-        const options = optionGroups.flat();
-        setAiModelOptions(options);
-        setDefaultAiSelection({
-          provider: currentSettings.provider ?? null,
-          model: currentSettings.model ?? null,
-        });
-
-        if (!options.length) {
-          setSelectedAiModelOption(null);
-          setAiProvider(null);
-          setAiModel(null);
-          return;
-        }
-      } catch {
-        // keep composer functional without model selector data
-      } finally {
-        if (!cancelled) {
-          setAiModelsLoading(false);
-          setAiConfigInitialized(true);
-        }
-      }
-    };
-
-    void loadAiOptions();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isSettingsOpen]);
-
-  useEffect(() => {
-    if (!aiModelOptions.length) {
-      return;
-    }
-
-    const stored = readStoredModelSelection(modelSelectionServerId, activeChatId);
-    const storedValue = stored ? `${stored.provider}::${stored.model}` : null;
-    const configuredValue =
-      defaultAiSelection.provider && defaultAiSelection.model
-        ? `${defaultAiSelection.provider}::${defaultAiSelection.model}`
-        : null;
-
-    const selectedValue =
-      [storedValue, configuredValue, aiModelOptions[0].value].find(value =>
-        Boolean(value && aiModelOptions.some(option => option.value === value))
-      ) || aiModelOptions[0].value;
-    const selected =
-      aiModelOptions.find(option => option.value === selectedValue) || aiModelOptions[0];
-
-    setSelectedAiModelOption(selected.value);
-    setAiProvider(selected.provider);
-    setAiModel(selected.model);
-  }, [
-    aiModelOptions,
-    activeChatId,
-    modelSelectionServerId,
-    defaultAiSelection.provider,
-    defaultAiSelection.model,
-  ]);
-
-  useEffect(() => {
     setDraft('');
     setMentionQuery(null);
     resetMentionSuggestions();
@@ -1942,211 +1076,26 @@ export function AgentPage() {
                       .slice()
                       .sort((a, b) => a.id - b.id);
                     const isActive = ACTIVE_RUN_STATUSES.has(run.status);
-                    const activity = buildRunActivity(runEvents);
-
                     return (
-                      <Box key={`timeline-run-${run.id}`} py={2}>
-                        <Stack gap="xs">
-                          {activity.map((step, idx) => {
-                            if (step.kind === 'note') {
-                              return (
-                                <Box
-                                  key={idx}
-                                  className="agent-markdown"
-                                  dangerouslySetInnerHTML={{
-                                    __html: renderMarkdown(step.label, {
-                                      copyLabel: t('copy'),
-                                      copiedLabel: t('copied'),
-                                    }),
-                                  }}
-                                  style={{ fontSize: 14, lineHeight: 1.6 }}
-                                />
-                              );
-                            }
-
-                            if (step.kind === 'execution' && step.detail) {
-                              const translatedLabel = step.label.startsWith('__i18n:')
-                                ? t(step.label.replace('__i18n:', ''))
-                                : step.label;
-
-                              return (
-                                <StepDetailAccordion
-                                  key={idx}
-                                  label={translatedLabel}
-                                  color={
-                                    step.level === 'error' ? 'red' : 'var(--mantine-color-text)'
-                                  }
-                                  detail={step.detail}
-                                />
-                              );
-                            }
-
-                            if (step.level === 'error') {
-                              const translatedLabel = step.label.startsWith('__i18n:')
-                                ? t(step.label.replace('__i18n:', ''))
-                                : step.label;
-
-                              if (step.detail) {
-                                return (
-                                  <StepDetailAccordion
-                                    key={idx}
-                                    label={translatedLabel}
-                                    color="red"
-                                    detail={step.detail}
-                                  />
-                                );
-                              }
-
-                              return (
-                                <Text key={idx} size="sm" c="red">
-                                  {translatedLabel}
-                                </Text>
-                              );
-                            }
-
-                            return (
-                              <Text key={idx} size="xs" c="dimmed">
-                                {step.label.startsWith('__i18n:')
-                                  ? t(step.label.replace('__i18n:', ''))
-                                  : step.label}
-                              </Text>
-                            );
-                          })}
-
-                          {isActive && (
-                            <Group gap="xs" py={2}>
-                              <Loader size={14} />
-                              <Text size="xs" c="dimmed">
-                                {t('thinking')} (
-                                <RunTimer createdAt={run.createdAt} />)
-                              </Text>
-                            </Group>
-                          )}
-                        </Stack>
-                      </Box>
+                      <AgentRunTimelineItem
+                        key={`timeline-run-${run.id}`}
+                        run={run}
+                        runEvents={runEvents}
+                        isActive={isActive}
+                        copyLabel={t('copy')}
+                        copiedLabel={t('copied')}
+                      />
                     );
                   }
 
                   const { message } = item;
-
-                  if (message.role === 'assistant') {
-                    return (
-                      <Box
-                        key={`message-${message.id}`}
-                        className="agent-message-group"
-                        style={{ position: 'relative' }}
-                        mb={32}
-                      >
-                        <Box
-                          py={2}
-                          className="agent-markdown"
-                          dangerouslySetInnerHTML={{
-                            __html: renderMarkdown(message.content, {
-                              copyLabel: t('copy'),
-                              copiedLabel: t('copied'),
-                            }),
-                          }}
-                          style={{ fontSize: 14, lineHeight: 1.6 }}
-                        />
-                        <Box
-                          className="agent-message-copy-btn"
-                          style={{
-                            position: 'absolute',
-                            bottom: -24,
-                            right: 0,
-                            opacity: 0,
-                            transition: 'opacity 0.2s',
-                          }}
-                        >
-                          <CopyButton value={message.content} timeout={2000}>
-                            {({ copied, copy }) => (
-                              <Tooltip
-                                label={copied ? t('copied') : t('copy')}
-                                withArrow
-                                position="top"
-                              >
-                                <ActionIcon
-                                  color={copied ? 'teal' : 'gray'}
-                                  variant="subtle"
-                                  onClick={copy}
-                                  size="sm"
-                                >
-                                  {copied ? (
-                                    <IconCheck style={{ width: 14 }} />
-                                  ) : (
-                                    <IconCopy style={{ width: 14 }} />
-                                  )}
-                                </ActionIcon>
-                              </Tooltip>
-                            )}
-                          </CopyButton>
-                        </Box>
-                      </Box>
-                    );
-                  }
-
                   return (
-                    <Group
+                    <AgentMessageBubble
                       key={`message-${message.id}`}
-                      justify="flex-end"
-                      className="agent-message-group"
-                      style={{ position: 'relative' }}
-                      mb={32}
-                    >
-                      <Paper
-                        p="sm"
-                        withBorder={false}
-                        shadow="none"
-                        style={{
-                          maxWidth: '72%',
-                          width: 'fit-content',
-                          backgroundColor: 'var(--mantine-color-gray-light)',
-                        }}
-                      >
-                        <Text
-                          component="div"
-                          size="sm"
-                          style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}
-                        >
-                          {renderUserMessageContent(message.content, message.mentions)}
-                        </Text>
-                      </Paper>
-
-                      <Box
-                        className="agent-message-copy-btn"
-                        style={{
-                          position: 'absolute',
-                          bottom: -28,
-                          right: 0,
-                          opacity: 0,
-                          transition: 'opacity 0.2s',
-                          zIndex: 10,
-                        }}
-                      >
-                        <CopyButton value={message.content} timeout={2000}>
-                          {({ copied, copy }) => (
-                            <Tooltip
-                              label={copied ? t('copied') : t('copy')}
-                              withArrow
-                              position="top"
-                            >
-                              <ActionIcon
-                                color={copied ? 'teal' : 'gray'}
-                                variant="subtle"
-                                onClick={copy}
-                                size="sm"
-                              >
-                                {copied ? (
-                                  <IconCheck style={{ width: 14 }} />
-                                ) : (
-                                  <IconCopy style={{ width: 14 }} />
-                                )}
-                              </ActionIcon>
-                            </Tooltip>
-                          )}
-                        </CopyButton>
-                      </Box>
-                    </Group>
+                      message={message}
+                      copyLabel={t('copy')}
+                      copiedLabel={t('copied')}
+                    />
                   );
                 })}
               </>
