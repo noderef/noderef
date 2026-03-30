@@ -20,6 +20,7 @@
  */
 
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 export type InsightRangeDays = 7 | 14 | 30 | 90;
 export const DEFAULT_INSIGHT_RANGE: InsightRangeDays = 7;
@@ -29,15 +30,27 @@ interface InsightsState {
   setSelectedRange: (serverId: number, range: InsightRangeDays) => void;
 }
 
-export const useInsightsStore = create<InsightsState>(set => ({
-  selectedRangeByServer: {},
+const STORAGE_KEY = 'insights-store';
 
-  setSelectedRange: (serverId: number, range: InsightRangeDays) => {
-    set(state => ({
-      selectedRangeByServer: {
-        ...state.selectedRangeByServer,
-        [serverId]: range,
+export const useInsightsStore = create<InsightsState>()(
+  persist(
+    set => ({
+      selectedRangeByServer: {},
+
+      setSelectedRange: (serverId: number, range: InsightRangeDays) => {
+        set(state => ({
+          selectedRangeByServer: {
+            ...state.selectedRangeByServer,
+            [serverId]: range,
+          },
+        }));
       },
-    }));
-  },
-}));
+    }),
+    {
+      name: STORAGE_KEY,
+      partialize: state => ({
+        selectedRangeByServer: state.selectedRangeByServer,
+      }),
+    }
+  )
+);
