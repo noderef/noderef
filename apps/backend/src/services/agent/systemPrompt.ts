@@ -40,7 +40,10 @@ function buildTemporalDirective(): string {
     hourCycle: 'h23',
   });
   const parts = Object.fromEntries(
-    formatter.formatToParts(now).filter(part => part.type !== 'literal').map(part => [part.type, part.value])
+    formatter
+      .formatToParts(now)
+      .filter(part => part.type !== 'literal')
+      .map(part => [part.type, part.value])
   ) as Record<string, string>;
 
   const localDateTime = `${parts.year ?? '0000'}-${parts.month ?? '01'}-${parts.day ?? '01'}T${

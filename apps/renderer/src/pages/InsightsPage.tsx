@@ -21,8 +21,7 @@
  */
 
 import { BrandLogo } from '@/components/BrandLogo';
-import { backendRpc } from '@/core/ipc/backend';
-import type { InsightDashboard, InsightGraph } from '@/core/ipc/backend';
+import type { InsightGraph } from '@/core/ipc/backend';
 import {
   DEFAULT_INSIGHT_RANGE,
   useInsightsStore,
@@ -46,9 +45,10 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconAlertCircle, IconPlus } from '@tabler/icons-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToggleInsightPin } from '@/hooks/useToggleInsightPin';
+import { useInsightsDashboard } from '@/hooks/useInsightsDashboard';
 
 const RANGE_OPTIONS: InsightRangeDays[] = [7, 14, 30, 90];
 
@@ -62,10 +62,10 @@ function InsightsPage() {
   );
   const setSelectedRange = useInsightsStore(state => state.setSelectedRange);
 
-  const [dashboard, setDashboard] = useState<InsightDashboard | null>(null);
-  const [graphs, setGraphs] = useState<InsightGraph[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { dashboard, graphs, loading, error, loadDashboard, setGraphs } = useInsightsDashboard(
+    activeServerId,
+    selectedRange
+  );
 
   // Modal state
   const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
@@ -74,31 +74,6 @@ function InsightsPage() {
     () => new Map(graphs.map(graph => [graph.id, graph.isPinned])),
     [graphs]
   );
-
-  // Load dashboard data
-  const loadDashboard = useCallback(async () => {
-    if (!activeServerId) return;
-
-    setLoading(true);
-    setError(null);
-    try {
-      const [dashboardData, graphsList] = await Promise.all([
-        backendRpc.serverInsights.getDashboard(activeServerId, selectedRange),
-        backendRpc.serverInsights.listGraphs(activeServerId),
-      ]);
-      setDashboard(dashboardData);
-      setGraphs(graphsList);
-    } catch (err) {
-      console.error('Failed to load insights dashboard:', err);
-      setError(err instanceof Error ? err.message : t('insights:loadError'));
-    } finally {
-      setLoading(false);
-    }
-  }, [activeServerId, selectedRange, t]);
-
-  useEffect(() => {
-    loadDashboard();
-  }, [loadDashboard]);
 
   const handleEditGraph = useCallback(
     (graphId: number) => {
@@ -118,9 +93,12 @@ function InsightsPage() {
     loadDashboard();
   }, [loadDashboard]);
 
-  const updateGraphPinState = useCallback((graphId: number, isPinned: boolean) => {
-    setGraphs(prev => prev.map(g => (g.id === graphId ? { ...g, isPinned } : g)));
-  }, []);
+  const updateGraphPinState = useCallback(
+    (graphId: number, isPinned: boolean) => {
+      setGraphs(prev => prev.map(g => (g.id === graphId ? { ...g, isPinned } : g)));
+    },
+    [setGraphs]
+  );
 
   const handleTogglePin = useToggleInsightPin(updateGraphPinState, updateGraphPinState);
 

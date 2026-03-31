@@ -27,6 +27,7 @@ import {
   useDesktopClipboardHandlers,
   type EditableTarget,
 } from '@/hooks/useDesktopClipboardHandlers';
+import { usePropertyDataTypes } from '@/hooks/usePropertyDataTypes';
 import { useSearchDictionary } from '@/hooks/useSearchDictionary';
 import {
   ActionIcon,
@@ -75,13 +76,6 @@ export function InsightGraphSettingsModal({
   const [color, setColor] = useState(graph?.color ?? '#228be6');
   const [columnSpan, setColumnSpan] = useState(String(graph?.columnSpan ?? 1));
   const [saving, setSaving] = useState(false);
-  const propertyDataTypesCacheRef = useRef<
-    Record<string, { values: Record<string, string>; timestamp: number }>
-  >({});
-  const [currentPropertyDataTypes, setCurrentPropertyDataTypes] = useState<Record<string, string>>(
-    {}
-  );
-  const [isLoadingDynamicProps, setIsLoadingDynamicProps] = useState(false);
   const modalContentRef = useRef<HTMLDivElement | null>(null);
   const isDesktopMode = useMemo(
     () => typeof window !== 'undefined' && isNeutralinoMode() && !!(window as any).Neutralino,
@@ -151,10 +145,18 @@ export function InsightGraphSettingsModal({
   const baseUrl = selectedServer?.baseUrl ?? null;
 
   const activePropertyQuery = dateFieldInput.trim().length > 0 ? dateFieldInput : dateField;
-  const propertyPrefix = useMemo(() => {
-    const match = activePropertyQuery.match(/^([a-z0-9_-]+:)/i);
-    return match ? match[1].toLowerCase() : null;
-  }, [activePropertyQuery]);
+  const {
+    combinedPropertyDataTypes,
+    isLoadingDynamicProps,
+    availableDateFields,
+    findMatchingDateProperty,
+  } = usePropertyDataTypes({
+    serverId,
+    baseUrl,
+    dictionary,
+    activePropertyQuery,
+    activePropertyInput: dateFieldInput,
+  });
 
   const isDateDataType = useCallback((dataType: string | null | undefined) => {
     const normalized = dataType?.trim().toLowerCase();
@@ -162,92 +164,8 @@ export function InsightGraphSettingsModal({
   }, []);
 
   useEffect(() => {
-    propertyDataTypesCacheRef.current = {};
-    setCurrentPropertyDataTypes({});
     setDateFieldInput('');
   }, [serverId]);
-
-  useEffect(() => {
-    if (!serverId || !baseUrl || !propertyPrefix) {
-      setCurrentPropertyDataTypes({});
-      setIsLoadingDynamicProps(false);
-      return;
-    }
-
-    const cacheKey = `${serverId}:${propertyPrefix}`;
-    const cached = propertyDataTypesCacheRef.current[cacheKey];
-    const cacheTtl = 5 * 60 * 1000;
-
-    if (cached && Date.now() - cached.timestamp < cacheTtl) {
-      setCurrentPropertyDataTypes(cached.values);
-      setIsLoadingDynamicProps(false);
-      return;
-    }
-
-    let cancelled = false;
-    setIsLoadingDynamicProps(true);
-
-    backendRpc.alfresco.search
-      .propertyDataTypesByPrefix(serverId, baseUrl, propertyPrefix)
-      .then(propertyDataTypes => {
-        if (cancelled) return;
-        setCurrentPropertyDataTypes(propertyDataTypes);
-        propertyDataTypesCacheRef.current[cacheKey] = {
-          values: propertyDataTypes,
-          timestamp: Date.now(),
-        };
-      })
-      .catch(error => {
-        if (cancelled) return;
-        console.error('Failed to load property data types', error);
-        setCurrentPropertyDataTypes({});
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setIsLoadingDynamicProps(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [serverId, baseUrl, propertyPrefix]);
-
-  const combinedPropertyDataTypes = useMemo(
-    () => ({ ...dictionary.propertyDataTypes, ...currentPropertyDataTypes }),
-    [currentPropertyDataTypes, dictionary.propertyDataTypes]
-  );
-
-  const availableDateFields = useMemo(() => {
-    const term = dateFieldInput.toLowerCase();
-    const normalizedPrefix = propertyPrefix?.toLowerCase() ?? null;
-    return Object.entries(combinedPropertyDataTypes)
-      .filter(
-        ([prop, dataType]) =>
-          isDateDataType(dataType) &&
-          (!normalizedPrefix || prop.toLowerCase().startsWith(normalizedPrefix)) &&
-          (term.length === 0 || prop.toLowerCase().includes(term))
-      )
-      .map(([prop]) => prop)
-      .slice(0, 50);
-  }, [combinedPropertyDataTypes, dateFieldInput, isDateDataType, propertyPrefix]);
-
-  const findMatchingDateProperty = useCallback(
-    (input: string): string | null => {
-      const value = input.trim();
-      if (!value) return null;
-      const lower = value.toLowerCase();
-      const allDateProperties = Object.entries(combinedPropertyDataTypes)
-        .filter(([, dataType]) => isDateDataType(dataType))
-        .map(([prop]) => prop);
-      const exact = allDateProperties.find(prop => prop.toLowerCase() === lower);
-      if (exact) return exact;
-      const startsWith = allDateProperties.find(prop => prop.toLowerCase().startsWith(lower));
-      if (startsWith) return startsWith;
-      return null;
-    },
-    [combinedPropertyDataTypes, isDateDataType]
-  );
 
   const handleSelectDateField = (prop: string) => {
     const match = findMatchingDateProperty(prop);
