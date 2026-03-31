@@ -52,6 +52,7 @@ NodeRef gives Alfresco teams a focused desktop workspace for searching repositor
 ### ✨ **Features**
 
 - **Activity overview** — Dashboard heatmap and timeline of recent nodes.
+- **Insights** — Server charts with 7–90 day ranges and also pin graphs to your dashboard.
 - **Query builder** — Search by property, aspect, type, path, or site. No CMIS/AFTS syntax required.
 - **Saved searches** — Store queries with custom result columns, reuse across servers.
 - **JavaScript console** — Execute scripts across servers, view history, and `/ai` assist.
