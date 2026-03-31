@@ -30,6 +30,7 @@ import {
 } from '@mantine/core';
 import { IconAlertTriangle, IconLock } from '@tabler/icons-react';
 import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 type Phase = 'checking' | 'prompt' | 'submitting' | 'ready' | 'error';
 
@@ -38,11 +39,17 @@ interface WebAuthStatusResponse {
   authenticated: boolean;
 }
 
+interface WebAuthErrorPayload {
+  code?: string;
+  message?: string;
+}
+
 interface WebPasswordGateProps {
   children: ReactNode;
 }
 
 export function WebPasswordGate({ children }: WebPasswordGateProps) {
+  const { t } = useTranslation('common');
   const computedColorScheme = useComputedColorScheme('light', { getInitialValueInEffect: true });
   const [phase, setPhase] = useState<Phase>('checking');
   const [password, setPassword] = useState('');
@@ -81,13 +88,11 @@ export function WebPasswordGate({ children }: WebPasswordGateProps) {
         return;
       }
       setPhase('prompt');
-    } catch (statusError) {
-      const message =
-        statusError instanceof Error ? statusError.message : 'Unable to reach backend.';
-      setError(message);
+    } catch {
+      setError(t('unableToReachBackend'));
       setPhase('error');
     }
-  }, [neutralino, readStatus]);
+  }, [neutralino, readStatus, t]);
 
   useEffect(() => {
     void refreshGateStatus();
@@ -98,7 +103,7 @@ export function WebPasswordGate({ children }: WebPasswordGateProps) {
       event.preventDefault();
 
       if (!password.trim()) {
-        setError('Password is required.');
+        setError(t('passwordRequired'));
         return;
       }
 
@@ -115,19 +120,22 @@ export function WebPasswordGate({ children }: WebPasswordGateProps) {
         });
 
         if (!response.ok) {
-          const payload = (await response.json().catch(() => ({}))) as { message?: string };
-          throw new Error(payload.message || 'Login failed.');
+          const payload = (await response.json().catch(() => ({}))) as WebAuthErrorPayload;
+          if (payload.code === 'INVALID_PASSWORD') {
+            throw new Error(t('invalidPassword'));
+          }
+          throw new Error(payload.message || t('loginFailed'));
         }
 
         setPassword('');
         await refreshGateStatus();
       } catch (loginError) {
-        const message = loginError instanceof Error ? loginError.message : 'Login failed.';
+        const message = loginError instanceof Error ? loginError.message : t('loginFailed');
         setError(message);
         setPhase('prompt');
       }
     },
-    [password, refreshGateStatus]
+    [password, refreshGateStatus, t]
   );
 
   if (phase === 'ready') {
@@ -154,7 +162,7 @@ export function WebPasswordGate({ children }: WebPasswordGateProps) {
             <Group gap="sm" align="center">
               <Loader size="sm" />
               <Text size="sm" c="dimmed">
-                {phase === 'submitting' ? 'Signing in...' : 'Checking access...'}
+                {phase === 'submitting' ? t('signingIn') : t('checkingAccess')}
               </Text>
             </Group>
           )}
@@ -162,10 +170,10 @@ export function WebPasswordGate({ children }: WebPasswordGateProps) {
           {phase === 'error' && (
             <>
               <Alert variant="light" color="red" icon={<IconAlertTriangle size={16} />}>
-                <Text fw={600}>Access check failed</Text>
-                <Text size="sm">{error || 'Unable to reach backend.'}</Text>
+                <Text fw={600}>{t('accessCheckFailed')}</Text>
+                <Text size="sm">{error || t('unableToReachBackend')}</Text>
               </Alert>
-              <Button onClick={() => void refreshGateStatus()}>Retry</Button>
+              <Button onClick={() => void refreshGateStatus()}>{t('retry')}</Button>
             </>
           )}
 
@@ -173,11 +181,10 @@ export function WebPasswordGate({ children }: WebPasswordGateProps) {
             <form onSubmit={handleSubmit}>
               <Stack gap="md">
                 <Text size="sm" c="dimmed">
-                  This NodeRef web deployment is password protected.
+                  {t('pleaseLoginBelow')}
                 </Text>
                 <PasswordInput
-                  label="Password"
-                  placeholder="Enter deployment password"
+                  placeholder={t('enterPassword')}
                   value={password}
                   onChange={event => setPassword(event.currentTarget.value)}
                   leftSection={<IconLock size={16} />}
@@ -188,7 +195,7 @@ export function WebPasswordGate({ children }: WebPasswordGateProps) {
                     <Text size="sm">{error}</Text>
                   </Alert>
                 )}
-                <Button type="submit">Unlock NodeRef</Button>
+                <Button type="submit">{t('login')}</Button>
               </Stack>
             </form>
           )}
