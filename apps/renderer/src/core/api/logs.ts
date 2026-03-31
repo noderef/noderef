@@ -20,6 +20,7 @@
  */
 
 import { call, buildStreamUrl } from '@/core/ipc/alfresco';
+import { backendFetch } from '@/core/ipc/rpc';
 import type { LogFile } from '@/components/logs/LogFilesList';
 
 interface LogFilesResponse {
@@ -84,7 +85,7 @@ export async function downloadLogFile(
     });
 
     // Fetch the text content directly
-    const response = await fetch(streamUrl, {
+    const response = await backendFetch(streamUrl, {
       method: 'GET',
       headers: {
         Accept: 'text/plain,*/*',

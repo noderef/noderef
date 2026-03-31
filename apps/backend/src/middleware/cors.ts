@@ -36,8 +36,11 @@ export function corsMiddleware(): RequestHandler {
       typeof origin === 'string' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
 
     if (!origin || origin === 'null' || isLoopback) {
-      // For loopback-only service, '*' is safe (no credentials used)
+      // Echo allowed origins so credentialed requests can be used when needed.
       res.setHeader('Access-Control-Allow-Origin', origin || '*');
+      if (origin) {
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+      }
     } else {
       // Block everything else - don't set CORS header, let browser block it
       // This prevents the backend from being accessed from arbitrary web origins

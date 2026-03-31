@@ -18,6 +18,7 @@ import { buildStreamUrl } from '@/core/ipc/alfresco';
 import type { AlfrescoNodeDetails } from '@/core/ipc/backend';
 import { backendRpc } from '@/core/ipc/backend';
 import { ensureNeutralinoReady } from '@/core/ipc/neutralino';
+import { backendFetch } from '@/core/ipc/rpc';
 import { useServersStore } from '@/core/store/servers';
 import { formatBytes } from '@/utils/formatBytes';
 import {
@@ -165,7 +166,7 @@ export function NodeProperties({ properties, serverId, nodeId, nodeName }: NodeP
           serverId,
           nodeId: nodeId,
         });
-        const response = await fetch(streamUrl, { method: 'GET' });
+        const response = await backendFetch(streamUrl, { method: 'GET' });
         if (!response.ok) {
           throw new Error(`Failed to download content: ${response.statusText}`);
         }

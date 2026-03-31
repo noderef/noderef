@@ -31,15 +31,11 @@ const DEFAULT_RPC_TIMEOUT_MS = 7000;
 // Detect if we're running in Docker/SERVE_STATIC mode (frontend served by backend)
 // In this case, use the current window location port instead of DEFAULT_PORT
 function getInitialBackendURL(): string {
-  // If running in browser (not Neutralino) and the page is served from a port (not file://),
-  // assume the backend is on the same host:port
-  if (typeof window !== 'undefined' && !isNeutralinoMode()) {
-    const { protocol, hostname, port } = window.location;
-    // Check if we're in a browser with http/https (not file://)
-    if (protocol.startsWith('http') && hostname && port) {
-      console.log(`[RPC] Docker mode detected: using backend at ${protocol}//${hostname}:${port}`);
-      return `${protocol}//${hostname}:${port}`;
-    }
+  // In browser/Docker mode, keep the exact page origin to avoid cross-site cookie issues.
+  const browserBaseUrl = getBrowserBackendUrlFromLocation();
+  if (browserBaseUrl) {
+    console.log(`[RPC] Docker mode detected: using backend at ${browserBaseUrl}`);
+    return browserBaseUrl;
   }
   // Default: Neutralino mode or dev mode
   return `http://127.0.0.1:${DEFAULT_PORT}`;
@@ -55,6 +51,19 @@ const enableDebugLogging = import.meta.env.DEV && !(window as any).NL_ARGS?.incl
 const NEUTRALINO_RESOURCE_ATTEMPTS = 2;
 const NEUTRALINO_RESOURCE_TIMEOUT_MS = 2500;
 const NEUTRALINO_RESOURCE_RETRY_DELAY_MS = 150;
+
+function getBrowserBackendUrlFromLocation(): string | null {
+  if (typeof window === 'undefined' || isNeutralinoMode()) {
+    return null;
+  }
+
+  const { protocol, hostname, origin } = window.location;
+  if (protocol.startsWith('http') && hostname) {
+    return origin;
+  }
+
+  return null;
+}
 
 // Helper to log to both console and Neutralino log file
 function debugLog(...args: unknown[]): void {
@@ -535,9 +544,10 @@ export async function waitForBackend(maxAttempts = 50, intervalMs = 200): Promis
     return;
   }
 
+  const browserBaseUrl = getBrowserBackendUrlFromLocation();
+
   for (let i = 0; i < maxAttempts; i++) {
-    const discoveredPort = await discoverPort();
-    const candidate = `http://127.0.0.1:${discoveredPort}`;
+    const candidate = browserBaseUrl ?? `http://127.0.0.1:${await discoverPort()}`;
 
     if (await isAlive(candidate)) {
       baseURL = candidate;
@@ -554,6 +564,16 @@ export async function waitForBackend(maxAttempts = 50, intervalMs = 200): Promis
 
 export function getRpcBaseUrl(): string {
   return baseURL;
+}
+
+/**
+ * Shared fetch helper for backend routes that may rely on HttpOnly session cookies.
+ */
+export function backendFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  return fetch(input, {
+    ...init,
+    credentials: init.credentials ?? 'include',
+  });
 }
 
 export async function startBackend(): Promise<void> {
@@ -584,7 +604,7 @@ export async function startBackend(): Promise<void> {
             setTimeout(() => reject(new Error('Port discovery timed out')), 3000);
           });
           const discoveredPort = await Promise.race([discoverPort(), discoverTimeout]);
-          baseURL = `http://127.0.0.1:${discoveredPort}`;
+          baseURL = getBrowserBackendUrlFromLocation() ?? `http://127.0.0.1:${discoveredPort}`;
           started = true;
           backendReady = true;
           debugLog('[RPC] Using existing backend on port:', discoveredPort);
@@ -933,7 +953,7 @@ export async function rpc<T = unknown>(
   try {
     const timeoutMs = options?.timeoutMs ?? DEFAULT_RPC_TIMEOUT_MS;
     const res = await withTimeout(
-      fetch(`${baseURL}/rpc`, {
+      backendFetch(`${baseURL}/rpc`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ method, params }),

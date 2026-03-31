@@ -15,6 +15,7 @@
  */
 
 import { BackendGate } from '@/components/boot/BackendGate';
+import { WebPasswordGate } from '@/components/boot/WebPasswordGate';
 import { I18nProvider } from '@/core/i18n';
 import { ensureBackendStarted } from '@/core/ipc/neutralino';
 import { startBackend } from '@/core/ipc/rpc';
@@ -65,9 +66,11 @@ createRoot(root).render(
   <React.StrictMode>
     <ThemeProvider>
       <I18nProvider>
-        <BackendGate>
-          <App />
-        </BackendGate>
+        <WebPasswordGate>
+          <BackendGate>
+            <App />
+          </BackendGate>
+        </WebPasswordGate>
       </I18nProvider>
     </ThemeProvider>
   </React.StrictMode>

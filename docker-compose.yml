@@ -9,6 +9,8 @@ services:
       PORT: 5001
       DEBUG: "1"
       DATA_DIR: /data
+      # Optional web password protection
+      # WEB_PASSWORD: "change-me"
       # SERVER_URL: "http://alfresco.local:8080/alfresco"
       # SERVER_NAME: "Alfresco"
       # SERVER_USERNAME: "admin"

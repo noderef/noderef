@@ -350,6 +350,7 @@ async function main() {
     app.use((req, res, next) => {
       if (
         req.path.startsWith('/rpc') ||
+        req.path.startsWith('/web-auth') ||
         req.path.startsWith('/health') ||
         req.path.startsWith('/debug')
       ) {
