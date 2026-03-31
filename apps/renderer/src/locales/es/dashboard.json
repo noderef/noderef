@@ -1,0 +1,27 @@
+{
+  "activity": "Actividad reciente",
+  "pinnedInsights": "Insights fijados",
+  "pinnedInsightsDescription": "Gráficos fijados de tus servidores, cada uno usando el rango seleccionado de ese servidor.",
+  "activityDescription": "Nodos que abriste recientemente agrupados por día",
+  "noActivity": "Aún no hay actividad",
+  "noActivityDescription": "Navega por nodos para completar el historial del panel.",
+  "heatmap": {
+    "noActivityLegend": "Sin actividad",
+    "legendRange": "{{min}}-{{max}} nodos",
+    "legendRangePlus": "{{min}}+ nodos",
+    "tooltipCount_one": "{{count}} nodo visto",
+    "tooltipCount_other": "{{count}} nodos vistos",
+    "tooltipDate": "{{date}}",
+    "jumpToDate": "Iniciar la línea de tiempo desde {{date}}"
+  },
+  "timeline": {
+    "unknownLocation": "Ubicación desconocida",
+    "filteredFrom": "La línea de tiempo comienza en {{date}}",
+    "clearFilter": "Limpiar selección",
+    "noEntriesForSelection": "No hay entradas en o antes de {{date}}.",
+    "tryLoadingMore": "Carga más historial o limpia la selección para ver nodos recientes."
+  },
+  "errors": {
+    "activityLoadFailed": "No se pudo cargar la actividad"
+  }
+}

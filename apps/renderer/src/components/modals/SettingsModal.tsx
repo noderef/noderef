@@ -247,33 +247,42 @@ export function SettingsModal() {
     setStoreLanguage(value);
   };
 
-  // Language options with flags - sorted alphabetically by native label
-  const languageOptions = [
-    {
-      value: 'de',
-      label: t('settings:german'),
-      nativeLabel: 'Deutsch',
-      flagClass: 'fi fi-de',
-    },
-    {
-      value: 'en',
-      label: t('settings:english'),
-      nativeLabel: 'English',
-      flagClass: 'fi fi-gb',
-    },
-    {
-      value: 'fr',
-      label: t('settings:french'),
-      nativeLabel: 'Français',
-      flagClass: 'fi fi-fr',
-    },
-    {
-      value: 'nl',
-      label: t('settings:dutch'),
-      nativeLabel: 'Nederlands',
-      flagClass: 'fi fi-nl',
-    },
-  ];
+  const languageOptions = useMemo(
+    () =>
+      [
+        {
+          value: 'de',
+          label: t('settings:german'),
+          nativeLabel: 'Deutsch',
+          flagClass: 'fi fi-de',
+        },
+        {
+          value: 'en',
+          label: t('settings:english'),
+          nativeLabel: 'English',
+          flagClass: 'fi fi-gb',
+        },
+        {
+          value: 'es',
+          label: 'Español',
+          nativeLabel: 'Español',
+          flagClass: 'fi fi-es',
+        },
+        {
+          value: 'fr',
+          label: t('settings:french'),
+          nativeLabel: 'Français',
+          flagClass: 'fi fi-fr',
+        },
+        {
+          value: 'nl',
+          label: t('settings:dutch'),
+          nativeLabel: 'Nederlands',
+          flagClass: 'fi fi-nl',
+        },
+      ].sort((a, b) => a.nativeLabel.localeCompare(b.nativeLabel)),
+    [t]
+  );
 
   const aiProviderDefaultModelMap = useMemo(() => {
     return new Map(aiProviderOptions.map(option => [option.value, option.defaultModel]));

@@ -1,0 +1,18 @@
+{
+  "dashboard": "Panel",
+  "settings": "Ajustes",
+  "browseRepositories": "Explorar repositorios",
+  "browseRepositoriesDesc": "Navegar carpetas y archivos del servidor",
+  "dashboardDesc": "Ir al panel",
+  "settingsDesc": "Abrir ajustes de la aplicación",
+  "addServerDesc": "Agregar un nuevo servidor Alfresco",
+  "goBack": "Volver",
+  "goBackDesc": "Navegar a la carpeta padre",
+  "folder": "Carpeta",
+  "fetchingContents": "Obteniendo contenido",
+  "loadMore": "Cargar más…",
+  "loadMoreDesc": "Mostrar más elementos de esta carpeta",
+  "openFolder": "Abrir \"{{name}}\"",
+  "openFolderDesc": "Abrir esta carpeta en el explorador de archivos",
+  "searchError": "No se pudieron cargar los resultados"
+}
