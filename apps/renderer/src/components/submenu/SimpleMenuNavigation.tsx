@@ -423,12 +423,18 @@ export function SimpleMenuNavigation() {
   // Alfresco server sections - dynamically build search items from saved searches
   const alfrescoSections: MenuSectionType[] = useMemo(() => {
     const sortedSearches = [...savedSearches].sort((a, b) => a.name.localeCompare(b.name));
-    const savedSearchItems: MenuItemType[] = sortedSearches.map(search => ({
-      id: `saved-search-${search.id}`,
-      label: search.name,
-      icon: 'hash',
-      viewMode: 'monaco' as const,
-    }));
+    const savedSearchItems: MenuItemType[] = sortedSearches.map(search => {
+      const searchServer = getServerById(search.serverId);
+      return {
+        id: `saved-search-${search.id}`,
+        label: search.name,
+        icon: 'hash',
+        viewMode: 'monaco' as const,
+        metaLabel: isNodeRefSpace
+          ? searchServer?.name || `#${search.serverId}`
+          : formatElapsedCompact(search.lastAccessed || search.createdAt),
+      };
+    });
 
     const persistedOpened = getPersistedSectionOpened(activeServerId, 'search-main');
     const shouldOpen = persistedOpened ?? savedSearches.length > 0;
@@ -452,7 +458,7 @@ export function SimpleMenuNavigation() {
         items: savedSearchItems,
       },
     ];
-  }, [activeServerId, savedSearches, t]);
+  }, [activeServerId, getServerById, isNodeRefSpace, savedSearches, t]);
 
   const agentSections: MenuSectionType[] = useMemo(() => {
     const sortedChats = [...agentChats].sort((a, b) => {
@@ -467,7 +473,6 @@ export function SimpleMenuNavigation() {
 
     const chatItems: MenuItemType[] = sortedChats.map(chat => {
       const chatServer = getServerById(chat.serverId);
-      const serverLabel = chatServer?.label || chatServer?.name;
       return {
         id: `agent-chat-${chat.id}`,
         label: chat.title,
@@ -476,7 +481,7 @@ export function SimpleMenuNavigation() {
         badgeLabel: chat.hasWaitingConfirmation ? t('submenu:waitingApproval') : undefined,
         badgeColor: 'green',
         metaLabel: isNodeRefSpace
-          ? serverLabel || `#${chat.serverId}`
+          ? chatServer?.name || `#${chat.serverId}`
           : formatElapsedCompact(chat.lastMessageAt || chat.updatedAt),
       };
     });

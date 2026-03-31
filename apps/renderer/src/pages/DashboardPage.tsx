@@ -934,16 +934,6 @@ export function DashboardPage() {
                                               {item.name ?? item.nodeRef}
                                             </Text>
                                           </Anchor>
-                                          {item.serverLabel && (
-                                            <Badge
-                                              size="xs"
-                                              variant="light"
-                                              color="gray"
-                                              style={{ flexShrink: 0 }}
-                                            >
-                                              {item.serverLabel}
-                                            </Badge>
-                                          )}
                                         </Group>
                                         {pathClickable ? (
                                           <Anchor

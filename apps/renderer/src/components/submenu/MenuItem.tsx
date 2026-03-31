@@ -189,7 +189,7 @@ export function MenuItem({
           </Text>
         </Group>
         {(item.badgeLabel || item.metaLabel) && (
-          <Group gap={6} wrap="nowrap" style={{ flexShrink: 0 }}>
+          <Group gap={6} wrap="nowrap" style={{ minWidth: 0, maxWidth: '50%' }}>
             {item.badgeLabel && (
               <Badge
                 size="sm"
@@ -202,7 +202,19 @@ export function MenuItem({
               </Badge>
             )}
             {item.metaLabel && (
-              <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+              <Text
+                size="xs"
+                c="dimmed"
+                title={item.metaLabel}
+                style={{
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  maxWidth: item.badgeLabel ? 90 : 140,
+                  minWidth: 0,
+                  display: 'block',
+                }}
+              >
                 {item.metaLabel}
               </Text>
             )}
