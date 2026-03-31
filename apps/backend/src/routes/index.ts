@@ -28,6 +28,12 @@ import { oauthCallbackHandler } from './oauth.js';
 import { registerPingRoute, rpcDebugHandler, rpcHandler, type Routes } from './rpc.js';
 import { createUploadMiddleware, rpcBinaryHandler } from './rpcBinary.js';
 import { rpcStreamHandler } from './rpcStream.js';
+import {
+  webAuthLoginHandler,
+  webAuthLoginRateLimiter,
+  webAuthStatusHandler,
+  webPasswordGateMiddleware,
+} from './webAuth.js';
 
 // Re-export types
 export type { HealthRouteOptions } from './health.js';
@@ -57,6 +63,13 @@ export async function registerRoutes({
 }: RegisterRoutesOptions): Promise<void> {
   // Health check endpoint
   app.get('/health', healthHandler({ version, buildId }));
+
+  // Optional Docker web password gate endpoints
+  app.get('/web-auth/status', webAuthStatusHandler());
+  app.post('/web-auth/login', webAuthLoginRateLimiter(), webAuthLoginHandler());
+
+  // Protect backend APIs when the optional web password gate is active
+  app.use(webPasswordGateMiddleware());
 
   // OAuth callback endpoint
   app.get('/auth/callback', oauthCallbackHandler());

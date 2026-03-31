@@ -112,7 +112,7 @@ Deploy inside your infrastructure when network policies block the desktop app or
 docker run -p 5111:5111 ghcr.io/noderef/noderef:latest
 ```
 
-Then open [http://localhost:5111](http://localhost:5111) — data persists inside the container at `/data`.
+Then open [http://localhost:5111](http://localhost:5111). The data persists inside the container at `/data`. Use variable `WEB_PASSWORD` to make the app password protected.
 
 ### 🛠 **Tech stack**
 

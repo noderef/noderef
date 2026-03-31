@@ -36,23 +36,6 @@ function escapeHtml(unsafe: string): string {
 }
 
 /**
- * Escape JavaScript string for safe embedding in JS code
- */
-function escapeJs(unsafe: string): string {
-  return unsafe
-    .replace(/\\/g, '\\\\')
-    .replace(/'/g, "\\'")
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r')
-    .replace(/\t/g, '\\t')
-    .replace(/\f/g, '\\f')
-    .replace(/\v/g, '\\v')
-    .replace(/\0/g, '\\0')
-    .replace(/<\/script>/gi, '<\\/script>');
-}
-
-/**
  * OAuth callback route handler
  */
 export function oauthCallbackHandler(): RequestHandler {
@@ -70,11 +53,6 @@ export function oauthCallbackHandler(): RequestHandler {
             <h1>Authentication Failed</h1>
             <p>${escapeHtml(errorMsg)}</p>
             <p>You can close this window and try again.</p>
-            <script>
-              // Store error in localStorage so the app can detect it
-              localStorage.setItem('oauth_error', '${escapeJs(errorMsg)}');
-              setTimeout(() => window.close(), 3000);
-            </script>
           </body>
         </html>
       `);
@@ -105,7 +83,7 @@ export function oauthCallbackHandler(): RequestHandler {
 
       log.info({ state: authState }, 'OAuth callback received, authorization code stored');
 
-      // Send a success page that closes itself
+      // Send a simple success page
       res.send(`
         <!DOCTYPE html>
         <html>
@@ -113,21 +91,6 @@ export function oauthCallbackHandler(): RequestHandler {
           <body style="font-family: system-ui; padding: 40px; text-align: center;">
             <h1>✓ Authentication Successful</h1>
             <p>You can close this window and return to the application.</p>
-            <script>
-              // Store success flag in localStorage so the app can detect it
-              localStorage.setItem('oauth_success', 'true');
-              localStorage.setItem('oauth_code', '${escapeJs(authCode)}');
-              localStorage.setItem('oauth_timestamp', '${timestamp}');
-              
-              // Try to close the window after a short delay
-              setTimeout(() => {
-                window.close();
-                // If window.close() doesn't work (some browsers prevent it), show a message
-                setTimeout(() => {
-                  document.body.innerHTML = '<h1>✓ Authentication Successful</h1><p>Please close this window manually.</p>';
-                }, 500);
-              }, 2000);
-            </script>
           </body>
         </html>
       `);

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { getBackendUrl } from '@/core/ipc/rpc';
+import { backendFetch, getBackendUrl } from '@/core/ipc/rpc';
 
 export interface AiStatusResponse {
   enabled: boolean;
@@ -38,7 +38,7 @@ export interface AiInputImage {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const base = getBackendUrl();
-  const response = await fetch(`${base}${path}`, {
+  const response = await backendFetch(`${base}${path}`, {
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
     ...init,
   });

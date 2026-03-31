@@ -36,7 +36,7 @@ import type {
   ValidateOidcCredentialsReq,
   ValidateOidcCredentialsRes,
 } from '@app/contracts';
-import { getRpcBaseUrl, rpc, waitForBackend } from './rpc.js';
+import { backendFetch, getRpcBaseUrl, rpc, waitForBackend } from './rpc.js';
 
 /**
  * Generic RPC client for Alfresco operations
@@ -130,7 +130,7 @@ export async function rpcBinary(
   const backendUrl = await getBackendUrl();
   const url = `${backendUrl}/rpc-binary`;
 
-  const response = await fetch(url, {
+  const response = await backendFetch(url, {
     method: 'POST',
     body: formData,
   });
