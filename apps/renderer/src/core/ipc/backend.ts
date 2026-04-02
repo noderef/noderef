@@ -31,6 +31,12 @@ import type {
 } from '@app/contracts';
 import { rpc } from './rpc.js';
 
+export type AppServer = PublicServer;
+
+export type AppCreateServer = Omit<CreateServer, 'userId'>;
+
+export type AppUpdateServer = UpdateServer;
+
 /**
  * Backend data services RPC client
  */
@@ -40,7 +46,7 @@ export const backendRpc = {
    * Returns all servers, saved searches, and recent history
    */
   async loadWorkspace(): Promise<{
-    servers: PublicServer[];
+    servers: AppServer[];
     savedSearches: unknown[];
     recentNodeHistory: unknown[];
     recentJsConsoleHistory: unknown[];
@@ -57,7 +63,7 @@ export const backendRpc = {
     const startTime = Date.now();
     try {
       const result = await rpc<{
-        servers: PublicServer[];
+        servers: AppServer[];
         savedSearches: unknown[];
         recentNodeHistory: unknown[];
         recentJsConsoleHistory: unknown[];
@@ -90,31 +96,31 @@ export const backendRpc = {
     /**
      * List all servers for the current user
      */
-    async list(): Promise<PublicServer[]> {
-      return rpc<PublicServer[]>('backend.servers.list', {});
+    async list(): Promise<AppServer[]> {
+      return rpc<AppServer[]>('backend.servers.list', {});
     },
 
     /**
      * Get a server by ID
      */
-    async get(id: number): Promise<PublicServer> {
-      return rpc<PublicServer>('backend.servers.get', { id });
+    async get(id: number): Promise<AppServer> {
+      return rpc<AppServer>('backend.servers.get', { id });
     },
 
     /**
      * Create a new server
      */
-    async create(data: Omit<CreateServer, 'userId'>): Promise<PublicServer> {
+    async create(data: AppCreateServer): Promise<AppServer> {
       console.log('➕ Creating server:', data.name);
-      return rpc<PublicServer>('backend.servers.create', data);
+      return rpc<AppServer>('backend.servers.create', data);
     },
 
     /**
      * Update a server
      */
-    async update(id: number, data: UpdateServer): Promise<PublicServer> {
+    async update(id: number, data: AppUpdateServer): Promise<AppServer> {
       console.log('✏️  Updating server:', id);
-      return rpc<PublicServer>('backend.servers.update', { id, ...data });
+      return rpc<AppServer>('backend.servers.update', { id, ...data });
     },
 
     /**
@@ -153,8 +159,8 @@ export const backendRpc = {
     async updateOidcTokens(
       id: number,
       tokens: { accessToken: string; refreshToken?: string; expiresIn?: number }
-    ): Promise<PublicServer> {
-      return rpc<PublicServer>('backend.servers.updateOidcTokens', { id, ...tokens });
+    ): Promise<AppServer> {
+      return rpc<AppServer>('backend.servers.updateOidcTokens', { id, ...tokens });
     },
   },
 

@@ -27,6 +27,14 @@ import { ServerRepository } from '../repositories/serverRepository.js';
 import { validateCreateServerInput, validateUpdateServerInput } from './validators.js';
 import { refreshOidcTokens } from './alfresco/oidcTicketService.js';
 
+type ServerCreateInput = Omit<CreateServer, 'userId' | 'insightRangeDays'> & {
+  insightRangeDays?: number;
+};
+
+type ServerUpdateInput = Omit<UpdateServer, 'insightRangeDays'> & {
+  insightRangeDays?: number;
+};
+
 /**
  * Server service class
  * Provides high-level operations with validation and user scoping
@@ -66,7 +74,7 @@ export class ServerService {
   /**
    * Create a new server with validation - returns public safe version
    */
-  async create(userId: number, data: Omit<CreateServer, 'userId'>): Promise<PublicServer> {
+  async create(userId: number, data: ServerCreateInput): Promise<PublicServer> {
     const validated = validateCreateServerInput({ ...data, userId });
     // Normalize 'oauth' to 'openid_connect' for compatibility
     const normalized = {
@@ -81,19 +89,15 @@ export class ServerService {
   /**
    * Update a server with validation (scoped to user) - returns public safe version
    */
-  async update(userId: number, id: number, data: UpdateServer): Promise<PublicServer | null> {
+  async update(userId: number, id: number, data: ServerUpdateInput): Promise<PublicServer | null> {
     const validated = validateUpdateServerInput(data, id);
     // Normalize 'oauth' to 'openid_connect' for compatibility
-    const normalized: UpdateServer =
-      validated.authType === 'oauth'
-        ? ({ ...validated, authType: 'openid_connect' as const } as unknown as UpdateServer)
-        : (validated as UpdateServer);
+    const normalized = {
+      ...validated,
+      authType: validated.authType === 'oauth' ? ('openid_connect' as const) : validated.authType,
+    };
     const encryptedInput = await this.encryptCredentialPayload(normalized);
-    const server = await this.repository.update(
-      userId,
-      id,
-      encryptedInput as Omit<UpdateServer, 'userId'>
-    );
+    const server = await this.repository.update(userId, id, encryptedInput);
     return this.toPublicServer(server);
   }
 

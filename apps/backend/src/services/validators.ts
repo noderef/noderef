@@ -21,6 +21,7 @@
 
 import { ErrorCode, createRPCError } from '@app/contracts';
 import { z } from 'zod';
+import { InsightRangeDaysSchema } from '../constants/insights.js';
 
 /**
  * Validation error class with structured metadata
@@ -126,6 +127,7 @@ const ServerBaseValidationSchema = z
     color: z.string().max(50).nullable().optional(),
     label: z.string().max(4).nullable().optional(), // Environment label (e.g., PROD, TEST, ACC)
     displayOrder: z.number().int().min(0).optional(),
+    insightRangeDays: InsightRangeDaysSchema.optional(),
   })
   .strict();
 

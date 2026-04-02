@@ -23,6 +23,17 @@ import type { CreateServer, UpdateServer } from '@app/contracts';
 import { z } from 'zod';
 import type { Routes, RpcContext } from './types.js';
 import { getCurrentUserId, withAuth } from './withAuth.js';
+import { InsightRangeDaysSchema } from '../../constants/insights.js';
+
+type RpcCreateServerInput = Omit<CreateServer, 'userId' | 'insightRangeDays'> & {
+  insightRangeDays?: number;
+  tokenExpiry?: string | Date | null;
+};
+
+type RpcUpdateServerInput = Omit<UpdateServer, 'insightRangeDays'> & {
+  insightRangeDays?: number;
+  tokenExpiry?: string | Date | null;
+};
 
 /**
  * Register all server-related RPC handlers
@@ -66,17 +77,18 @@ export function registerServersHandlers(routes: Routes, ctx: RpcContext): void {
       color: z.string().nullable().optional(),
       label: z.string().nullable().optional(),
       displayOrder: z.number().optional(),
+      insightRangeDays: InsightRangeDaysSchema.optional(),
     }),
     handler: async params => {
       const userId = await getCurrentUserId();
-      const data = params as Omit<CreateServer, 'userId'> & { tokenExpiry?: string | Date | null };
+      const data = params as RpcCreateServerInput;
       // Convert tokenExpiry string to Date if provided
-      const processedData: Omit<CreateServer, 'userId'> = {
+      const processedData = {
         ...data,
         tokenExpiry:
           data.tokenExpiry && typeof data.tokenExpiry === 'string'
             ? new Date(data.tokenExpiry)
-            : (data.tokenExpiry as Date | null | undefined),
+            : data.tokenExpiry,
       };
       return serverService.create(userId, processedData);
     },
@@ -102,19 +114,18 @@ export function registerServersHandlers(routes: Routes, ctx: RpcContext): void {
       color: z.string().nullable().optional(),
       label: z.string().nullable().optional(),
       displayOrder: z.number().optional(),
+      insightRangeDays: InsightRangeDaysSchema.optional(),
     }),
     handler: async params => {
       const userId = await getCurrentUserId();
-      const { id, ...rawData } = params as { id: number } & UpdateServer & {
-          tokenExpiry?: string | Date | null;
-        };
+      const { id, ...rawData } = params as { id: number } & RpcUpdateServerInput;
       // Convert tokenExpiry string to Date if provided
-      const data: UpdateServer = {
+      const data = {
         ...rawData,
         tokenExpiry:
           rawData.tokenExpiry && typeof rawData.tokenExpiry === 'string'
             ? new Date(rawData.tokenExpiry)
-            : (rawData.tokenExpiry as Date | null | undefined),
+            : rawData.tokenExpiry,
       };
       return serverService.update(userId, id, data);
     },

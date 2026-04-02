@@ -55,6 +55,7 @@ model Server {
   color             String?
   label             String?   // Environment label (e.g., PROD, TEST, ACC)
   displayOrder      Int       @default(0)
+  insightRangeDays  Int       @default(7) // Preferred insights range (7/14/30/90)
   lastAccessed      DateTime?
   createdAt         DateTime  @default(now())
 

@@ -22,6 +22,20 @@
 
 import type { CreateServer, Server, UpdateServer } from '@app/contracts';
 import type { PrismaClient, Server as PrismaServer } from '@prisma/client';
+import type { InsightRangeDays } from '../constants/insights.js';
+import { normalizeInsightRangeDays } from '../constants/insights.js';
+
+export type ServerEntity = Omit<Server, 'insightRangeDays'> & {
+  insightRangeDays: InsightRangeDays;
+};
+
+type CreateServerInput = Omit<CreateServer, 'insightRangeDays'> & {
+  insightRangeDays?: number;
+};
+
+type UpdateServerInput = Omit<UpdateServer, 'insightRangeDays'> & {
+  insightRangeDays?: number;
+};
 
 /**
  * Utility to build partial update object with only defined fields
@@ -47,7 +61,7 @@ export class ServerRepository {
    * Convert Prisma Server model to DTO
    * Note: Credentials should be decrypted before conversion (handled by service layer)
    */
-  private toDTO(server: PrismaServer): Server {
+  private toDTO(server: PrismaServer): ServerEntity {
     return {
       id: server.id,
       userId: server.userId,
@@ -68,6 +82,7 @@ export class ServerRepository {
       color: server.color,
       label: server.label,
       displayOrder: server.displayOrder ?? 0,
+      insightRangeDays: normalizeInsightRangeDays(server.insightRangeDays),
       lastAccessed: server.lastAccessed,
       createdAt: server.createdAt,
     };
@@ -76,7 +91,7 @@ export class ServerRepository {
   /**
    * Find server by ID (scoped to user)
    */
-  async findById(userId: number, id: number): Promise<Server | null> {
+  async findById(userId: number, id: number): Promise<ServerEntity | null> {
     const server = await this.prisma.server.findFirst({
       where: { id, userId },
     });
@@ -86,7 +101,7 @@ export class ServerRepository {
   /**
    * Find server by URL (scoped to user)
    */
-  async findByUrl(userId: number, baseUrl: string): Promise<Server | null> {
+  async findByUrl(userId: number, baseUrl: string): Promise<ServerEntity | null> {
     const server = await this.prisma.server.findFirst({
       where: { userId, baseUrl },
     });
@@ -96,7 +111,7 @@ export class ServerRepository {
   /**
    * Find all servers for a user (ordered by displayOrder)
    */
-  async findAll(userId: number): Promise<Server[]> {
+  async findAll(userId: number): Promise<ServerEntity[]> {
     const servers = await this.prisma.server.findMany({
       where: { userId },
       orderBy: { displayOrder: 'asc' },
@@ -108,8 +123,9 @@ export class ServerRepository {
    * Create a new server
    * Note: Encryption of credentials should be handled by service layer before calling this
    */
-  async create(data: CreateServer): Promise<Server> {
+  async create(data: CreateServerInput): Promise<ServerEntity> {
     const displayOrder = data.displayOrder ?? (await this.getNextDisplayOrder(data.userId));
+    const { insightRangeDays } = data;
 
     const server = await this.prisma.server.create({
       data: {
@@ -129,6 +145,7 @@ export class ServerRepository {
         color: data.color ?? null,
         label: data.label ?? null,
         displayOrder,
+        insightRangeDays: normalizeInsightRangeDays(insightRangeDays),
       },
     });
 
@@ -142,8 +159,8 @@ export class ServerRepository {
   async update(
     userId: number,
     id: number,
-    data: Omit<UpdateServer, 'userId'> & { lastAccessed?: Date }
-  ): Promise<Server | null> {
+    data: UpdateServerInput & { lastAccessed?: Date }
+  ): Promise<ServerEntity | null> {
     const existing = await this.prisma.server.findFirst({
       where: { id, userId },
     });
