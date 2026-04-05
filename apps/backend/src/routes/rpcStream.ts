@@ -239,7 +239,10 @@ const isReadableStream = (value: unknown): value is NodeJS.ReadableStream => {
 };
 
 const isEmptyObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Buffer.isBuffer(value) && Object.keys(value).length === 0;
+  typeof value === 'object' &&
+  value !== null &&
+  !Buffer.isBuffer(value) &&
+  Object.keys(value).length === 0;
 
 const sendText = (res: any, text: string): void => {
   res.type('text/plain; charset=utf-8');
@@ -319,12 +322,7 @@ interface ParsedStreamRequest {
 }
 
 const parseStreamRequestQuery = (query: StreamQuery): ParsedStreamRequest => {
-  const {
-    baseUrl: baseUrlRaw,
-    method: methodRaw,
-    serverId: serverIdRaw,
-    ...rest
-  } = query;
+  const { baseUrl: baseUrlRaw, method: methodRaw, serverId: serverIdRaw, ...rest } = query;
 
   const baseUrl = Array.isArray(baseUrlRaw) ? baseUrlRaw[0] : baseUrlRaw;
   const method = Array.isArray(methodRaw) ? methodRaw[0] : methodRaw;
@@ -360,9 +358,10 @@ const validateStreamRequest = (
   }
 
   try {
-    contracts.AlfrescoRpcStreamCallSchema
-      .passthrough()
-      .parse({ baseUrl: parsed.baseUrl, method: parsed.method });
+    contracts.AlfrescoRpcStreamCallSchema.passthrough().parse({
+      baseUrl: parsed.baseUrl,
+      method: parsed.method,
+    });
     return null;
   } catch (validationErr) {
     log.warn({ error: validationErr }, 'Stream RPC validation error');
@@ -400,10 +399,7 @@ const maybeHandleNodeContentDownload = async (params: {
   res: any;
 }): Promise<boolean> => {
   const { parsed, args, authenticatedApi, res } = params;
-  if (
-    parsed.method !== 'nodes.getNodeContent' &&
-    parsed.method !== 'nodes.getContent'
-  ) {
+  if (parsed.method !== 'nodes.getNodeContent' && parsed.method !== 'nodes.getContent') {
     return false;
   }
   if (!authenticatedApi || parsed.serverId === undefined) {
@@ -420,7 +416,11 @@ const maybeHandleNodeContentDownload = async (params: {
     );
   } catch (directHttpError) {
     log.warn(
-      { error: directHttpError, method: parsed.method, nodeId: (args as any)?.nodeId || parsed.rest.nodeId },
+      {
+        error: directHttpError,
+        method: parsed.method,
+        nodeId: (args as any)?.nodeId || parsed.rest.nodeId,
+      },
       'Direct API call failed, falling back to proxy method'
     );
     return false;
@@ -475,15 +475,21 @@ export function rpcStreamHandler({ serverService, contracts }: RpcStreamOptions)
       } catch (error) {
         const message = error instanceof Error ? error.message : 'INVALID_INPUT';
         if (message === 'INVALID_BASE_URL') {
-          return res.status(400).json({ code: 'INVALID_INPUT', message: 'Missing or invalid baseUrl' });
+          return res
+            .status(400)
+            .json({ code: 'INVALID_INPUT', message: 'Missing or invalid baseUrl' });
         }
         if (message === 'INVALID_METHOD') {
-          return res.status(400).json({ code: 'INVALID_INPUT', message: 'Missing or invalid method' });
+          return res
+            .status(400)
+            .json({ code: 'INVALID_INPUT', message: 'Missing or invalid method' });
         }
         if (message === 'INVALID_SERVER_ID') {
           return res.status(400).json({ code: 'INVALID_INPUT', message: 'Invalid serverId' });
         }
-        return res.status(400).json({ code: 'INVALID_INPUT', message: 'Invalid request parameters' });
+        return res
+          .status(400)
+          .json({ code: 'INVALID_INPUT', message: 'Invalid request parameters' });
       }
 
       const validationError = validateStreamRequest(parsed, contracts);

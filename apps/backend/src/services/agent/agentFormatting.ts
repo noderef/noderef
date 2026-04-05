@@ -76,10 +76,7 @@ export function formatValueForInline(value: unknown): string {
   }
 }
 
-function stringifyJsonTruncated(
-  value: unknown,
-  maxChars = MAX_PROPERTIES_JSON_CHARS
-): string {
+function stringifyJsonTruncated(value: unknown, maxChars = MAX_PROPERTIES_JSON_CHARS): string {
   try {
     const serialized = JSON.stringify(value, null, 2);
     if (serialized.length <= maxChars) {

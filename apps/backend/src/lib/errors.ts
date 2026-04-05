@@ -38,11 +38,7 @@ class AppError extends Error {
  * @param message Error message
  * @param details Optional error details
  */
-function throwAppError(
-  code: ErrorCode,
-  message: string,
-  details?: Record<string, unknown>
-): never {
+function throwAppError(code: ErrorCode, message: string, details?: Record<string, unknown>): never {
   throw new AppError(code, message, details);
 }
 

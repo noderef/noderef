@@ -45,10 +45,7 @@ const truncateText = (text: string, maxChars: number): string => {
   return `${text.slice(0, maxChars - 3).trimEnd()}...`;
 };
 
-const buildFallbackStepSummary = (
-  operation: string,
-  args: Record<string, unknown>
-): string => {
+const buildFallbackStepSummary = (operation: string, args: Record<string, unknown>): string => {
   switch (operation) {
     case 'node_create': {
       const name = toNonEmptyString(args.name);

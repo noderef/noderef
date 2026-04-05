@@ -7,8 +7,5 @@
     "scripts/gh-post-release.mjs",
     "scripts/gh-release-generate-changelog.mjs"
   ],
-  "ignorePatterns": [
-    "apps/renderer/public/neutralino.js",
-    "**/neutralino.js"
-  ]
+  "ignorePatterns": ["apps/renderer/public/neutralino.js", "**/neutralino.js"]
 }

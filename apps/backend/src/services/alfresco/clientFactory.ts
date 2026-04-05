@@ -251,10 +251,7 @@ export function dropClient(baseUrl: string, auth?: AuthDescriptor): void {
  * @param auth Optional authentication descriptor
  * @returns The stored auth descriptor, or undefined if not found
  */
-function getAuthDescriptor(
-  baseUrl: string,
-  auth?: AuthDescriptor
-): AuthDescriptor | undefined {
+function getAuthDescriptor(baseUrl: string, auth?: AuthDescriptor): AuthDescriptor | undefined {
   const cacheKey = getCacheKey(baseUrl, auth);
   return authCache.get(cacheKey);
 }

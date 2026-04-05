@@ -14,12 +14,7 @@
  * limitations under the License.
  */
 
-import {
-  createTheme,
-  DEFAULT_THEME,
-  MantineColorsTuple,
-  mergeMantineTheme,
-} from '@mantine/core';
+import { createTheme, DEFAULT_THEME, MantineColorsTuple, mergeMantineTheme } from '@mantine/core';
 import { defaultTheme } from './default';
 
 /**

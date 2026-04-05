@@ -19,6 +19,4 @@
  */
 
 export { corsMiddleware } from './cors.js';
-export {
-  applySecurityMiddleware,
-} from './security.js';
+export { applySecurityMiddleware } from './security.js';
