@@ -198,6 +198,7 @@ noderef/
 | `pnpm package[:target]` | Produce ready-to-ship bundles (`:mac`, `:win`, `:linux` targets available)    |
 | `pnpm docker:run`       | Build the Docker image and launch the compose stack for NodeRef               |
 | `pnpm lint`             | Run ESLint                                                                    |
+| `pnpm fallow`           | Run Fallow (unused code, duplication, complexity)                             |
 | `pnpm format`           | Apply Prettier formatting                                                     |
 | `pnpm format:check`     | Verify formatting without writing changes                                     |
 | `pnpm purge`            | Clean build outputs, generated files, and local dev databases                 |
