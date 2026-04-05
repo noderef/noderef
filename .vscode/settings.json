@@ -19,6 +19,9 @@
   // ─────────────────────────────────────
   "files.exclude": {
     "**/node_modules": true,
+    "**/.pnpm": true,
+    "**/.pnpm-store": true,
+    "**/.fallow": true,
     "bin": true,
     "**/dist": true,
     "**/resources": true,
@@ -29,6 +32,9 @@
   },
   "files.watcherExclude": {
     "**/node_modules/**": true,
+    "**/.pnpm/**": true,
+    "**/.pnpm-store/**": true,
+    "**/.fallow/**": true,
     "**/dist/**": true,
     "**/resources/**": true
   },
@@ -70,6 +76,9 @@
   // ─────────────────────────────────────
   "search.exclude": {
     "**/node_modules": true,
+    "**/.pnpm": true,
+    "**/.pnpm-store": true,
+    "**/.fallow": true,
     "**/dist": true,
     "**/resources": true
   },
