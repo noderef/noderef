@@ -34,6 +34,7 @@ import { SearchHistoryRepository } from '../../src/repositories/searchHistoryRep
 import { ServerRepository } from '../../src/repositories/serverRepository.js';
 import { UserRepository } from '../../src/repositories/userRepository.js';
 import { InsightGraphService } from '../../src/services/insightGraphService.js';
+import { InsightRangeDaysSchema } from '../../src/constants/insights.js';
 
 import { prisma } from './database';
 
@@ -116,6 +117,8 @@ function rpcHandler(routes: Routes) {
 // -----------------------------------------------------------------------------
 
 function registerServerHandlers(routes: Routes, repo: ServerRepository): void {
+  const insightRangeDaysSchema = InsightRangeDaysSchema;
+
   routes['backend.servers.list'] = {
     schema: z.object({}),
     handler: async () => {
@@ -140,10 +143,11 @@ function registerServerHandlers(routes: Routes, repo: ServerRepository): void {
       serverType: z.string().optional(),
       authType: z.string().nullable().optional(),
       username: z.string().nullable().optional(),
+      insightRangeDays: insightRangeDaysSchema.optional(),
     }),
     handler: async p => {
       const userId = await getTestUserId();
-      const { name, baseUrl, serverType, authType, username } = p as any;
+      const { name, baseUrl, serverType, authType, username, insightRangeDays } = p as any;
       const server = await repo.create({
         userId,
         name,
@@ -152,6 +156,7 @@ function registerServerHandlers(routes: Routes, repo: ServerRepository): void {
         serverType: serverType ?? 'alfresco',
         authType,
         username,
+        insightRangeDays,
       });
       return toPublicServer(server);
     },
@@ -163,6 +168,7 @@ function registerServerHandlers(routes: Routes, repo: ServerRepository): void {
       name: z.string().optional(),
       baseUrl: z.string().optional(),
       label: z.string().nullable().optional(),
+      insightRangeDays: insightRangeDaysSchema.optional(),
     }),
     handler: async p => {
       const userId = await getTestUserId();

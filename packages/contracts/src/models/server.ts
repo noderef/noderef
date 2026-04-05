@@ -34,6 +34,18 @@ export type ServerType = z.infer<typeof ServerTypeSchema>;
  */
 const AuthTypeSchema = z.enum(['basic', 'openid_connect']);
 export type AuthType = z.infer<typeof AuthTypeSchema>;
+export const INSIGHT_RANGE_DAYS = [7, 14, 30, 90] as const;
+export type InsightRangeDays = (typeof INSIGHT_RANGE_DAYS)[number];
+export const DEFAULT_INSIGHT_RANGE_DAYS: InsightRangeDays = INSIGHT_RANGE_DAYS[0];
+export const InsightRangeDaysSchema = z
+  .number()
+  .int()
+  .refine(
+    (value): value is InsightRangeDays => INSIGHT_RANGE_DAYS.includes(value as InsightRangeDays),
+    {
+      message: `insightRangeDays must be one of: ${INSIGHT_RANGE_DAYS.join(', ')}`,
+    }
+  );
 
 /**
  * Server DTO schema
@@ -59,6 +71,7 @@ const ServerSchema = z.object({
   color: z.string().max(50).nullable(),
   label: z.string().max(4).nullable(), // Environment label (e.g., PROD, TEST, ACC)
   displayOrder: z.number().int().min(0).default(0),
+  insightRangeDays: InsightRangeDaysSchema.default(DEFAULT_INSIGHT_RANGE_DAYS),
   lastAccessed: z.date().nullable(),
   createdAt: z.date(),
 });
@@ -87,6 +100,7 @@ const CreateServerSchema = z.object({
   color: z.string().max(50).nullable().optional(),
   label: z.string().max(4).nullable().optional(), // Environment label (e.g., PROD, TEST, ACC)
   displayOrder: z.number().int().min(0).optional(),
+  insightRangeDays: InsightRangeDaysSchema.optional(),
 });
 
 export type CreateServer = z.infer<typeof CreateServerSchema>;

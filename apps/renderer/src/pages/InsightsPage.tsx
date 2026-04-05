@@ -21,15 +21,18 @@
  */
 
 import { BrandLogo } from '@/components/BrandLogo';
+import { backendRpc } from '@/core/ipc/backend';
 import type { InsightGraph } from '@/core/ipc/backend';
-import {
-  DEFAULT_INSIGHT_RANGE,
-  useInsightsStore,
-  type InsightRangeDays,
-} from '@/core/store/insightsStore';
+import { useServersStore } from '@/core/store/servers';
 import { useActiveServerId } from '@/hooks/useNavigation';
 import { InsightGraphCard } from '@/components/insights/InsightGraphCard';
 import { InsightGraphSettingsModal } from '@/components/insights/InsightGraphSettingsModal';
+import {
+  INSIGHT_RANGE_DAYS as RANGE_OPTIONS,
+  isInsightRangeDays,
+  normalizeInsightRangeDays,
+  type InsightRangeDays,
+} from '@/utils/insightsRange';
 import {
   ActionIcon,
   Alert,
@@ -45,22 +48,20 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconAlertCircle, IconPlus } from '@tabler/icons-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToggleInsightPin } from '@/hooks/useToggleInsightPin';
 import { useInsightsDashboard } from '@/hooks/useInsightsDashboard';
 
-const RANGE_OPTIONS: InsightRangeDays[] = [7, 14, 30, 90];
-
 function InsightsPage() {
   const { t } = useTranslation(['insights', 'common']);
   const activeServerId = useActiveServerId();
-  const selectedRange = useInsightsStore(state =>
-    activeServerId
-      ? (state.selectedRangeByServer[activeServerId] ?? DEFAULT_INSIGHT_RANGE)
-      : DEFAULT_INSIGHT_RANGE
+  const activeServer = useServersStore(state =>
+    activeServerId ? (state.servers.find(server => server.id === activeServerId) ?? null) : null
   );
-  const setSelectedRange = useInsightsStore(state => state.setSelectedRange);
+  const updateServer = useServersStore(state => state.updateServer);
+  const selectedRange = normalizeInsightRangeDays(activeServer?.insightRangeDays);
+  const latestRangeSaveIdRef = useRef(0);
 
   const { dashboard, graphs, loading, error, loadDashboard, setGraphs } = useInsightsDashboard(
     activeServerId,
@@ -116,11 +117,54 @@ function InsightsPage() {
       <Group justify="space-between" align="center">
         <SegmentedControl
           value={String(selectedRange)}
-          onChange={value => {
+          onChange={async value => {
             if (!activeServerId) {
               return;
             }
-            setSelectedRange(activeServerId, parseInt(value, 10) as InsightRangeDays);
+
+            const parsedRange = parseInt(value, 10);
+            if (!isInsightRangeDays(parsedRange)) {
+              return;
+            }
+            const nextRange: InsightRangeDays = parsedRange;
+
+            const serverId = activeServerId;
+            const saveId = ++latestRangeSaveIdRef.current;
+            updateServer(serverId, { insightRangeDays: nextRange });
+            try {
+              const updatedServer = await backendRpc.servers.update(serverId, {
+                insightRangeDays: nextRange,
+              });
+
+              // Ignore out-of-order responses from older requests.
+              if (saveId !== latestRangeSaveIdRef.current) {
+                return;
+              }
+              updateServer(serverId, {
+                insightRangeDays: normalizeInsightRangeDays(updatedServer.insightRangeDays),
+              });
+            } catch (error) {
+              if (saveId !== latestRangeSaveIdRef.current) {
+                return;
+              }
+              console.error('Failed to persist insight range preference:', error);
+
+              // Re-sync from backend instead of reverting to a potentially stale local value.
+              try {
+                const refreshedServer = await backendRpc.servers.get(serverId);
+                if (saveId !== latestRangeSaveIdRef.current) {
+                  return;
+                }
+                updateServer(serverId, {
+                  insightRangeDays: normalizeInsightRangeDays(refreshedServer.insightRangeDays),
+                });
+              } catch (refreshError) {
+                console.error(
+                  'Failed to refresh persisted insight range preference:',
+                  refreshError
+                );
+              }
+            }
           }}
           data={RANGE_OPTIONS.map(days => ({
             label: t(`insights:range${days}`),

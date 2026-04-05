@@ -23,6 +23,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { createHash } from 'crypto';
 import { createLogger } from '../lib/logger.js';
+import { DEFAULT_INSIGHT_RANGE_DAYS, VALID_INSIGHT_RANGE_DAYS } from '../constants/insights.js';
 import {
   InsightGraphRepository,
   type InsightGraph,
@@ -34,8 +35,8 @@ import {
 import { executeCountQuery, getDayBounds, type SearchFn } from './insightCountService.js';
 
 const log = createLogger('insight.graph');
-const DEFAULT_RANGE_DAYS = 7;
-export const VALID_RANGE_DAYS = new Set([7, 14, 30, 90]);
+const DEFAULT_RANGE_DAYS = DEFAULT_INSIGHT_RANGE_DAYS;
+export const VALID_RANGE_DAYS = VALID_INSIGHT_RANGE_DAYS;
 const TODAY_BUCKET_TTL_MS = 10 * 60 * 1000;
 
 /** A single day data point in a chart series */

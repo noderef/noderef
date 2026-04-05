@@ -19,7 +19,8 @@ import type { PinnedInsightDashboard } from '@/core/ipc/backend';
 import type { NodeHistoryActivitySummary, NodeHistoryTimelineItem } from '@app/contracts';
 import { Heatmap } from '@mantine/charts';
 import { InsightGraphCard } from '@/components/insights/InsightGraphCard';
-import { useInsightsStore } from '@/core/store/insightsStore';
+import { useServersStore } from '@/core/store/servers';
+import { normalizeInsightRangeDays, type InsightRangeDays } from '@/utils/insightsRange';
 import {
   Alert,
   Anchor,
@@ -125,7 +126,7 @@ const TIMELINE_PAGE_SIZE = 20;
 export function DashboardPage() {
   const { t, i18n } = useTranslation('dashboard');
   const locale = i18n.language ?? undefined;
-  const selectedRangeByServer = useInsightsStore(state => state.selectedRangeByServer);
+  const servers = useServersStore(state => state.servers);
   const theme = useMantineTheme();
   const colorScheme = useComputedColorScheme('light', { getInitialValueInEffect: true });
   const { ref: heatmapRef, width: heatmapWidth } = useElementSize();
@@ -142,6 +143,14 @@ export function DashboardPage() {
   const openNodeTab = useNodeBrowserTabsStore(state => state.openTab);
   const openFolderTab = useFileFolderBrowserTabsStore(state => state.openTab);
   const { navigate } = useNavigation();
+  const selectedRangeByServer = useMemo<Record<number, InsightRangeDays>>(
+    () =>
+      servers.reduce<Record<number, InsightRangeDays>>((acc, server) => {
+        acc[server.id] = normalizeInsightRangeDays(server.insightRangeDays);
+        return acc;
+      }, {}),
+    [servers]
+  );
 
   // Load initial data (heatmap + first page of timeline)
   useEffect(() => {

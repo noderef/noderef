@@ -20,24 +20,24 @@
  */
 
 import { create } from 'zustand';
-import type { PublicServer } from '@app/contracts';
+import type { AppServer } from '@/core/ipc/backend';
 
 export interface ServersState {
-  servers: PublicServer[];
+  servers: AppServer[];
   loading: boolean;
   error: string | null;
 }
 
 export interface ServersActions {
-  setServers: (servers: PublicServer[]) => void;
-  addServer: (server: PublicServer) => void;
-  updateServer: (id: number, updates: Partial<PublicServer>) => void;
+  setServers: (servers: AppServer[]) => void;
+  addServer: (server: AppServer) => void;
+  updateServer: (id: number, updates: Partial<AppServer>) => void;
   removeServer: (id: number) => void;
   reorderServers: (orders: Array<{ id: number; displayOrder: number }>) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
-  getServerById: (id: number | null) => PublicServer | null;
-  getServersSorted: () => PublicServer[];
+  getServerById: (id: number | null) => AppServer | null;
+  getServersSorted: () => AppServer[];
 }
 
 const initialState: ServersState = {

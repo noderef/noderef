@@ -170,6 +170,27 @@ describe('backend.servers', () => {
       expect(res.body.baseUrl).toBe('http://new.com');
       expect(res.body.label).toBe('PROD');
     });
+
+    it('persists insight range preference', async () => {
+      const server = await prisma.server.create({
+        data: { userId, name: 'Insights Server', baseUrl: 'http://insights.example.com' },
+      });
+
+      const res = await request(app)
+        .post('/rpc')
+        .send(
+          rpc('backend.servers.update', {
+            id: server.id,
+            insightRangeDays: 30,
+          })
+        );
+
+      expect(res.status).toBe(200);
+      expect(res.body.insightRangeDays).toBe(30);
+
+      const updated = await prisma.server.findUnique({ where: { id: server.id } });
+      expect(updated?.insightRangeDays).toBe(30);
+    });
   });
 
   describe('backend.servers.delete', () => {

@@ -16,7 +16,7 @@
 
 import { backendRpc } from '@/core/ipc/backend';
 import type { InsightDashboard, InsightGraph } from '@/core/ipc/backend';
-import type { InsightRangeDays } from '@/core/store/insightsStore';
+import type { InsightRangeDays } from '@/utils/insightsRange';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
