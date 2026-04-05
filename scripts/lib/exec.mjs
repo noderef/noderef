@@ -22,7 +22,7 @@ export function sh(cmd, opts = {}) {
   return execSync(cmd, { stdio: 'inherit', ...opts });
 }
 
-export function shSilent(cmd, opts = {}) {
+function shSilent(cmd, opts = {}) {
   debug(cmd);
   return execSync(cmd, { stdio: 'pipe', encoding: 'utf8', ...opts });
 }

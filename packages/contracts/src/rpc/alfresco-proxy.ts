@@ -26,6 +26,7 @@ import { z } from 'zod';
  * Proxy JSON RPC call schema
  * Used for all non-binary methods that accept/return JSON-able values
  */
+// fallow-ignore-next-line unused-export
 export const AlfrescoRpcCallSchema = z.object({
   baseUrl: z.string().url(),
   method: z.string().min(1).max(200), // e.g., "nodes.getNode", "people.getPerson"
@@ -46,6 +47,7 @@ export type AlfrescoRpcResponse = unknown;
  * Binary upload call schema (for multipart/form-data)
  * Used for upload methods that accept file data
  */
+// fallow-ignore-next-line unused-export
 export const AlfrescoRpcBinaryCallSchema = z.object({
   baseUrl: z.string().url(),
   method: z.string().min(1).max(200), // e.g., "upload.uploadFile"
@@ -60,6 +62,7 @@ export type AlfrescoRpcBinaryCall = z.infer<typeof AlfrescoRpcBinaryCallSchema>;
  * Stream call schema (for GET requests with query params)
  * Used for content/rendition/download methods that return binary data
  */
+// fallow-ignore-next-line unused-export
 export const AlfrescoRpcStreamCallSchema = z.object({
   baseUrl: z.string().url(),
   method: z.string().min(1).max(200), // e.g., "nodes.getContent", "renditions.getRenditionContent"

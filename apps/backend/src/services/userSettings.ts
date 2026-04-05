@@ -61,6 +61,6 @@ export async function updateUserProfile(
 }
 
 // Backward compatibility helper
-export async function updateUserFullName(userId: number, fullName: string | null): Promise<void> {
+async function updateUserFullName(userId: number, fullName: string | null): Promise<void> {
   return updateUserProfile(userId, { fullName });
 }

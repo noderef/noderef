@@ -117,6 +117,6 @@ export function parseMethod(
  * @param namespace The namespace to check
  * @returns True if the namespace exists in the registry
  */
-export function hasNamespace(namespace: string): boolean {
+function hasNamespace(namespace: string): boolean {
   return namespace in API_REGISTRY;
 }

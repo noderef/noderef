@@ -251,7 +251,7 @@ export function dropClient(baseUrl: string, auth?: AuthDescriptor): void {
  * @param auth Optional authentication descriptor
  * @returns The stored auth descriptor, or undefined if not found
  */
-export function getAuthDescriptor(
+function getAuthDescriptor(
   baseUrl: string,
   auth?: AuthDescriptor
 ): AuthDescriptor | undefined {
@@ -292,7 +292,7 @@ export function updateOAuth2Token(
  * Note: For a desktop app with limited servers this is typically not needed,
  * but helps prevent unbounded cache growth in long-running processes
  */
-export function clearAllClients(): void {
+function clearAllClients(): void {
   clientCache.clear();
   authCache.clear();
 }

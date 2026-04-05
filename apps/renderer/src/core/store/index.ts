@@ -17,7 +17,6 @@
 // Re-export all stores for convenience
 export { useNavigationStore } from './navigation';
 export { useUIStore } from './ui';
-export { usePagingStore } from './paging';
 export { useLayoutStore } from './layout';
 export { useAgentStore } from './agent';
 export * from './keys';

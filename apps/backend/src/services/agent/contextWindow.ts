@@ -25,14 +25,14 @@ import type { AgentMessageParam, AgentToolSchema } from '../../ai/anthropic.js';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-export const AVG_CHARS_PER_TOKEN = 4;
-export const DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000;
+const AVG_CHARS_PER_TOKEN = 4;
+const DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000;
 export const CONTEXT_NEAR_LIMIT_RATIO = 0.85;
 export const CONTEXT_CRITICAL_LIMIT_RATIO = 0.95;
 export const CONTEXT_TARGET_AFTER_COMPACTION_RATIO = 0.75;
-export const MAX_COMPACTED_TOOL_RESULT_CHARS = 3_000;
+const MAX_COMPACTED_TOOL_RESULT_CHARS = 3_000;
 
-export const KNOWN_MODEL_CONTEXT_WINDOWS: Array<{ pattern: RegExp; tokens: number }> = [
+const KNOWN_MODEL_CONTEXT_WINDOWS: Array<{ pattern: RegExp; tokens: number }> = [
   { pattern: /claude/i, tokens: 200_000 },
 ];
 
@@ -63,7 +63,7 @@ export interface ContextCompactionResult {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-export const toTokenEstimate = (text: string): number =>
+const toTokenEstimate = (text: string): number =>
   Math.ceil(Math.max(text.length, 1) / AVG_CHARS_PER_TOKEN);
 
 export const resolveModelContextWindow = (model: string): ContextWindowResolution => {
@@ -75,7 +75,7 @@ export const resolveModelContextWindow = (model: string): ContextWindowResolutio
   return { tokens: DEFAULT_CONTEXT_WINDOW_TOKENS, source: 'default' };
 };
 
-export const estimateMessageContentTokens = (content: unknown): number => {
+const estimateMessageContentTokens = (content: unknown): number => {
   if (typeof content === 'string') {
     return toTokenEstimate(content);
   }

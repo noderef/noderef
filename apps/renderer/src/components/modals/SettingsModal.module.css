@@ -101,11 +101,6 @@
   height: 100%;
 }
 
-.inlineBadge {
-  margin-left: var(--mantine-spacing-xs);
-  vertical-align: middle;
-}
-
 .updateBanner {
   width: 100%;
   background: var(--mantine-color-blue-0);

@@ -25,7 +25,7 @@ import { marked } from 'marked';
 
 // ── HTML escaping ─────────────────────────────────────────────────────────────
 
-export const escapeHtml = (value: string): string =>
+const escapeHtml = (value: string): string =>
   value
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -35,7 +35,7 @@ export const escapeHtml = (value: string): string =>
 
 // ── Language normalisation ────────────────────────────────────────────────────
 
-export const normalizeFenceLanguage = (langRaw: string | undefined): string => {
+const normalizeFenceLanguage = (langRaw: string | undefined): string => {
   const lang = (langRaw || '').trim().toLowerCase();
   if (!lang) return 'text';
   if (lang === 'js') return 'javascript';
@@ -48,7 +48,7 @@ export const normalizeFenceLanguage = (langRaw: string | undefined): string => {
   return lang;
 };
 
-export const detectCodeLanguageFromContent = (code: string): string => {
+const detectCodeLanguageFromContent = (code: string): string => {
   const sample = code.slice(0, 2000);
 
   if (/^\s*<!doctype html>/i.test(sample) || /<html[\s>]/i.test(sample)) {
@@ -138,7 +138,7 @@ const highlightWithPattern = (
   return parts.join('');
 };
 
-export const highlightCode = (code: string, language: string): string => {
+const highlightCode = (code: string, language: string): string => {
   const lang = normalizeFenceLanguage(language);
 
   if (lang === 'javascript' || lang === 'typescript') {

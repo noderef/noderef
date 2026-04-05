@@ -28,7 +28,7 @@ const isDev = process.env.NODE_ENV !== 'production';
 /**
  * Configure Helmet security headers
  */
-export function helmetMiddleware(): RequestHandler {
+function helmetMiddleware(): RequestHandler {
   return helmet({
     contentSecurityPolicy: isDev
       ? false
@@ -57,7 +57,7 @@ export function helmetMiddleware(): RequestHandler {
 /**
  * Rate limiter for standard RPC endpoints
  */
-export function rpcRateLimiter(): RequestHandler {
+function rpcRateLimiter(): RequestHandler {
   return rateLimit({
     windowMs: 10_000,
     max: 500,
@@ -69,7 +69,7 @@ export function rpcRateLimiter(): RequestHandler {
 /**
  * Rate limiter for binary upload endpoints (lower limit)
  */
-export function binaryRateLimiter(): RequestHandler {
+function binaryRateLimiter(): RequestHandler {
   return rateLimit({
     windowMs: 10_000,
     max: 50,
@@ -79,7 +79,7 @@ export function binaryRateLimiter(): RequestHandler {
 /**
  * Rate limiter for stream download endpoints (lower limit)
  */
-export function streamRateLimiter(): RequestHandler {
+function streamRateLimiter(): RequestHandler {
   return rateLimit({
     windowMs: 10_000,
     max: 50,
@@ -89,7 +89,7 @@ export function streamRateLimiter(): RequestHandler {
 /**
  * Content-type validation middleware for RPC endpoints
  */
-export function contentTypeValidator(): RequestHandler {
+function contentTypeValidator(): RequestHandler {
   return (req, res, next) => {
     if (req.method === 'POST' && req.path === '/rpc') {
       const ct = req.headers['content-type'] || '';

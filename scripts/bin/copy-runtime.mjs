@@ -21,7 +21,7 @@ import path from 'path';
 import { cp, exists, rm } from '../lib/fsx.mjs';
 import { error, info, warn } from '../lib/log.mjs';
 import { appName, backendDir, binDir, distDir, resources } from '../lib/paths.mjs';
-import { copyPrismaCliTo, copyPrismaTo } from '../lib/prisma.mjs';
+import { copyPrismaTo } from '../lib/prisma.mjs';
 
 function copyNodeBinary(srcName, destPath) {
   const src = path.join(binDir(), srcName);

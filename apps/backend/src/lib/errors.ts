@@ -20,7 +20,7 @@ import { ErrorCode } from '@app/contracts';
  * Application error class with ErrorCode
  * Use this to throw errors that will be properly handled by sendAppError
  */
-export class AppError extends Error {
+class AppError extends Error {
   code: ErrorCode;
   details?: Record<string, unknown>;
 
@@ -38,7 +38,7 @@ export class AppError extends Error {
  * @param message Error message
  * @param details Optional error details
  */
-export function throwAppError(
+function throwAppError(
   code: ErrorCode,
   message: string,
   details?: Record<string, unknown>

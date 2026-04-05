@@ -35,6 +35,15 @@ const debugDisabled = debugFlag === '0' || debugFlag === 'false' || debugFlag ==
 const resolvedLevel =
   process.env.LOG_LEVEL || (isDev || debugEnabled ? 'debug' : debugDisabled ? 'warn' : 'info');
 
+const prettyTarget = (() => {
+  if (!isDev) return undefined;
+  try {
+    return require.resolve('pino-pretty');
+  } catch {
+    return undefined;
+  }
+})();
+
 /**
  * Shared logger instance with security-aware configuration
  */
@@ -66,9 +75,9 @@ export const log = pino({
   },
 
   // Pretty print in development
-  transport: isDev
+  transport: prettyTarget
     ? {
-        target: 'pino-pretty',
+        target: prettyTarget,
         options: {
           colorize: true,
           translateTime: 'SYS:standard',

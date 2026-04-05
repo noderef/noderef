@@ -70,7 +70,7 @@ export interface ContextWindowDisplayState {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-export const EXECUTION_EVENT_KEYS: Record<string, string> = {
+const EXECUTION_EVENT_KEYS: Record<string, string> = {
   'step.completed': 'stepCompleted',
   'step.failed': 'stepFailed',
   'step.waiting_confirmation': 'stepAwaitingConfirmation',
@@ -79,7 +79,7 @@ export const EXECUTION_EVENT_KEYS: Record<string, string> = {
   'run.failed': 'stepFailed',
 };
 
-export const SKIP_EVENT_TYPES = new Set([
+const SKIP_EVENT_TYPES = new Set([
   'run.queued',
   'run.executing',
   'run.summarizing',
@@ -89,7 +89,7 @@ export const SKIP_EVENT_TYPES = new Set([
 ]);
 
 const MAX_EVENT_DETAIL_CHARS = 12_000;
-export const DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000;
+const DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

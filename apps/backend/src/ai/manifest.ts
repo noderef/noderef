@@ -16,7 +16,7 @@
 
 import type { Manifest } from './loadLibs.js';
 
-export const manifest: Manifest = {
+const manifest: Manifest = {
   node: {
     description:
       'Work directly with Alfresco ScriptNode: properties, aspects, associations, children, content, tags, permissions, versioning, create/move/copy/delete.',

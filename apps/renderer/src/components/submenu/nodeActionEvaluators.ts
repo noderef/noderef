@@ -70,7 +70,7 @@ const PROTECTED_NODE_TYPES = ['st:site', 'st:sites', 'rma:rmsite'];
 /**
  * Evaluator: Can the node be renamed?
  */
-export function canRename(context: NodeActionContext): boolean {
+function canRename(context: NodeActionContext): boolean {
   // Cannot rename company home
   if (context.nodeId === '-root-') {
     return false;
@@ -102,7 +102,7 @@ export function canRename(context: NodeActionContext): boolean {
 /**
  * Evaluator: Can the node be deleted?
  */
-export function canDelete(context: NodeActionContext): boolean {
+function canDelete(context: NodeActionContext): boolean {
   // Cannot delete company home
   if (context.nodeId === '-root-') {
     return false;
@@ -134,7 +134,7 @@ export function canDelete(context: NodeActionContext): boolean {
 /**
  * Allow opening in JS Console only for JavaScript files
  */
-export function canOpenInJsConsole(context: NodeActionContext): boolean {
+function canOpenInJsConsole(context: NodeActionContext): boolean {
   // Only allow for files
   if (!context.isFile) {
     return false;
@@ -165,7 +165,7 @@ export function canOpenInJsConsole(context: NodeActionContext): boolean {
 /**
  * Allow opening in Text Editor for supported text-based files
  */
-export function canOpenInTextEditor(context: NodeActionContext): boolean {
+function canOpenInTextEditor(context: NodeActionContext): boolean {
   if (!context.isFile) {
     return false;
   }

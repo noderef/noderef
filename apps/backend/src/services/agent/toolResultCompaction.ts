@@ -25,15 +25,15 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 // ── Constants ────────────────────────────────────────────────────────────────
 
 export const MAX_TOOL_RESULT_JSON_CHARS_FOR_MODEL = 60_000;
-export const MAX_API_TRACE_ENTRIES_PREVIEW = 10;
-export const MAX_API_TRACE_RESPONSE_CHARS_FOR_MODEL = 4_000;
-export const MAX_SEARCH_SAMPLE_ITEMS_FOR_MODEL = 40;
-export const MAX_SEARCH_PROJECTED_ITEMS_FOR_MODEL = 80;
-export const MAX_SEARCH_NAMES_FOR_MODEL = 120;
+const MAX_API_TRACE_ENTRIES_PREVIEW = 10;
+const MAX_API_TRACE_RESPONSE_CHARS_FOR_MODEL = 4_000;
+const MAX_SEARCH_SAMPLE_ITEMS_FOR_MODEL = 40;
+const MAX_SEARCH_PROJECTED_ITEMS_FOR_MODEL = 80;
+const MAX_SEARCH_NAMES_FOR_MODEL = 120;
 
 // ── Functions ────────────────────────────────────────────────────────────────
 
-export const compactApiTraceResponseBodyForModel = (body: unknown): unknown => {
+const compactApiTraceResponseBodyForModel = (body: unknown): unknown => {
   if (isRecord(body) && isRecord(body.list)) {
     const list = body.list as Record<string, unknown>;
     const entries = Array.isArray(list.entries) ? list.entries : [];

@@ -170,7 +170,7 @@ export async function emitRunEvent(
   });
 }
 
-export function validateOperationOutput(output: Record<string, unknown>): string | null {
+function validateOperationOutput(output: Record<string, unknown>): string | null {
   const statusCode = typeof output.status === 'number' ? output.status : 0;
   const outputError =
     typeof output.error === 'string' && output.error.trim() ? output.error.trim() : null;

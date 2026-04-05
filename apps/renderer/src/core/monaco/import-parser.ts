@@ -140,7 +140,7 @@ function parseJSDoc(jsdoc: string): ParsedJSDoc {
  * Extract function declarations from JavaScript code
  * Returns an array of function signatures with JSDoc comments
  */
-export function extractFunctionSignatures(code: string): string[] {
+function extractFunctionSignatures(code: string): string[] {
   const signatures: string[] = [];
 
   // Match function declarations with optional JSDoc comments
@@ -248,7 +248,7 @@ export function extractFunctionSignatures(code: string): string[] {
 /**
  * Extract global variable/constant declarations from JavaScript code
  */
-export function extractGlobalDeclarations(code: string): string[] {
+function extractGlobalDeclarations(code: string): string[] {
   const declarations: string[] = [];
 
   // Match top-level var/let/const declarations (not inside functions)
@@ -275,7 +275,7 @@ export function extractGlobalDeclarations(code: string): string[] {
 /**
  * Extract @typedef declarations from JSDoc and convert to TypeScript interfaces
  */
-export function extractTypedefDeclarations(code: string): string[] {
+function extractTypedefDeclarations(code: string): string[] {
   const typedefs: string[] = [];
 
   // Match @typedef blocks in JSDoc comments
@@ -331,13 +331,4 @@ export function convertToTypeScriptDeclarations(code: string, moduleName: string
   }
 
   return `// Auto-generated declarations for ${moduleName}\n\n${allDeclarations.join('\n\n')}`;
-}
-
-/**
- * Remove import tags from code (for cleaner error-free editing)
- * Note: Import tags are XML-style and are typically removed by Alfresco's
- * RhinoScriptProcessor before execution
- */
-export function stripImportTags(code: string): string {
-  return code.replace(new RegExp(IMPORT_TAG_REGEX_SOURCE, 'gi'), '');
 }

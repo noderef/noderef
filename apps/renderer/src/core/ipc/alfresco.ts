@@ -89,7 +89,7 @@ type RpcBinaryOptions = Record<string, unknown> & {
  * @param options Additional options to pass to the upload method (serverId, args, custom fields)
  * @returns The raw SDK response
  */
-export async function rpcBinary(
+async function rpcBinary(
   method: string,
   baseUrl: string,
   file: File | Blob,

@@ -32,7 +32,7 @@ export function readJson(p) {
   return JSON.parse(fs.readFileSync(p, 'utf8'));
 }
 
-export function writeJson(p, o) {
+function writeJson(p, o) {
   ensureDir(path.dirname(p));
   fs.writeFileSync(p, JSON.stringify(o, null, 2) + '\n');
 }

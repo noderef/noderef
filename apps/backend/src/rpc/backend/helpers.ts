@@ -124,7 +124,7 @@ export function extractMimeTypeFromSlingshotNode(nodeData: any): string | null {
 /**
  * Extract a property value from Slingshot node data
  */
-export function extractPropertyValueFromSlingshotNode(
+function extractPropertyValueFromSlingshotNode(
   nodeData: any,
   propertyNames: string[]
 ): string | null {
@@ -245,7 +245,7 @@ export function getNodePropertyValue(node: any, propertyName: string): string | 
 /**
  * Map an Alfresco API node entry to a standardized format
  */
-export function mapNodeEntry(entry: any) {
+function mapNodeEntry(entry: any) {
   return {
     id: entry.id,
     name: entry.name,

@@ -24,7 +24,7 @@ import { z } from 'zod';
 /**
  * Alfresco User model
  */
-export const AlfUserSchema = z.object({
+const AlfUserSchema = z.object({
   id: z.string(),
   displayName: z.string(),
   email: z.string().email().optional(),
@@ -35,14 +35,14 @@ export type AlfUser = z.infer<typeof AlfUserSchema>;
 /**
  * Alfresco Site visibility enum
  */
-export const AlfSiteVisibilitySchema = z.enum(['PUBLIC', 'PRIVATE', 'MODERATED']);
+const AlfSiteVisibilitySchema = z.enum(['PUBLIC', 'PRIVATE', 'MODERATED']);
 
 export type AlfSiteVisibility = z.infer<typeof AlfSiteVisibilitySchema>;
 
 /**
  * Alfresco Site model
  */
-export const AlfSiteSchema = z.object({
+const AlfSiteSchema = z.object({
   id: z.string(),
   title: z.string(),
   visibility: AlfSiteVisibilitySchema,
@@ -53,7 +53,7 @@ export type AlfSite = z.infer<typeof AlfSiteSchema>;
 /**
  * Alfresco Group model
  */
-export const AlfGroupSchema = z.object({
+const AlfGroupSchema = z.object({
   id: z.string(),
   displayName: z.string(),
   isRoot: z.boolean(),
@@ -65,14 +65,14 @@ export type AlfGroup = z.infer<typeof AlfGroupSchema>;
 /**
  * Alfresco Group Member type enum
  */
-export const AlfGroupMemberTypeSchema = z.enum(['PERSON', 'GROUP']);
+const AlfGroupMemberTypeSchema = z.enum(['PERSON', 'GROUP']);
 
 export type AlfGroupMemberType = z.infer<typeof AlfGroupMemberTypeSchema>;
 
 /**
  * Alfresco Group Member model
  */
-export const AlfGroupMemberSchema = z.object({
+const AlfGroupMemberSchema = z.object({
   id: z.string(),
   displayName: z.string(),
   memberType: AlfGroupMemberTypeSchema,

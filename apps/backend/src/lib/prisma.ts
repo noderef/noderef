@@ -34,7 +34,7 @@ const SCHEMA_ENGINE_FILES: Record<string, string[]> = {
  * Prisma binary targets we bundle for the current runtime platform.
  * Used for resolving schema/query engines inside packaged apps.
  */
-export function prismaBinaryTargetsForCurrentPlatform(): string[] {
+function prismaBinaryTargetsForCurrentPlatform(): string[] {
   if (process.platform === 'win32') {
     return ['windows'];
   }
@@ -52,7 +52,7 @@ export function prismaBinaryTargetsForCurrentPlatform(): string[] {
 /**
  * Locate the bundled schema engine for the current platform within backendRoot.
  */
-export function findSchemaEngineBinary(backendRoot: string): string | null {
+function findSchemaEngineBinary(backendRoot: string): string | null {
   const prismaDir = path.join(backendRoot, 'node_modules', 'prisma');
   if (!existsSync(prismaDir)) return null;
 

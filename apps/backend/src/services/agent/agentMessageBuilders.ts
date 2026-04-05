@@ -42,7 +42,7 @@ export function getConfirmationActionLabel(step: {
   return `the ${humanizeOperation(resolveToolName(step.operation))} action`;
 }
 
-export function buildRemainingTasksHint(
+function buildRemainingTasksHint(
   originalRequest: string,
   completedOutput?: Record<string, unknown>
 ): string[] {
@@ -72,7 +72,7 @@ export function buildRemainingTasksHint(
   return tasks;
 }
 
-export function parseStructuredError(rawMessage: string): {
+function parseStructuredError(rawMessage: string): {
   statusCode?: number;
   errorKey?: string;
   briefSummary?: string;

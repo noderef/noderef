@@ -60,7 +60,7 @@ const PASSWORD_SALT_BYTES = 16;
 const PASSWORD_HASH_BYTES = 64;
 const PASSWORD_HASH_PREFIX = 'pbkdf2-sha512';
 
-export class EncryptionError extends Error {
+class EncryptionError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'EncryptionError';
@@ -213,7 +213,7 @@ async function deriveEncryptionKey(salt: Buffer): Promise<Buffer> {
 /**
  * Hash a password using PBKDF2-HMAC-SHA512.
  */
-export async function hashPassword(password: string): Promise<string> {
+async function hashPassword(password: string): Promise<string> {
   if (!password) {
     throw new EncryptionError('Password must be provided for hashing');
   }
@@ -238,7 +238,7 @@ export async function hashPassword(password: string): Promise<string> {
 /**
  * Verify a password against a stored PBKDF2 hash.
  */
-export async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
+async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
   try {
     const [prefix, iterationStr, saltB64, derivedB64] = storedHash.split(':');
     if (prefix !== PASSWORD_HASH_PREFIX) {

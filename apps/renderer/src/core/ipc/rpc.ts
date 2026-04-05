@@ -16,7 +16,7 @@
 
 /* eslint-disable no-console */
 // Frontend RPC client for local HTTP backend
-import { events, os } from '@neutralinojs/lib';
+import { os } from '@neutralinojs/lib';
 import {
   ensureNeutralinoReady,
   getBundledNodePath,
@@ -295,7 +295,7 @@ async function withTimeout<T>(p: Promise<T>, ms = 5000): Promise<T> {
   ]);
 }
 
-export async function readPublishedPortFromFile(): Promise<number | null> {
+async function readPublishedPortFromFile(): Promise<number | null> {
   const NL = (window as any).Neutralino;
   if (!NL?.os) {
     debugLog('[RPC] readPublishedPortFromFile: Neutralino.os not available');
@@ -1001,20 +1001,6 @@ export async function rpc<T = unknown>(
     }
     throw error;
   }
-}
-
-export function onBackendExit(handler: () => void) {
-  events.on('serverOffline', handler);
-}
-
-/**
- * Set the backend URL explicitly (useful when discovered via diagnostics)
- * @param url The backend URL to use for RPC calls
- */
-export function setBackendUrl(url: string): void {
-  baseURL = url;
-  backendReady = true;
-  debugLog('[RPC] Backend URL set to:', baseURL);
 }
 
 /**

@@ -23,13 +23,13 @@ import { parseModelJsonObject } from './agentParsing.js';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-export const CHAT_TITLE_MAX_CHARS = 60;
+const CHAT_TITLE_MAX_CHARS = 60;
 export const CHAT_TITLE_MAX_TOKENS = 48;
 export const CHAT_TITLE_CALL_TIMEOUT_MS = 8_000;
-export const CHAT_TITLE_PLACEHOLDER = 'new chat';
+const CHAT_TITLE_PLACEHOLDER = 'new chat';
 export const DEFAULT_CHAT_ICON = 'hash';
 
-export const CHAT_ICON_OPTIONS = [
+const CHAT_ICON_OPTIONS = [
   'hash',
   'search',
   'file-pdf',
@@ -44,7 +44,7 @@ export const CHAT_ICON_OPTIONS = [
   'database',
 ] as const;
 
-export const CHAT_ICON_SET = new Set<string>(CHAT_ICON_OPTIONS);
+const CHAT_ICON_SET = new Set<string>(CHAT_ICON_OPTIONS);
 
 export const CHAT_TITLE_SYSTEM_PROMPT =
   'You generate a short chat title and select a chat icon. Return strict JSON only.';
@@ -53,7 +53,7 @@ export const CHAT_TITLE_SYSTEM_PROMPT =
 
 const collapseWhitespace = (text: string): string => text.replace(/\s+/g, ' ').trim();
 
-export const trimOuterQuotes = (text: string): string => {
+const trimOuterQuotes = (text: string): string => {
   let value = text.trim();
   while (
     (value.startsWith('"') && value.endsWith('"')) ||
@@ -67,7 +67,7 @@ export const trimOuterQuotes = (text: string): string => {
   return value;
 };
 
-export const capitalizeFirstLetter = (text: string): string => {
+const capitalizeFirstLetter = (text: string): string => {
   const match = text.match(/\p{L}/u);
   if (!match || match.index === undefined) {
     return text;
@@ -76,7 +76,7 @@ export const capitalizeFirstLetter = (text: string): string => {
   return `${text.slice(0, i)}${text.charAt(i).toLocaleUpperCase()}${text.slice(i + 1)}`;
 };
 
-export const sanitizeChatTitle = (raw: string, maxChars = CHAT_TITLE_MAX_CHARS): string => {
+const sanitizeChatTitle = (raw: string, maxChars = CHAT_TITLE_MAX_CHARS): string => {
   const firstLine = raw.split(/\r?\n/, 1)[0] ?? '';
   const noMarkdownPrefix = firstLine.replace(/^[#>*\-\s]+/, '');
   const noOuterQuotes = trimOuterQuotes(noMarkdownPrefix);
@@ -93,12 +93,13 @@ export const sanitizeChatTitle = (raw: string, maxChars = CHAT_TITLE_MAX_CHARS):
   return capitalizeFirstLetter(cleaned);
 };
 
-export const buildLegacyTitleSnippet = (content: string, maxChars: number): string =>
+const buildLegacyTitleSnippet = (content: string, maxChars: number): string =>
   collapseWhitespace(content)
     .slice(0, maxChars)
     .replace(/[.!?]+$/g, '')
     .trim();
 
+// fallow-ignore-next-line unused-export
 export const normalizeChatIcon = (value: unknown): string => {
   if (typeof value !== 'string') {
     return DEFAULT_CHAT_ICON;

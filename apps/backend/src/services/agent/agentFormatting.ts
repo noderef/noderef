@@ -32,7 +32,7 @@ export function inlineCode(value: string): string {
   return `\`${value.replace(/`/g, '\\`')}\``;
 }
 
-export function escapeMarkdownLinkLabel(value: string): string {
+function escapeMarkdownLinkLabel(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/\[/g, '\\[').replace(/\]/g, '\\]');
 }
 
@@ -76,7 +76,7 @@ export function formatValueForInline(value: unknown): string {
   }
 }
 
-export function stringifyJsonTruncated(
+function stringifyJsonTruncated(
   value: unknown,
   maxChars = MAX_PROPERTIES_JSON_CHARS
 ): string {

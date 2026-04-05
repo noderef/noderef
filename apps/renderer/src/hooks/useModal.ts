@@ -34,15 +34,3 @@ export function useModal(name: ModalKey) {
     close: closeModal,
   };
 }
-
-/**
- * Hook to get the currently active modal (if any)
- */
-export function useActiveModal() {
-  const activeModal = useUIStore(state => state.activeModal);
-  const modalPayload = useUIStore(state => state.modalPayload);
-  return {
-    activeModal,
-    payload: modalPayload,
-  };
-}

@@ -317,7 +317,7 @@ export function copyPrismaTo(destNodeModules, keepEngine) {
   return (!targets.length || enginesOk) && genOk;
 }
 
-export function copyPrismaCliTo(destNodeModules, keepEngine) {
+function copyPrismaCliTo(destNodeModules, keepEngine) {
   const targets = normalizeTargets(keepEngine);
   const prismaPkg = resolvePackage('prisma');
   if (!prismaPkg) {
@@ -432,7 +432,7 @@ export function copyPrismaCliTo(destNodeModules, keepEngine) {
   return !targets.length || (schemaOk && queryOk);
 }
 
-export function ensurePrismaEngine(destNodeModules, keepEngine) {
+function ensurePrismaEngine(destNodeModules, keepEngine) {
   const targets = normalizeTargets(keepEngine);
   const dest = path.join(destNodeModules, '.prisma', 'client');
   return ensureQueryEngines(dest, targets);

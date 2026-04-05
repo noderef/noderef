@@ -16,11 +16,11 @@
 
 let VERBOSE = process.env.VERBOSE === '1' || process.argv.includes('--verbose');
 
-export function setVerbose(v) {
+function setVerbose(v) {
   VERBOSE = !!v;
 }
 
-export const log = (...a) => console.log(...a);
+const log = (...a) => console.log(...a);
 
 export const warn = (...a) => console.warn('⚠', ...a);
 

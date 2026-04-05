@@ -20,10 +20,10 @@
  */
 
 // OIDC scope for authentication requests
-export const OIDC_SCOPE = 'openid profile email offline_access';
+const OIDC_SCOPE = 'openid profile email offline_access';
 
 // Popup window configuration
-export const OIDC_POPUP_CONFIG = {
+const OIDC_POPUP_CONFIG = {
   width: 500,
   height: 700,
   features: 'toolbar=no,menubar=no,location=no,status=yes,scrollbars=yes,resizable=yes',
@@ -33,7 +33,7 @@ export const OIDC_POPUP_CONFIG = {
 export const OIDC_AUTH_TIMEOUT = 300000;
 
 // Grace period after popup closes (3 seconds)
-export const POPUP_CLOSE_GRACE_PERIOD = 3000;
+const POPUP_CLOSE_GRACE_PERIOD = 3000;
 
 /**
  * Generate PKCE code verifier and challenge

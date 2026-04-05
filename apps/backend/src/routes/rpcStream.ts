@@ -220,96 +220,248 @@ async function handleLogFileWebscript(
 /**
  * Handle generic stream result
  */
-function handleStreamResult(result: any, res: any): void {
-  // Handle Axios-style response with data property
-  if (result?.data !== undefined) {
-    // Forward headers if they exist
-    if (result.headers) {
-      for (const [key, value] of Object.entries(result.headers)) {
-        if (value !== undefined && value !== null) {
-          res.setHeader(key, String(value));
-        }
-      }
+const setResponseHeaders = (res: any, headers: Record<string, unknown> | undefined): void => {
+  if (!headers) {
+    return;
+  }
+  for (const [key, value] of Object.entries(headers)) {
+    if (value !== undefined && value !== null) {
+      res.setHeader(key, String(value));
     }
+  }
+};
 
-    // Handle different data types
+const isReadableStream = (value: unknown): value is NodeJS.ReadableStream => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  return typeof (value as { pipe?: unknown }).pipe === 'function';
+};
+
+const isEmptyObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Buffer.isBuffer(value) && Object.keys(value).length === 0;
+
+const sendText = (res: any, text: string): void => {
+  res.type('text/plain; charset=utf-8');
+  res.send(text);
+};
+
+const handleAxiosEmptyObjectFallback = (result: any, res: any): boolean => {
+  if (!isEmptyObject(result.data)) {
+    return false;
+  }
+
+  if (typeof result.request?.responseText === 'string' && result.request.responseText.length > 0) {
+    sendText(res, result.request.responseText);
+    return true;
+  }
+  if (typeof result.response?.data === 'string') {
+    sendText(res, result.response.data);
+    return true;
+  }
+  return false;
+};
+
+function handleStreamResult(result: any, res: any): void {
+  if (result?.data !== undefined) {
+    setResponseHeaders(res, result.headers);
+
     if (Buffer.isBuffer(result.data)) {
       res.send(result.data);
       return;
     }
-    if (result.data && typeof result.data === 'object' && 'pipe' in result.data) {
-      (result.data as NodeJS.ReadableStream).pipe(res);
+    if (isReadableStream(result.data)) {
+      result.data.pipe(res);
       return;
     }
     if (typeof result.data === 'string') {
-      // Set content type for text responses if not already set
       if (!res.getHeader('content-type')) {
-        res.type('text/plain; charset=utf-8');
+        sendText(res, result.data);
+      } else {
+        res.send(result.data);
       }
-      res.send(result.data);
       return;
     }
-    // Check if data is an empty object - try to get raw response text
-    if (
-      typeof result.data === 'object' &&
-      result.data !== null &&
-      !Buffer.isBuffer(result.data) &&
-      Object.keys(result.data).length === 0
-    ) {
-      // Try to get raw response text from Axios request object
-      if (result.request?.responseText !== undefined) {
-        const rawText = result.request.responseText;
-        if (typeof rawText === 'string' && rawText.length > 0) {
-          res.type('text/plain; charset=utf-8');
-          res.send(rawText);
-          return;
-        }
-      }
-      // Try response.data if available
-      if (result.response?.data !== undefined && typeof result.response.data === 'string') {
-        res.type('text/plain; charset=utf-8');
-        res.send(result.response.data);
-        return;
-      }
+    if (handleAxiosEmptyObjectFallback(result, res)) {
+      return;
     }
-    // For other data types, send as-is
     res.send(result.data);
     return;
   }
 
-  // Handle Node.js stream directly
-  if (
-    result &&
-    typeof result === 'object' &&
-    'pipe' in result &&
-    typeof result.pipe === 'function'
-  ) {
-    (result as NodeJS.ReadableStream).pipe(res);
+  if (isReadableStream(result)) {
+    result.pipe(res);
     return;
   }
-
   if (typeof result === 'string') {
-    res.type('text/plain; charset=utf-8');
-    res.send(result);
+    sendText(res, result);
     return;
   }
-
   if (Buffer.isBuffer(result)) {
     res.type('application/octet-stream');
     res.send(result);
     return;
   }
-
-  // Check if result is an empty object - return empty string for text responses
-  if (typeof result === 'object' && result !== null && Object.keys(result).length === 0) {
-    res.type('text/plain; charset=utf-8');
-    res.send('');
+  if (isEmptyObject(result)) {
+    sendText(res, '');
     return;
   }
-
-  // Fallback: return as JSON if not a stream
   res.json(result);
 }
+
+type StreamQuery = Record<string, string | string[]>;
+
+interface ParsedStreamRequest {
+  baseUrl: string;
+  method: string;
+  serverId?: number;
+  rest: StreamQuery;
+}
+
+const parseStreamRequestQuery = (query: StreamQuery): ParsedStreamRequest => {
+  const {
+    baseUrl: baseUrlRaw,
+    method: methodRaw,
+    serverId: serverIdRaw,
+    ...rest
+  } = query;
+
+  const baseUrl = Array.isArray(baseUrlRaw) ? baseUrlRaw[0] : baseUrlRaw;
+  const method = Array.isArray(methodRaw) ? methodRaw[0] : methodRaw;
+
+  if (!baseUrl || typeof baseUrl !== 'string') {
+    throw new Error('INVALID_BASE_URL');
+  }
+  if (!method || typeof method !== 'string') {
+    throw new Error('INVALID_METHOD');
+  }
+
+  let serverId: number | undefined;
+  if (serverIdRaw !== undefined) {
+    const rawValue = Array.isArray(serverIdRaw) ? serverIdRaw[0] : serverIdRaw;
+    if (rawValue && rawValue.length) {
+      const parsed = Number.parseInt(rawValue, 10);
+      if (Number.isNaN(parsed)) {
+        throw new Error('INVALID_SERVER_ID');
+      }
+      serverId = parsed;
+    }
+  }
+
+  return { baseUrl, method, serverId, rest };
+};
+
+const validateStreamRequest = (
+  parsed: ParsedStreamRequest,
+  contracts: any
+): { code: string; message: string; details?: Record<string, unknown> } | null => {
+  if (!contracts?.AlfrescoRpcStreamCallSchema) {
+    return null;
+  }
+
+  try {
+    contracts.AlfrescoRpcStreamCallSchema
+      .passthrough()
+      .parse({ baseUrl: parsed.baseUrl, method: parsed.method });
+    return null;
+  } catch (validationErr) {
+    log.warn({ error: validationErr }, 'Stream RPC validation error');
+    return {
+      code: 'VALIDATION_ERROR',
+      message: 'Invalid request parameters',
+      details: { zodError: (validationErr as { errors?: unknown }).errors },
+    };
+  }
+};
+
+const parseStreamArgs = (rest: StreamQuery): unknown => {
+  if (typeof rest._args === 'string') {
+    try {
+      return JSON.parse(rest._args);
+    } catch {
+      // Fallback to key/value coercion below.
+    }
+  }
+
+  const args: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(rest)) {
+    if (key === '_args') {
+      continue;
+    }
+    args[key] = coerceQueryValue(value);
+  }
+  return args;
+};
+
+const maybeHandleNodeContentDownload = async (params: {
+  parsed: ParsedStreamRequest;
+  args: unknown;
+  authenticatedApi: AlfrescoApi | undefined;
+  res: any;
+}): Promise<boolean> => {
+  const { parsed, args, authenticatedApi, res } = params;
+  if (
+    parsed.method !== 'nodes.getNodeContent' &&
+    parsed.method !== 'nodes.getContent'
+  ) {
+    return false;
+  }
+  if (!authenticatedApi || parsed.serverId === undefined) {
+    return false;
+  }
+
+  try {
+    return await handleNodeContentDownload(
+      authenticatedApi,
+      parsed.baseUrl,
+      args,
+      parsed.rest,
+      res
+    );
+  } catch (directHttpError) {
+    log.warn(
+      { error: directHttpError, method: parsed.method, nodeId: (args as any)?.nodeId || parsed.rest.nodeId },
+      'Direct API call failed, falling back to proxy method'
+    );
+    return false;
+  }
+};
+
+const maybeHandleLogFileWebscript = async (params: {
+  parsed: ParsedStreamRequest;
+  args: unknown;
+  authenticatedApi: AlfrescoApi | undefined;
+  res: any;
+}): Promise<boolean> => {
+  const { parsed, args, authenticatedApi, res } = params;
+  if (parsed.method !== 'webscript.executeWebScript' || !Array.isArray(args) || args.length < 2) {
+    return false;
+  }
+  if (!authenticatedApi || parsed.serverId === undefined) {
+    return false;
+  }
+
+  const [, scriptPath] = args as [string, string];
+  if (!scriptPath?.includes('log4j-log-file')) {
+    return false;
+  }
+
+  try {
+    return await handleLogFileWebscript(
+      authenticatedApi,
+      parsed.baseUrl,
+      parsed.serverId,
+      scriptPath,
+      res
+    );
+  } catch (directHttpError) {
+    log.warn(
+      { error: directHttpError, scriptPath },
+      'Direct HTTP call failed, falling back to API method'
+    );
+    return false;
+  }
+};
 
 /**
  * Create RPC stream download handler
@@ -317,132 +469,42 @@ function handleStreamResult(result: any, res: any): void {
 export function rpcStreamHandler({ serverService, contracts }: RpcStreamOptions): RequestHandler {
   return async (req, res) => {
     try {
-      const {
-        baseUrl: baseUrlRaw,
-        method: methodRaw,
-        serverId: serverIdRaw,
-        ...rest
-      } = req.query as Record<string, string | string[]>;
-
-      // Extract and validate baseUrl and method (ensure they're strings, not arrays)
-      const baseUrl = Array.isArray(baseUrlRaw) ? baseUrlRaw[0] : baseUrlRaw;
-      const method = Array.isArray(methodRaw) ? methodRaw[0] : methodRaw;
-
-      let serverId: number | undefined;
-      if (serverIdRaw !== undefined) {
-        const rawValue = Array.isArray(serverIdRaw) ? serverIdRaw[0] : serverIdRaw;
-        if (rawValue && rawValue.length) {
-          const parsed = Number.parseInt(rawValue, 10);
-          if (Number.isNaN(parsed)) {
-            return res.status(400).json({ code: 'INVALID_INPUT', message: 'Invalid serverId' });
-          }
-          serverId = parsed;
+      let parsed: ParsedStreamRequest;
+      try {
+        parsed = parseStreamRequestQuery(req.query as StreamQuery);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'INVALID_INPUT';
+        if (message === 'INVALID_BASE_URL') {
+          return res.status(400).json({ code: 'INVALID_INPUT', message: 'Missing or invalid baseUrl' });
         }
+        if (message === 'INVALID_METHOD') {
+          return res.status(400).json({ code: 'INVALID_INPUT', message: 'Missing or invalid method' });
+        }
+        if (message === 'INVALID_SERVER_ID') {
+          return res.status(400).json({ code: 'INVALID_INPUT', message: 'Invalid serverId' });
+        }
+        return res.status(400).json({ code: 'INVALID_INPUT', message: 'Invalid request parameters' });
       }
 
-      // Validate with zod schema if available
-      if (contracts?.AlfrescoRpcStreamCallSchema) {
-        try {
-          contracts.AlfrescoRpcStreamCallSchema.passthrough().parse({ baseUrl, method });
-        } catch (validationErr) {
-          log.warn({ error: validationErr }, 'Stream RPC validation error');
-          return res.status(400).json({
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid request parameters',
-            details: { zodError: (validationErr as { errors?: unknown }).errors },
-          });
-        }
-      } else {
-        // Fallback validation
-        if (!baseUrl || typeof baseUrl !== 'string') {
-          return res
-            .status(400)
-            .json({ code: 'INVALID_INPUT', message: 'Missing or invalid baseUrl' });
-        }
-        if (!method || typeof method !== 'string') {
-          return res
-            .status(400)
-            .json({ code: 'INVALID_INPUT', message: 'Missing or invalid method' });
-        }
+      const validationError = validateStreamRequest(parsed, contracts);
+      if (validationError) {
+        return res.status(400).json(validationError);
       }
 
-      // Convert query params to proper types for SDK
-      // Special handling: if _args is provided as JSON string, parse it as array/object
-      let args: unknown;
-      if (rest._args && typeof rest._args === 'string') {
-        try {
-          args = JSON.parse(rest._args);
-        } catch {
-          // If parsing fails, fall back to object approach
-          args = {};
-          for (const [key, value] of Object.entries(rest)) {
-            if (key !== '_args') {
-              (args as Record<string, unknown>)[key] = coerceQueryValue(value);
-            }
-          }
-        }
-      } else {
-        // Default: convert query params to object
-        args = {};
-        for (const [key, value] of Object.entries(rest)) {
-          (args as Record<string, unknown>)[key] = coerceQueryValue(value);
-        }
+      const args = parseStreamArgs(parsed.rest);
+      const authenticatedApi =
+        parsed.serverId !== undefined
+          ? await authenticateServerRequest(serverService, parsed.baseUrl, parsed.serverId)
+          : undefined;
+
+      if (await maybeHandleNodeContentDownload({ parsed, args, authenticatedApi, res })) {
+        return;
+      }
+      if (await maybeHandleLogFileWebscript({ parsed, args, authenticatedApi, res })) {
+        return;
       }
 
-      // Call the method via proxy service
-      let authenticatedApi: AlfrescoApi | undefined;
-      if (serverId !== undefined) {
-        authenticatedApi = await authenticateServerRequest(serverService, baseUrl, serverId);
-      }
-
-      // Special handling for node content download - use NodesApi.getNodeContent
-      if (method === 'nodes.getNodeContent' || method === 'nodes.getContent') {
-        try {
-          if (authenticatedApi && serverId !== undefined) {
-            const handled = await handleNodeContentDownload(
-              authenticatedApi,
-              baseUrl,
-              args,
-              rest,
-              res
-            );
-            if (handled) return;
-          }
-        } catch (directHttpError) {
-          log.warn(
-            { error: directHttpError, method, nodeId: (args as any)?.nodeId || rest.nodeId },
-            'Direct API call failed, falling back to proxy method'
-          );
-          // Fall through to normal API call
-        }
-      }
-
-      // Special handling for log file webscripts - make direct HTTP call to avoid JSON parsing
-      if (method === 'webscript.executeWebScript' && Array.isArray(args) && args.length >= 2) {
-        const [, scriptPath] = args as [string, string];
-        if (scriptPath?.includes('log4j-log-file')) {
-          try {
-            if (authenticatedApi && serverId !== undefined) {
-              const handled = await handleLogFileWebscript(
-                authenticatedApi,
-                baseUrl,
-                serverId,
-                scriptPath,
-                res
-              );
-              if (handled) return;
-            }
-          } catch (directHttpError) {
-            log.warn(
-              { error: directHttpError, scriptPath },
-              'Direct HTTP call failed, falling back to API method'
-            );
-            // Fall through to normal API call
-          }
-        }
-      }
-
-      const result: any = await callMethod(baseUrl, method, args, authenticatedApi);
+      const result: any = await callMethod(parsed.baseUrl, parsed.method, args, authenticatedApi);
       handleStreamResult(result, res);
     } catch (err: unknown) {
       log.error({ error: err }, 'Stream RPC call failed');

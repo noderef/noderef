@@ -14,20 +14,6 @@
  * limitations under the License.
  */
 
-export const LANGUAGE_OPTIONS = [
-  { value: 'plaintext', label: 'Plain text / CSV / text/plain' },
-  { value: 'json', label: 'JSON' },
-  { value: 'javascript', label: 'JavaScript' },
-  { value: 'typescript', label: 'TypeScript' },
-  { value: 'xml', label: 'XML' },
-  { value: 'yaml', label: 'YAML' },
-  { value: 'html', label: 'HTML' },
-  { value: 'css', label: 'CSS' },
-  { value: 'markdown', label: 'Markdown' },
-  { value: 'sql', label: 'SQL' },
-  { value: 'freemarker2', label: 'FreeMarker' },
-] as const;
-
 const EXTENSION_LANGUAGE_MAP: Record<string, string> = {
   txt: 'plaintext',
   text: 'plaintext',

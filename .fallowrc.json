@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "entry": [
+    "apps/backend/src/server.ts",
+    "apps/backend/src/ai/libs/*.js",
+    "apps/renderer/src/main.tsx",
+    "scripts/gh-post-release.mjs",
+    "scripts/gh-release-generate-changelog.mjs"
+  ],
+  "ignorePatterns": [
+    "apps/renderer/public/neutralino.js",
+    "**/neutralino.js"
+  ]
+}

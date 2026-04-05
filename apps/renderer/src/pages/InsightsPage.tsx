@@ -221,4 +221,5 @@ function InsightsPage() {
   );
 }
 
+// fallow-ignore-next-line unused-export
 export default InsightsPage;

@@ -36,7 +36,7 @@ export const SYSTEM_AUTHORITIES: Record<string, string> = {
   system: 'System',
 };
 
-export const isSystemAuthority = (id: string): boolean => id in SYSTEM_AUTHORITIES;
+const isSystemAuthority = (id: string): boolean => id in SYSTEM_AUTHORITIES;
 
 /** Map Alfresco webscript `api/people` response entries to AuthorityResult[] */
 export const mapPeopleResponse = (response: any): AuthorityResult[] => {

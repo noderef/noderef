@@ -229,7 +229,7 @@ export async function callWithTools({
  * Build the assistant turn that includes both tool_use blocks and text (if any).
  * Used when appending the model's tool-call turn to the message history.
  */
-export function buildAssistantToolCallTurn(
+function buildAssistantToolCallTurn(
   result: Extract<AgentCallResult, { type: 'tool_calls' }>,
   rawContent: Anthropic.ContentBlock[]
 ): AgentMessageParam {
@@ -239,7 +239,7 @@ export function buildAssistantToolCallTurn(
 /**
  * Build the user turn that contains tool_result blocks.
  */
-export function buildToolResultTurn(
+function buildToolResultTurn(
   results: Array<{ id: string; content: string; isError?: boolean }>
 ): AgentMessageParam {
   return {

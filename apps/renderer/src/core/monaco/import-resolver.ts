@@ -21,7 +21,7 @@ import { convertToTypeScriptDeclarations, parseImportTags } from './import-parse
 /**
  * Manages loading and resolving imported scripts for Monaco Editor IntelliSense
  */
-export class ImportResolver {
+class ImportResolver {
   private loadedImports = new Map<string, monaco.IDisposable>();
   private serverId: number | null = null;
   private isResolving = false;

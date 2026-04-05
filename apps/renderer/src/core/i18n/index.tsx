@@ -215,7 +215,7 @@ const resources: Resource = {
   },
 };
 
-function getInitialLanguage() {
+export function getInitialLanguage() {
   if (typeof window === 'undefined') {
     return DEFAULT_LANGUAGE;
   }
@@ -298,4 +298,4 @@ export function I18nProvider({ children }: I18nProviderProps) {
   return <I18nextProvider i18n={i18n}>{children}</I18nextProvider>;
 }
 
-export { DEFAULT_LANGUAGE, getInitialLanguage, i18n };
+export { i18n };

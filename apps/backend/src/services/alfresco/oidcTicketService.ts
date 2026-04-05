@@ -34,7 +34,7 @@ const log = createLogger('alfresco.oidc-ticket');
  * @param accessToken The OIDC access token from Keycloak
  * @returns The Alfresco ticket (without TICKET_ prefix)
  */
-export async function exchangeOidcTokenForTicket(
+async function exchangeOidcTokenForTicket(
   baseUrl: string,
   accessToken: string
 ): Promise<string> {

@@ -24,7 +24,7 @@ import { z } from 'zod';
 /**
  * Server type enum
  */
-export const ServerTypeSchema = z.enum(['alfresco', 'process_services', 'elastic']);
+const ServerTypeSchema = z.enum(['alfresco', 'process_services', 'elastic']);
 export type ServerType = z.infer<typeof ServerTypeSchema>;
 
 /**
@@ -32,14 +32,14 @@ export type ServerType = z.infer<typeof ServerTypeSchema>;
  * - basic: Username + password authentication
  * - openid_connect: OAuth 2.0 / OpenID Connect with PKCE
  */
-export const AuthTypeSchema = z.enum(['basic', 'openid_connect']);
+const AuthTypeSchema = z.enum(['basic', 'openid_connect']);
 export type AuthType = z.infer<typeof AuthTypeSchema>;
 
 /**
  * Server DTO schema
  * Represents a complete server entity with all fields
  */
-export const ServerSchema = z.object({
+const ServerSchema = z.object({
   id: z.number().int().positive(),
   userId: z.number().int().positive(),
   name: z.string().min(1).max(200),
@@ -68,7 +68,7 @@ export type Server = z.infer<typeof ServerSchema>;
 /**
  * Create server input DTO
  */
-export const CreateServerSchema = z.object({
+const CreateServerSchema = z.object({
   userId: z.number().int().positive(),
   name: z.string().min(1).max(200),
   baseUrl: z.string().url(),
@@ -94,7 +94,7 @@ export type CreateServer = z.infer<typeof CreateServerSchema>;
 /**
  * Update server input DTO (all fields optional)
  */
-export const UpdateServerSchema = CreateServerSchema.partial().omit({ userId: true });
+const UpdateServerSchema = CreateServerSchema.partial().omit({ userId: true });
 
 export type UpdateServer = z.infer<typeof UpdateServerSchema>;
 

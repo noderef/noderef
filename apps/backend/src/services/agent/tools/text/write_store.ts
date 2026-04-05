@@ -129,7 +129,7 @@ const ensureOpenAndNotExpired = (state: WriteSessionState): void => {
   }
 };
 
-export async function ensureSessionsRoot(): Promise<void> {
+async function ensureSessionsRoot(): Promise<void> {
   await mkdir(SESSIONS_ROOT_DIR, { recursive: true });
 }
 
@@ -251,7 +251,7 @@ export async function loadWriteSession(sessionIdInput: string): Promise<WriteSes
   return { state, sessionDir, metadataPath, contentPath };
 }
 
-export async function saveWriteSession(record: WriteSessionRecord): Promise<void> {
+async function saveWriteSession(record: WriteSessionRecord): Promise<void> {
   record.state.updatedAt = nowIso();
   await writeFile(record.metadataPath, JSON.stringify(record.state, null, 2), 'utf8');
 }
@@ -338,7 +338,7 @@ export async function markWriteSessionCommitted(input: {
   return record;
 }
 
-export async function readWriteSessionText(sessionId: string): Promise<string> {
+async function readWriteSessionText(sessionId: string): Promise<string> {
   const record = await loadWriteSession(sessionId);
   return readFile(record.contentPath, 'utf8');
 }

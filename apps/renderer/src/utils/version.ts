@@ -35,7 +35,7 @@ export function normalizeVersion(input: string | undefined | null): string {
  *  -1 if a < b
  *  0 if equal
  */
-export function compareVersions(a: string, b: string): number {
+function compareVersions(a: string, b: string): number {
   const aParts = normalizeVersion(a).split(/[.-]/);
   const bParts = normalizeVersion(b).split(/[.-]/);
   const length = Math.max(aParts.length, bParts.length);

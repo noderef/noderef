@@ -25,7 +25,7 @@ import { z } from 'zod';
 /**
  * Validation error class with structured metadata
  */
-export class ValidationError extends Error {
+class ValidationError extends Error {
   constructor(
     public code: ErrorCode,
     public tableName: string,
@@ -52,14 +52,14 @@ export class ValidationError extends Error {
 /**
  * Server type enum values
  */
-export const SERVER_TYPES = ['alfresco', 'process_services', 'elastic'] as const;
-export type ServerType = (typeof SERVER_TYPES)[number];
+const SERVER_TYPES = ['alfresco', 'process_services', 'elastic'] as const;
+type ServerType = (typeof SERVER_TYPES)[number];
 
 /**
  * Auth type enum values
  */
-export const AUTH_TYPES = ['basic', 'oauth', 'openid_connect'] as const;
-export type AuthType = (typeof AUTH_TYPES)[number];
+const AUTH_TYPES = ['basic', 'oauth', 'openid_connect'] as const;
+type AuthType = (typeof AUTH_TYPES)[number];
 
 /**
  * Validate and normalize jsconsole_endpoint
@@ -132,7 +132,7 @@ const ServerBaseValidationSchema = z
 /**
  * Server validation schema with userId (for create operations)
  */
-export const ServerValidationSchema = ServerBaseValidationSchema.extend({
+const ServerValidationSchema = ServerBaseValidationSchema.extend({
   userId: z.number().int().positive(),
 });
 
@@ -164,7 +164,7 @@ export function validateCreateServerInput(
  * Update server input validation (all fields optional, no userId)
  * Note: The transform on jsconsoleEndpoint in ServerBaseValidationSchema will be applied
  */
-export const UpdateServerValidationSchema = ServerBaseValidationSchema.partial();
+const UpdateServerValidationSchema = ServerBaseValidationSchema.partial();
 
 export function validateUpdateServerInput(
   data: unknown,
@@ -197,7 +197,7 @@ export function validateUpdateServerInput(
  * Standalone jsconsole_endpoint validator
  * Can be used independently for validation
  */
-export function validateJsConsoleEndpointField(
+function validateJsConsoleEndpointField(
   value: string | null | undefined,
   recordId?: number
 ): string | null {

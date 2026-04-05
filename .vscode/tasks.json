@@ -92,6 +92,24 @@
       }
     },
     {
+      "label": "fallow",
+      "type": "shell",
+      "command": "pnpm exec fallow",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false
+      },
+      "runOptions": {
+        "runOn": "default"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      }
+    },
+    {
       "label": "test",
       "type": "shell",
       "command": "pnpm test",

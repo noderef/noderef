@@ -17,7 +17,6 @@
 import {
   createTheme,
   DEFAULT_THEME,
-  MantineColorScheme,
   MantineColorsTuple,
   mergeMantineTheme,
 } from '@mantine/core';
@@ -28,14 +27,6 @@ import { defaultTheme } from './default';
  * Used by Mantine's localStorageColorSchemeManager
  */
 export const colorSchemePreferenceKey = 'noderef-color-scheme';
-
-/**
- * Supported color schemes for the application
- * - light: Light mode
- * - dark: Dark mode
- * - auto: Sync with system preference
- */
-export const supportedColorSchemes: MantineColorScheme[] = ['light', 'dark', 'auto'];
 
 /**
  * Custom color palette: Slate

@@ -72,12 +72,3 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     </>
   );
 }
-
-/**
- * Export theme and color scheme manager for use in:
- * - Unit tests
- * - Storybook
- * - Server-side rendering
- * - Direct theme access outside components
- */
-export { colorSchemeManager, customTheme as theme };

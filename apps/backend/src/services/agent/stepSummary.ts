@@ -35,7 +35,7 @@ const normalizeSummaryText = (text: string): string =>
     .replace(/[`*_#]+/g, '')
     .trim();
 
-export const formatOperationLabel = (operation: string): string =>
+const formatOperationLabel = (operation: string): string =>
   operation.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
 
 const truncateText = (text: string, maxChars: number): string => {
@@ -45,7 +45,7 @@ const truncateText = (text: string, maxChars: number): string => {
   return `${text.slice(0, maxChars - 3).trimEnd()}...`;
 };
 
-export const buildFallbackStepSummary = (
+const buildFallbackStepSummary = (
   operation: string,
   args: Record<string, unknown>
 ): string => {
