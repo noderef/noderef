@@ -18,9 +18,9 @@
 
 import fs from 'fs';
 import path from 'path';
-import { cp, exists, rm } from '../lib/fsx.mjs';
-import { error, info, warn } from '../lib/log.mjs';
-import { appName, backendDir, binDir, distDir, resources } from '../lib/paths.mjs';
+import { cp, exists, readJson, rm } from '../lib/fsx.mjs';
+import { debug, error, info, warn } from '../lib/log.mjs';
+import { appName, backendDir, binDir, distDir, readConfig, resources, root } from '../lib/paths.mjs';
 import { copyPrismaTo } from '../lib/prisma.mjs';
 
 function copyNodeBinary(srcName, destPath) {
@@ -99,8 +99,37 @@ if (!exists(nodeSrc)) {
 }
 
 const buildMetaPath = path.join(resources(), 'build-meta.json');
-if (!exists(buildMetaPath)) {
-  warn(`build-meta.json not found at ${buildMetaPath} (run pnpm sync:meta before build)`);
+let buildMeta = null;
+if (exists(buildMetaPath)) {
+  try {
+    buildMeta = readJson(buildMetaPath);
+  } catch (e) {
+    warn(`failed to parse ${buildMetaPath}; generating fallback build metadata`);
+  }
+}
+
+if (!buildMeta) {
+  let version = process.env.APP_VERSION;
+  let applicationId = undefined;
+
+  try {
+    const pkg = readJson(path.join(root(), 'package.json'));
+    if (!version && typeof pkg.version === 'string') version = pkg.version;
+  } catch {}
+
+  try {
+    const cfg = readConfig();
+    if (!version && typeof cfg.version === 'string') version = cfg.version;
+    if (typeof cfg.applicationId === 'string') applicationId = cfg.applicationId;
+  } catch {}
+
+  buildMeta = {
+    version: version || 'dev',
+    applicationId: applicationId || 'nl.noderef.desktop',
+    generatedAt: new Date().toISOString(),
+  };
+
+  debug(`build-meta.json not found at ${buildMetaPath}; generated fallback metadata`);
 }
 
 let failed = false;
@@ -137,11 +166,9 @@ for (const t of platformTargets()) {
   }
 
   // Backend reads version from ../../resources/build-meta.json (relative to node-src/dist)
-  if (exists(buildMetaPath)) {
-    const appResourcesDir = path.join(t.app, 'resources');
-    fs.mkdirSync(appResourcesDir, { recursive: true });
-    fs.copyFileSync(buildMetaPath, path.join(appResourcesDir, 'build-meta.json'));
-  }
+  const appResourcesDir = path.join(t.app, 'resources');
+  fs.mkdirSync(appResourcesDir, { recursive: true });
+  fs.writeFileSync(path.join(appResourcesDir, 'build-meta.json'), JSON.stringify(buildMeta, null, 2) + '\n');
 
   info(`✓ ${t.plat}/${t.arch} → OK`);
 }
