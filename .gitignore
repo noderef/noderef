@@ -51,6 +51,7 @@ master.key
 
 # Turbo
 .turbo/
+.fallow/
 
 # Neutralino
 .storage/
