@@ -149,6 +149,52 @@ export const mapPublicApiGroupsResponse = (response: any): AuthorityResult[] => 
   }));
 };
 
+/** Pagination block from Alfresco public list responses (e.g. groups.listGroups). */
+export interface PublicApiListPagination {
+  hasMoreItems: boolean;
+  totalItems?: number;
+  skipCount: number;
+  maxItems: number;
+  count: number;
+}
+
+export function parsePublicApiListPagination(
+  response: unknown
+): PublicApiListPagination | undefined {
+  const list = (response as { list?: { pagination?: Record<string, unknown> } })?.list;
+  const p = list?.pagination;
+  if (!p || typeof p !== 'object') return undefined;
+  return {
+    hasMoreItems: Boolean(p.hasMoreItems),
+    totalItems: typeof p.totalItems === 'number' ? p.totalItems : undefined,
+    skipCount: Number(p.skipCount ?? 0),
+    maxItems: Number(p.maxItems ?? 0),
+    count: Number(p.count ?? 0),
+  };
+}
+
+/** Escape a value for use inside single quotes in a GET /groups `where` clause. */
+export function escapeGroupWhereQuotedString(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+/**
+ * Alfresco GET /groups — exact display name (where=(displayName in ('…'))).
+ * @see https://api-explorer.alfresco.com (groups → listGroups)
+ */
+export function buildGroupListWhereDisplayNameEquals(displayName: string): string {
+  return `(displayName in ('${escapeGroupWhereQuotedString(displayName)}'))`;
+}
+
+/**
+ * Substring filter on displayName via `matches` (wildcard * around literal).
+ * Unsupported on some servers; callers may fall back to another API.
+ */
+export function buildGroupListWhereDisplayNameContains(text: string): string {
+  const literal = escapeGroupWhereQuotedString(text).replace(/\*/g, '');
+  return `(displayName matches ('*${literal}*'))`;
+}
+
 export const mapPublicApiMembersResponse = (response: any): AuthorityResult[] => {
   const list = response?.list ?? response;
   const entries = Array.isArray(list?.entries)

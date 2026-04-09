@@ -40,19 +40,24 @@ import {
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import { IconPlus, IconSearch, IconTrash, IconUsers, IconUsersGroup } from '@tabler/icons-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  buildGroupListWhereDisplayNameContains,
+  mapGroupsWebscriptResponse,
   mapPublicApiGroupsResponse,
   mapPublicApiMembersResponse,
   mapPublicApiPeopleDetailResponse,
   mapPublicApiPeopleResponse,
+  parsePublicApiListPagination,
   type AuthorityResult,
   type AuthorityType,
   type PersonDetail,
 } from './authorityUtils';
 
 const PAGE_SIZE = 50;
+/** Groups shown in Create User multi-select (separate from groups-tab list / search). */
+const GROUP_PICKER_MAX = 200;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 interface UsersGroupsModalPayload {
@@ -70,16 +75,32 @@ export function UsersGroupsModal() {
   const getServerById = useServersStore(state => state.getServerById);
 
   const [activeTab, setActiveTab] = useState<'users' | 'groups'>('users');
-  const [loading, setLoading] = useState(false);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersLoadingMore, setUsersLoadingMore] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  /** Shared debounced value for server-side search on Users and Groups tabs. */
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
 
-  // Users state
-  const [users, setUsers] = useState<PersonDetail[]>([]);
-  const usersRequestRef = useRef(0);
+  // Users tab: server-paged list + backend search (listPeople / queries.findPeople)
+  const [usersTabList, setUsersTabList] = useState<PersonDetail[]>([]);
+  const [usersTabHasMore, setUsersTabHasMore] = useState(false);
+  const usersTabRequestRef = useRef(0);
+  const usersTabNextSkipRef = useRef(0);
+  const usersScrollViewportRef = useRef<HTMLDivElement>(null);
+  const usersLoadMoreLockRef = useRef(false);
 
-  // Groups state
-  const [groups, setGroups] = useState<AuthorityResult[]>([]);
-  const groupsRequestRef = useRef(0);
+  // Groups tab: server-paged list + backend search (GET /groups; webscript fallback)
+  const [groupsTabList, setGroupsTabList] = useState<AuthorityResult[]>([]);
+  const [groupsTabHasMore, setGroupsTabHasMore] = useState(false);
+  const [groupsTabLoading, setGroupsTabLoading] = useState(false);
+  const [groupsTabLoadingMore, setGroupsTabLoadingMore] = useState(false);
+  const groupsTabRequestRef = useRef(0);
+  const groupsTabNextSkipRef = useRef(0);
+  const groupsScrollViewportRef = useRef<HTMLDivElement>(null);
+  const groupsLoadMoreLockRef = useRef(false);
+
+  // Groups for Create User picker (not affected by groups-tab search)
+  const [groupsPickerList, setGroupsPickerList] = useState<AuthorityResult[]>([]);
 
   // Per-user group memberships (lazy loaded)
   const [userGroupsMap, setUserGroupsMap] = useState<Record<string, AuthorityResult[]>>({});
@@ -117,97 +138,353 @@ export function UsersGroupsModal() {
 
   /* ---- Data loading ---- */
 
-  const loadUsers = useCallback(async () => {
-    if (!server?.baseUrl || !modalPayload) return;
-    const requestId = ++usersRequestRef.current;
-    setLoading(true);
-    try {
-      const response = await alfrescoRpc.call(
-        'people.listPeople',
-        { skipCount: 0, maxItems: PAGE_SIZE },
-        server.baseUrl,
-        modalPayload.serverId
-      );
-      if (requestId !== usersRequestRef.current) return;
-      setUsers(mapPublicApiPeopleDetailResponse(response));
-    } catch (err) {
-      console.error('[UsersGroupsModal] Failed to load users', err);
-      if (requestId === usersRequestRef.current) {
-        notifications.show({
-          color: 'red',
-          title: t('usersGroups:loadError'),
-          message: err instanceof Error ? err.message : t('common:error'),
-        });
-      }
-    } finally {
-      if (requestId === usersRequestRef.current) setLoading(false);
-    }
-  }, [modalPayload, server?.baseUrl, t]);
+  const PEOPLE_LIST_ORDER_BY = ['lastName', 'firstName'] as const;
 
-  const loadGroups = useCallback(async () => {
+  const fetchUsersTab = useCallback(
+    async ({ reset, append }: { reset: boolean; append: boolean }) => {
+      if (!server?.baseUrl || !modalPayload) return;
+      const query = debouncedSearchQuery.trim();
+      const requestId = ++usersTabRequestRef.current;
+
+      if (reset) {
+        setUsersLoading(true);
+        usersTabNextSkipRef.current = 0;
+        setUserGroupsMap({});
+        setUserGroupsLoading({});
+      } else if (append) {
+        setUsersLoadingMore(true);
+      }
+
+      const skipCount = reset ? 0 : usersTabNextSkipRef.current;
+      const orderBy = [...PEOPLE_LIST_ORDER_BY];
+
+      try {
+        let response: unknown;
+        let mapped: PersonDetail[];
+
+        if (query) {
+          response = await alfrescoRpc.call(
+            'queries.findPeople',
+            [query, { skipCount, maxItems: PAGE_SIZE, orderBy }],
+            server.baseUrl,
+            modalPayload.serverId
+          );
+          mapped = mapPublicApiPeopleDetailResponse(response);
+        } else {
+          response = await alfrescoRpc.call(
+            'people.listPeople',
+            { skipCount, maxItems: PAGE_SIZE, orderBy },
+            server.baseUrl,
+            modalPayload.serverId
+          );
+          mapped = mapPublicApiPeopleDetailResponse(response);
+        }
+
+        if (requestId !== usersTabRequestRef.current) return;
+
+        const pagination = parsePublicApiListPagination(response);
+        let hasMore: boolean;
+        if (pagination) {
+          usersTabNextSkipRef.current = pagination.skipCount + pagination.count;
+          hasMore = pagination.hasMoreItems;
+        } else {
+          usersTabNextSkipRef.current = skipCount + mapped.length;
+          hasMore = mapped.length === PAGE_SIZE;
+        }
+
+        setUsersTabHasMore(hasMore);
+        setUsersTabList(prev => (reset || !append ? mapped : [...prev, ...mapped]));
+      } catch (err) {
+        console.error('[UsersGroupsModal] Failed to load users tab', err);
+        if (requestId === usersTabRequestRef.current) {
+          notifications.show({
+            color: 'red',
+            title: t('usersGroups:loadError'),
+            message: err instanceof Error ? err.message : t('common:error'),
+          });
+          if (reset) {
+            setUsersTabList([]);
+            setUsersTabHasMore(false);
+          }
+        }
+      } finally {
+        if (requestId === usersTabRequestRef.current) {
+          setUsersLoading(false);
+          setUsersLoadingMore(false);
+        }
+      }
+    },
+    [debouncedSearchQuery, modalPayload, server?.baseUrl, t]
+  );
+
+  const loadMoreUsersTab = useCallback(async () => {
+    if (!usersTabHasMore || usersLoading || usersLoadingMore || usersLoadMoreLockRef.current) {
+      return;
+    }
+    usersLoadMoreLockRef.current = true;
+    try {
+      await fetchUsersTab({ reset: false, append: true });
+    } finally {
+      usersLoadMoreLockRef.current = false;
+    }
+  }, [fetchUsersTab, usersLoading, usersLoadingMore, usersTabHasMore]);
+
+  const loadGroupsPicker = useCallback(async () => {
     if (!server?.baseUrl || !modalPayload) return;
-    const requestId = ++groupsRequestRef.current;
-    setLoading(true);
     try {
       const response = await alfrescoRpc.call(
         'groups.listGroups',
-        { skipCount: 0, maxItems: PAGE_SIZE },
+        { skipCount: 0, maxItems: GROUP_PICKER_MAX, orderBy: ['displayName'] },
         server.baseUrl,
         modalPayload.serverId
       );
-      if (requestId !== groupsRequestRef.current) return;
-      setGroups(mapPublicApiGroupsResponse(response));
+      setGroupsPickerList(mapPublicApiGroupsResponse(response));
     } catch (err) {
-      console.error('[UsersGroupsModal] Failed to load groups', err);
-      if (requestId === groupsRequestRef.current) {
-        notifications.show({
-          color: 'red',
-          title: t('usersGroups:loadError'),
-          message: err instanceof Error ? err.message : t('common:error'),
-        });
-      }
-    } finally {
-      if (requestId === groupsRequestRef.current) setLoading(false);
+      console.error('[UsersGroupsModal] Failed to load groups for picker', err);
+      notifications.show({
+        color: 'red',
+        title: t('usersGroups:loadError'),
+        message: err instanceof Error ? err.message : t('common:error'),
+      });
+      setGroupsPickerList([]);
     }
   }, [modalPayload, server?.baseUrl, t]);
 
-  // Load data when modal opens – always load both users and groups
-  // so the Create User group picker is populated regardless of active tab.
+  const fetchGroupsTab = useCallback(
+    async ({ reset, append }: { reset: boolean; append: boolean }) => {
+      if (!server?.baseUrl || !modalPayload) return;
+      const query = debouncedSearchQuery.trim();
+      const requestId = ++groupsTabRequestRef.current;
+
+      if (reset) {
+        setGroupsTabLoading(true);
+        groupsTabNextSkipRef.current = 0;
+      } else if (append) {
+        setGroupsTabLoadingMore(true);
+      }
+
+      const skipCount = reset ? 0 : groupsTabNextSkipRef.current;
+      const orderBy = ['displayName'];
+
+      try {
+        let response: unknown;
+        let mapped: AuthorityResult[];
+
+        if (query) {
+          const literalForSearch = query.replace(/\*/g, '').trim();
+          if (!literalForSearch) {
+            mapped = [];
+            response = {};
+            groupsTabNextSkipRef.current = 0;
+          } else {
+            const where = buildGroupListWhereDisplayNameContains(query);
+            try {
+              response = await alfrescoRpc.call(
+                'groups.listGroups',
+                { skipCount, maxItems: PAGE_SIZE, orderBy, where },
+                server.baseUrl,
+                modalPayload.serverId
+              );
+              mapped = mapPublicApiGroupsResponse(response);
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              const tryFallback =
+                /\b400\b/i.test(msg) ||
+                /where/i.test(msg) ||
+                /predicate/i.test(msg) ||
+                /bad request/i.test(msg);
+              if (!tryFallback) throw err;
+              response = await alfrescoRpc.call(
+                'webscript.executeWebScript',
+                [
+                  'GET',
+                  'api/groups',
+                  {
+                    shortNameFilter: query,
+                    skipCount,
+                    maxItems: PAGE_SIZE,
+                    sortBy: 'displayName',
+                    dir: 'asc',
+                  },
+                ],
+                server.baseUrl,
+                modalPayload.serverId
+              );
+              mapped = mapGroupsWebscriptResponse(response);
+            }
+          }
+        } else {
+          response = await alfrescoRpc.call(
+            'groups.listGroups',
+            { skipCount, maxItems: PAGE_SIZE, orderBy },
+            server.baseUrl,
+            modalPayload.serverId
+          );
+          mapped = mapPublicApiGroupsResponse(response);
+        }
+
+        if (requestId !== groupsTabRequestRef.current) return;
+
+        const pagination = parsePublicApiListPagination(response);
+        let hasMore: boolean;
+        if (pagination) {
+          groupsTabNextSkipRef.current = pagination.skipCount + pagination.count;
+          hasMore = pagination.hasMoreItems;
+        } else {
+          groupsTabNextSkipRef.current = skipCount + mapped.length;
+          hasMore = mapped.length === PAGE_SIZE;
+        }
+
+        setGroupsTabHasMore(hasMore);
+        setGroupsTabList(prev => (reset || !append ? mapped : [...prev, ...mapped]));
+      } catch (err) {
+        console.error('[UsersGroupsModal] Failed to load groups tab', err);
+        if (requestId === groupsTabRequestRef.current) {
+          notifications.show({
+            color: 'red',
+            title: t('usersGroups:loadError'),
+            message: err instanceof Error ? err.message : t('common:error'),
+          });
+          if (reset) {
+            setGroupsTabList([]);
+            setGroupsTabHasMore(false);
+          }
+        }
+      } finally {
+        if (requestId === groupsTabRequestRef.current) {
+          setGroupsTabLoading(false);
+          setGroupsTabLoadingMore(false);
+        }
+      }
+    },
+    [debouncedSearchQuery, modalPayload, server?.baseUrl, t]
+  );
+
+  const loadMoreGroupsTab = useCallback(async () => {
+    if (
+      !groupsTabHasMore ||
+      groupsTabLoading ||
+      groupsTabLoadingMore ||
+      groupsLoadMoreLockRef.current
+    ) {
+      return;
+    }
+    groupsLoadMoreLockRef.current = true;
+    try {
+      await fetchGroupsTab({ reset: false, append: true });
+    } finally {
+      groupsLoadMoreLockRef.current = false;
+    }
+  }, [fetchGroupsTab, groupsTabHasMore, groupsTabLoading, groupsTabLoadingMore]);
+
+  // Debounce search for server-side People / Groups list APIs.
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedSearchQuery(searchQuery), 300);
+    return () => window.clearTimeout(handle);
+  }, [searchQuery]);
+
+  // Load data when modal opens – sync debounced query + group picker; user list loads via Users-tab effect.
   useEffect(() => {
     if (!isOpen || !modalPayload) return;
     setSearchQuery('');
-    loadUsers();
-    loadGroups();
+    setDebouncedSearchQuery('');
+    loadGroupsPicker();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, modalPayload]);
 
-  // Reload the active tab's data when switching
+  // Users tab: refetch when debounced search changes or tab opens.
   useEffect(() => {
-    if (!isOpen || !modalPayload) return;
-    if (activeTab === 'users') {
-      loadUsers();
-    } else {
-      loadGroups();
+    if (!isOpen || !modalPayload || activeTab !== 'users') return;
+    void fetchUsersTab({ reset: true, append: false });
+  }, [activeTab, debouncedSearchQuery, fetchUsersTab, isOpen, modalPayload]);
+
+  // Groups tab: refetch when debounced search changes while on Groups tab.
+  useEffect(() => {
+    if (!isOpen || !modalPayload || activeTab !== 'groups') return;
+    void fetchGroupsTab({ reset: true, append: false });
+  }, [activeTab, debouncedSearchQuery, fetchGroupsTab, isOpen, modalPayload]);
+
+  // Infinite scroll (users tab viewport)
+  useEffect(() => {
+    const el = usersScrollViewportRef.current;
+    if (!el || activeTab !== 'users') return;
+
+    const onScroll = () => {
+      if (!usersTabHasMore || usersLoading || usersLoadingMore) return;
+      if (el.scrollHeight - el.scrollTop - el.clientHeight < 72) {
+        void loadMoreUsersTab();
+      }
+    };
+
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [
+    activeTab,
+    loadMoreUsersTab,
+    usersLoading,
+    usersLoadingMore,
+    usersTabHasMore,
+    usersTabList.length,
+  ]);
+
+  // If user list does not fill the viewport, keep loading until it does or there is no more data.
+  useEffect(() => {
+    if (activeTab !== 'users') return;
+    if (!usersTabHasMore || usersLoading || usersLoadingMore) return;
+    const el = usersScrollViewportRef.current;
+    if (!el) return;
+    if (el.scrollHeight <= el.clientHeight + 2) {
+      void loadMoreUsersTab();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
+  }, [
+    activeTab,
+    loadMoreUsersTab,
+    usersLoading,
+    usersLoadingMore,
+    usersTabHasMore,
+    usersTabList.length,
+  ]);
 
-  // Filter results client-side based on search
-  const filteredUsers = useMemo(() => {
-    if (!searchQuery.trim()) return users;
-    const q = searchQuery.trim().toLowerCase();
-    return users.filter(
-      u => u.displayName.toLowerCase().includes(q) || u.id.toLowerCase().includes(q)
-    );
-  }, [users, searchQuery]);
+  // Infinite scroll (groups tab viewport)
+  useEffect(() => {
+    const el = groupsScrollViewportRef.current;
+    if (!el || activeTab !== 'groups') return;
 
-  const filteredGroups = useMemo(() => {
-    if (!searchQuery.trim()) return groups;
-    const q = searchQuery.trim().toLowerCase();
-    return groups.filter(
-      g => g.displayName.toLowerCase().includes(q) || g.id.toLowerCase().includes(q)
-    );
-  }, [groups, searchQuery]);
+    const onScroll = () => {
+      if (!groupsTabHasMore || groupsTabLoading || groupsTabLoadingMore) return;
+      if (el.scrollHeight - el.scrollTop - el.clientHeight < 72) {
+        void loadMoreGroupsTab();
+      }
+    };
+
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [
+    activeTab,
+    groupsTabHasMore,
+    groupsTabList.length,
+    groupsTabLoading,
+    groupsTabLoadingMore,
+    loadMoreGroupsTab,
+  ]);
+
+  // If the first page(s) do not fill the viewport, keep loading until they do or there is no more data.
+  useEffect(() => {
+    if (activeTab !== 'groups') return;
+    if (!groupsTabHasMore || groupsTabLoading || groupsTabLoadingMore) return;
+    const el = groupsScrollViewportRef.current;
+    if (!el) return;
+    if (el.scrollHeight <= el.clientHeight + 2) {
+      void loadMoreGroupsTab();
+    }
+  }, [
+    activeTab,
+    groupsTabHasMore,
+    groupsTabList.length,
+    groupsTabLoading,
+    groupsTabLoadingMore,
+    loadMoreGroupsTab,
+  ]);
 
   /* ---- Lazy-load user's groups on accordion open ---- */
 
@@ -295,7 +572,7 @@ export function UsersGroupsModal() {
         message: t('usersGroups:createUserSuccess', { name: userId }),
       });
       resetCreateUserForm();
-      loadUsers();
+      void fetchUsersTab({ reset: true, append: false });
     } catch (err) {
       console.error('[UsersGroupsModal] Failed to create user', err);
       notifications.show({
@@ -339,7 +616,8 @@ export function UsersGroupsModal() {
         }),
       });
       resetCreateGroupForm();
-      loadGroups();
+      await loadGroupsPicker();
+      void fetchGroupsTab({ reset: true, append: false });
     } catch (err) {
       console.error('[UsersGroupsModal] Failed to create group', err);
       notifications.show({
@@ -374,7 +652,8 @@ export function UsersGroupsModal() {
             title: t('common:success'),
             message: t('usersGroups:deleteGroupSuccess', { name: displayName }),
           });
-          setGroups(prev => prev.filter(g => g.id !== groupId));
+          setGroupsTabList(prev => prev.filter(g => g.id !== groupId));
+          setGroupsPickerList(prev => prev.filter(g => g.id !== groupId));
         } catch (err) {
           console.error('[UsersGroupsModal] Failed to delete group', err);
           notifications.show({
@@ -550,8 +829,12 @@ export function UsersGroupsModal() {
     if (!isOpen) {
       setActiveTab('users');
       setSearchQuery('');
-      setUsers([]);
-      setGroups([]);
+      setDebouncedSearchQuery('');
+      setUsersTabList([]);
+      setUsersTabHasMore(false);
+      setGroupsTabList([]);
+      setGroupsTabHasMore(false);
+      setGroupsPickerList([]);
       resetCreateUserForm();
       resetCreateGroupForm();
       closeMembersModal();
@@ -602,7 +885,8 @@ export function UsersGroupsModal() {
             <Stack gap="sm">
               <Group justify="space-between" align="center">
                 <Text fw={600}>
-                  {t('usersGroups:tabUsers')} ({filteredUsers.length})
+                  {t('usersGroups:tabUsers')} ({usersTabList.length}
+                  {usersTabHasMore ? '+' : ''})
                 </Text>
                 <Button
                   size="xs"
@@ -614,103 +898,110 @@ export function UsersGroupsModal() {
                 </Button>
               </Group>
 
-              <ScrollArea h={380}>
-                {loading ? (
+              <ScrollArea h={380} viewportRef={usersScrollViewportRef}>
+                {usersLoading ? (
                   <Group justify="center" py="xl">
                     <Loader size="sm" />
                     <Text c="dimmed" size="sm">
                       {t('common:loading')}
                     </Text>
                   </Group>
-                ) : filteredUsers.length === 0 ? (
+                ) : usersTabList.length === 0 ? (
                   <Text size="sm" c="dimmed" py="xs">
                     {t('usersGroups:noResults')}
                   </Text>
                 ) : (
-                  <Accordion variant="contained" onChange={handleUserAccordionChange}>
-                    {filteredUsers.map(user => (
-                      <Accordion.Item key={user.id} value={user.id}>
-                        <Accordion.Control>
-                          <Group justify="space-between" align="center" pr="xs">
-                            <Stack gap={2}>
-                              <Text size="sm" fw={500}>
-                                {user.displayName}
-                              </Text>
-                              <Text size="xs" c="dimmed">
-                                {user.id}
-                              </Text>
-                            </Stack>
-                          </Group>
-                        </Accordion.Control>
-                        <Accordion.Panel>
-                          <Stack gap="xs">
-                            {/* User details */}
-                            <Group gap="xl">
-                              {user.email && (
-                                <Stack gap={0}>
-                                  <Text size="xs" c="dimmed">
-                                    {t('usersGroups:email')}
-                                  </Text>
-                                  <Text size="sm">{user.email}</Text>
-                                </Stack>
-                              )}
-                              {(user.firstName || user.lastName) && (
-                                <Stack gap={0}>
-                                  <Text size="xs" c="dimmed">
-                                    {t('usersGroups:name')}
-                                  </Text>
-                                  <Text size="sm">
-                                    {[user.firstName, user.lastName].filter(Boolean).join(' ')}
-                                  </Text>
-                                </Stack>
-                              )}
-                              <Stack gap={0}>
-                                <Text size="xs" c="dimmed">
-                                  {t('usersGroups:status')}
+                  <Stack gap="xs">
+                    <Accordion variant="contained" onChange={handleUserAccordionChange}>
+                      {usersTabList.map(user => (
+                        <Accordion.Item key={user.id} value={user.id}>
+                          <Accordion.Control>
+                            <Group justify="space-between" align="center" pr="xs">
+                              <Stack gap={2}>
+                                <Text size="sm" fw={500}>
+                                  {user.displayName}
                                 </Text>
-                                <Badge
-                                  size="sm"
-                                  variant="light"
-                                  color={user.enabled ? 'green' : 'red'}
-                                >
-                                  {user.enabled
-                                    ? t('usersGroups:enabled')
-                                    : t('usersGroups:disabled')}
-                                </Badge>
+                                <Text size="xs" c="dimmed">
+                                  {user.id}
+                                </Text>
                               </Stack>
                             </Group>
-
-                            {/* Group memberships */}
-                            {userGroupsLoading[user.id] ? (
-                              <Group gap="xs">
-                                <Loader size="xs" />
-                                <Text size="xs" c="dimmed">
-                                  {t('common:loading')}
-                                </Text>
+                          </Accordion.Control>
+                          <Accordion.Panel>
+                            <Stack gap="xs">
+                              {/* User details */}
+                              <Group gap="xl">
+                                {user.email && (
+                                  <Stack gap={0}>
+                                    <Text size="xs" c="dimmed">
+                                      {t('usersGroups:email')}
+                                    </Text>
+                                    <Text size="sm">{user.email}</Text>
+                                  </Stack>
+                                )}
+                                {(user.firstName || user.lastName) && (
+                                  <Stack gap={0}>
+                                    <Text size="xs" c="dimmed">
+                                      {t('usersGroups:name')}
+                                    </Text>
+                                    <Text size="sm">
+                                      {[user.firstName, user.lastName].filter(Boolean).join(' ')}
+                                    </Text>
+                                  </Stack>
+                                )}
+                                <Stack gap={0}>
+                                  <Text size="xs" c="dimmed">
+                                    {t('usersGroups:status')}
+                                  </Text>
+                                  <Badge
+                                    size="sm"
+                                    variant="light"
+                                    color={user.enabled ? 'green' : 'red'}
+                                  >
+                                    {user.enabled
+                                      ? t('usersGroups:enabled')
+                                      : t('usersGroups:disabled')}
+                                  </Badge>
+                                </Stack>
                               </Group>
-                            ) : userGroupsMap[user.id] && userGroupsMap[user.id].length > 0 ? (
-                              <>
-                                <Text size="xs" fw={600}>
-                                  {t('usersGroups:memberOfGroups')}
-                                </Text>
-                                <Group gap="xs" wrap="wrap">
-                                  {userGroupsMap[user.id].map(g => (
-                                    <Badge key={g.id} size="sm" variant="light">
-                                      {g.displayName || g.id}
-                                    </Badge>
-                                  ))}
+
+                              {/* Group memberships */}
+                              {userGroupsLoading[user.id] ? (
+                                <Group gap="xs">
+                                  <Loader size="xs" />
+                                  <Text size="xs" c="dimmed">
+                                    {t('common:loading')}
+                                  </Text>
                                 </Group>
-                              </>
-                            ) : (
-                              <Text size="xs" c="dimmed">
-                                {t('usersGroups:noGroupMemberships')}
-                              </Text>
-                            )}
-                          </Stack>
-                        </Accordion.Panel>
-                      </Accordion.Item>
-                    ))}
-                  </Accordion>
+                              ) : userGroupsMap[user.id] && userGroupsMap[user.id].length > 0 ? (
+                                <>
+                                  <Text size="xs" fw={600}>
+                                    {t('usersGroups:memberOfGroups')}
+                                  </Text>
+                                  <Group gap="xs" wrap="wrap">
+                                    {userGroupsMap[user.id].map(g => (
+                                      <Badge key={g.id} size="sm" variant="light">
+                                        {g.displayName || g.id}
+                                      </Badge>
+                                    ))}
+                                  </Group>
+                                </>
+                              ) : (
+                                <Text size="xs" c="dimmed">
+                                  {t('usersGroups:noGroupMemberships')}
+                                </Text>
+                              )}
+                            </Stack>
+                          </Accordion.Panel>
+                        </Accordion.Item>
+                      ))}
+                    </Accordion>
+                    {usersLoadingMore ? (
+                      <Group justify="center" py="sm">
+                        <Loader size="xs" />
+                      </Group>
+                    ) : null}
+                  </Stack>
                 )}
               </ScrollArea>
             </Stack>
@@ -719,7 +1010,8 @@ export function UsersGroupsModal() {
             <Stack gap="sm">
               <Group justify="space-between" align="center">
                 <Text fw={600}>
-                  {t('usersGroups:tabGroups')} ({filteredGroups.length})
+                  {t('usersGroups:tabGroups')} ({groupsTabList.length}
+                  {groupsTabHasMore ? '+' : ''})
                 </Text>
                 <Button
                   size="xs"
@@ -731,21 +1023,21 @@ export function UsersGroupsModal() {
                 </Button>
               </Group>
 
-              <ScrollArea h={380}>
-                {loading ? (
+              <ScrollArea h={380} viewportRef={groupsScrollViewportRef}>
+                {groupsTabLoading ? (
                   <Group justify="center" py="xl">
                     <Loader size="sm" />
                     <Text c="dimmed" size="sm">
                       {t('common:loading')}
                     </Text>
                   </Group>
-                ) : filteredGroups.length === 0 ? (
+                ) : groupsTabList.length === 0 ? (
                   <Text size="sm" c="dimmed" py="xs">
                     {t('usersGroups:noResults')}
                   </Text>
                 ) : (
                   <Stack gap="xs">
-                    {filteredGroups.map(group => (
+                    {groupsTabList.map(group => (
                       <Paper key={group.id} withBorder p="xs">
                         <Group justify="space-between" align="center">
                           <Stack gap={2}>
@@ -783,6 +1075,11 @@ export function UsersGroupsModal() {
                         </Group>
                       </Paper>
                     ))}
+                    {groupsTabLoadingMore ? (
+                      <Group justify="center" py="sm">
+                        <Loader size="xs" />
+                      </Group>
+                    ) : null}
                   </Stack>
                 )}
               </ScrollArea>
@@ -849,7 +1146,7 @@ export function UsersGroupsModal() {
           <MultiSelect
             label={t('usersGroups:assignToGroups')}
             placeholder={t('usersGroups:assignToGroupsPlaceholder')}
-            data={groups.map(g => ({ value: g.id, label: g.displayName || g.id }))}
+            data={groupsPickerList.map(g => ({ value: g.id, label: g.displayName || g.id }))}
             value={newUserGroups}
             onChange={setNewUserGroups}
             searchable
