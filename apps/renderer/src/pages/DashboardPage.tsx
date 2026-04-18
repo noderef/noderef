@@ -16,11 +16,15 @@
 
 import { backendRpc } from '@/core/ipc/backend';
 import type { PinnedInsightDashboard } from '@/core/ipc/backend';
-import type { NodeHistoryActivitySummary, NodeHistoryTimelineItem } from '@app/contracts';
+import type {
+  InsightRangeDays,
+  NodeHistoryActivitySummary,
+  NodeHistoryTimelineItem,
+} from '@app/contracts';
 import { Heatmap } from '@mantine/charts';
 import { InsightGraphCard } from '@/components/insights/InsightGraphCard';
 import { useServersStore } from '@/core/store/servers';
-import { normalizeInsightRangeDays, type InsightRangeDays } from '@/utils/insightsRange';
+import { normalizeInsightRangeDays } from '@/utils/insightsRange';
 import {
   Alert,
   Anchor,

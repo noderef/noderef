@@ -174,16 +174,8 @@ export function parsePublicApiListPagination(
 }
 
 /** Escape a value for use inside single quotes in a GET /groups `where` clause. */
-export function escapeGroupWhereQuotedString(value: string): string {
+function escapeGroupWhereQuotedString(value: string): string {
   return value.replace(/'/g, "''");
-}
-
-/**
- * Alfresco GET /groups — exact display name (where=(displayName in ('…'))).
- * @see https://api-explorer.alfresco.com (groups → listGroups)
- */
-export function buildGroupListWhereDisplayNameEquals(displayName: string): string {
-  return `(displayName in ('${escapeGroupWhereQuotedString(displayName)}'))`;
 }
 
 /**

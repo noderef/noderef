@@ -20,7 +20,7 @@ import {
   type InsightRangeDays,
 } from '@app/contracts';
 
-export { DEFAULT_INSIGHT_RANGE_DAYS, INSIGHT_RANGE_DAYS, type InsightRangeDays };
+export { INSIGHT_RANGE_DAYS };
 
 export function isInsightRangeDays(value: number): value is InsightRangeDays {
   return INSIGHT_RANGE_DAYS.includes(value as InsightRangeDays);

@@ -20,10 +20,9 @@
  * Note: Encryption/decryption of credentials is handled by the service layer
  */
 
-import type { CreateServer, Server, UpdateServer } from '@app/contracts';
+import type { CreateServer, InsightRangeDays, Server, UpdateServer } from '@app/contracts';
 import type { PrismaClient, Server as PrismaServer } from '@prisma/client';
-import type { InsightRangeDays } from '../constants/insights.js';
-import { normalizeInsightRangeDays } from '../constants/insights.js';
+import { DEFAULT_INSIGHT_RANGE_DAYS, VALID_INSIGHT_RANGE_DAYS } from '../constants/insights.js';
 
 export type ServerEntity = Omit<Server, 'insightRangeDays'> & {
   insightRangeDays: InsightRangeDays;
@@ -36,6 +35,13 @@ type CreateServerInput = Omit<CreateServer, 'insightRangeDays'> & {
 type UpdateServerInput = Omit<UpdateServer, 'insightRangeDays'> & {
   insightRangeDays?: number;
 };
+
+function normalizeInsightRangeDays(value: number | null | undefined): InsightRangeDays {
+  if (typeof value === 'number' && VALID_INSIGHT_RANGE_DAYS.has(value)) {
+    return value as InsightRangeDays;
+  }
+  return DEFAULT_INSIGHT_RANGE_DAYS;
+}
 
 /**
  * Utility to build partial update object with only defined fields

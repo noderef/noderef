@@ -31,8 +31,8 @@ import {
   INSIGHT_RANGE_DAYS as RANGE_OPTIONS,
   isInsightRangeDays,
   normalizeInsightRangeDays,
-  type InsightRangeDays,
 } from '@/utils/insightsRange';
+import type { InsightRangeDays } from '@app/contracts';
 import {
   ActionIcon,
   Alert,

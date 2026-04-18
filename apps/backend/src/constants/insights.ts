@@ -18,25 +18,8 @@ import {
   DEFAULT_INSIGHT_RANGE_DAYS,
   INSIGHT_RANGE_DAYS,
   InsightRangeDaysSchema,
-  type InsightRangeDays,
 } from '@app/contracts';
 
-export {
-  DEFAULT_INSIGHT_RANGE_DAYS,
-  INSIGHT_RANGE_DAYS,
-  InsightRangeDaysSchema,
-  type InsightRangeDays,
-};
+export { DEFAULT_INSIGHT_RANGE_DAYS, InsightRangeDaysSchema };
 
 export const VALID_INSIGHT_RANGE_DAYS = new Set<number>(INSIGHT_RANGE_DAYS);
-
-export function isInsightRangeDays(value: number): value is InsightRangeDays {
-  return INSIGHT_RANGE_DAYS.includes(value as InsightRangeDays);
-}
-
-export function normalizeInsightRangeDays(value: number | null | undefined): InsightRangeDays {
-  if (typeof value === 'number' && isInsightRangeDays(value)) {
-    return value;
-  }
-  return DEFAULT_INSIGHT_RANGE_DAYS;
-}

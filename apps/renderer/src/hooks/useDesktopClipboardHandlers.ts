@@ -171,10 +171,7 @@ export const useDesktopClipboardHandlers = ({
       }
     };
 
-    const handleSelectAllShortcut = (
-      event: KeyboardEvent,
-      container: HTMLElement
-    ): boolean => {
+    const handleSelectAllShortcut = (event: KeyboardEvent, container: HTMLElement): boolean => {
       if (event.key.toLowerCase() !== 'a' || !enableCopyCut) return false;
 
       const target = getTextInputTargetInContainer(event.target, container);
