@@ -18,6 +18,7 @@ import { readClipboardText, writeClipboardText } from '@/core/utils/clipboard';
 import { useEffect, type RefObject } from 'react';
 
 export type EditableTarget = HTMLInputElement | HTMLTextAreaElement | HTMLElement;
+type TextInputTarget = HTMLInputElement | HTMLTextAreaElement;
 
 type DesktopClipboardHandlersOptions = {
   isEnabled: boolean;
@@ -57,6 +58,23 @@ const defaultGetSelectedText = (target: HTMLInputElement | HTMLTextAreaElement):
   if (selectionStart === null || selectionEnd === null) return '';
   if (selectionStart === selectionEnd) return '';
   return value.slice(selectionStart, selectionEnd);
+};
+
+const isTextInputTarget = (target: EditableTarget | null): target is TextInputTarget =>
+  target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
+
+const stopHandledEvent = (event: Event) => {
+  event.preventDefault();
+  event.stopPropagation();
+};
+
+const getTextInputTargetInContainer = (
+  target: EventTarget | null,
+  container: HTMLElement
+): TextInputTarget | null => {
+  const editableTarget = getEditableTarget(target);
+  if (!isTextInputTarget(editableTarget)) return null;
+  return container.contains(editableTarget) ? editableTarget : null;
 };
 
 const isNodeWithinContainer = (node: Node | null | undefined, container: HTMLElement): boolean => {
@@ -104,15 +122,121 @@ export const useDesktopClipboardHandlers = ({
     }
 
     let isProcessingPaste = false;
+    const releasePasteLock = () => {
+      setTimeout(() => {
+        isProcessingPaste = false;
+      }, 50);
+    };
+
+    const copyEditableSelection = async (
+      target: TextInputTarget,
+      event?: ClipboardEvent
+    ): Promise<boolean> => {
+      const selectedText = getSelectedText(target);
+      if (!selectedText) return false;
+      return writeClipboardText(selectedText, event);
+    };
+
+    const copyReadOnlySelection = async (
+      container: HTMLElement,
+      event?: ClipboardEvent
+    ): Promise<boolean> => {
+      const selectedText = getSelectionTextInContainer(container);
+      if (!selectedText) return false;
+      return writeClipboardText(selectedText, event);
+    };
+
+    const pasteIntoTarget = async (
+      target: EditableTarget,
+      event?: ClipboardEvent | KeyboardEvent
+    ): Promise<boolean> => {
+      if (!onInsertText) return false;
+      if (isProcessingPaste) {
+        if (event) stopHandledEvent(event);
+        return false;
+      }
+
+      if (event) {
+        stopHandledEvent(event);
+      }
+      isProcessingPaste = true;
+
+      try {
+        const text = await readClipboardText(event instanceof ClipboardEvent ? event : undefined);
+        if (!text) return false;
+        onInsertText(target, text);
+        return true;
+      } finally {
+        releasePasteLock();
+      }
+    };
+
+    const handleSelectAllShortcut = (
+      event: KeyboardEvent,
+      container: HTMLElement
+    ): boolean => {
+      if (event.key.toLowerCase() !== 'a' || !enableCopyCut) return false;
+
+      const target = getTextInputTargetInContainer(event.target, container);
+      if (!target) return false;
+
+      stopHandledEvent(event);
+      target.focus();
+      target.setSelectionRange(0, target.value.length);
+      return true;
+    };
+
+    const handleEditableCopyCutShortcut = async (
+      event: KeyboardEvent,
+      container: HTMLElement
+    ): Promise<boolean> => {
+      const key = event.key.toLowerCase();
+      if ((key !== 'c' && key !== 'x') || !enableCopyCut) return false;
+
+      const editableTarget = getEditableTarget(event.target);
+      if (!editableTarget || !container.contains(editableTarget)) return false;
+      if (!isTextInputTarget(editableTarget)) return true;
+
+      const selectedText = getSelectedText(editableTarget);
+      if (!selectedText) return true;
+
+      stopHandledEvent(event);
+      const copied = await writeClipboardText(selectedText);
+      if (!copied) return true;
+      if (key === 'x' && onInsertText) {
+        onInsertText(editableTarget, '');
+      }
+      return true;
+    };
+
+    const handleReadOnlyCopyShortcut = async (
+      event: KeyboardEvent,
+      container: HTMLElement
+    ): Promise<boolean> => {
+      if (event.key.toLowerCase() !== 'c' || !enableReadOnlyCopy) return false;
+
+      const selectedText = getSelectionTextInContainer(container);
+      if (!selectedText) return false;
+
+      stopHandledEvent(event);
+      await writeClipboardText(selectedText);
+      return true;
+    };
+
+    const handlePasteShortcut = async (
+      event: KeyboardEvent,
+      container: HTMLElement
+    ): Promise<boolean> => {
+      if (event.key.toLowerCase() !== 'v' || !onInsertText) return false;
+
+      const target = getEditableTarget(event.target);
+      if (!target || !container.contains(target)) return false;
+
+      return pasteIntoTarget(target, event);
+    };
 
     const handlePaste = async (event: ClipboardEvent) => {
       if (!onInsertText) return;
-
-      if (isProcessingPaste) {
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
 
       const container = containerRef.current;
       if (!container) return;
@@ -120,20 +244,7 @@ export const useDesktopClipboardHandlers = ({
       if (!editableTarget) return;
       if (!container.contains(editableTarget)) return;
 
-      event.preventDefault();
-      event.stopPropagation();
-      isProcessingPaste = true;
-
-      try {
-        const text = await readClipboardText(event);
-        if (text) {
-          onInsertText(editableTarget, text);
-        }
-      } finally {
-        setTimeout(() => {
-          isProcessingPaste = false;
-        }, 50);
-      }
+      await pasteIntoTarget(editableTarget, event);
     };
 
     const handleCopy = async (event: ClipboardEvent) => {
@@ -142,119 +253,29 @@ export const useDesktopClipboardHandlers = ({
 
       // Handle copy from editable targets
       if (enableCopyCut) {
-        const editableTarget = getEditableTarget(event.target);
-        if (
-          editableTarget &&
-          (editableTarget instanceof HTMLInputElement ||
-            editableTarget instanceof HTMLTextAreaElement)
-        ) {
-          if (!container.contains(editableTarget)) return;
-          const selectedText = getSelectedText(editableTarget);
-          if (selectedText) {
-            await writeClipboardText(selectedText, event);
-            return;
-          }
+        const target = getTextInputTargetInContainer(event.target, container);
+        if (target) {
+          const copied = await copyEditableSelection(target, event);
+          if (copied) return;
         }
       }
 
       // Handle copy from read-only content (e.g., tables in NodeBrowser)
       if (enableReadOnlyCopy) {
-        const selectedText = getSelectionTextInContainer(container);
-        if (selectedText) {
-          await writeClipboardText(selectedText, event);
-        }
+        await copyReadOnlySelection(container, event);
       }
     };
 
     const handleKeyDown = async (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey)) return;
 
-      const key = event.key.toLowerCase();
       const container = containerRef.current;
       if (!container) return;
 
-      // Handle Ctrl/Cmd+A for editable targets in desktop mode.
-      // Some Neutralino contexts do not reliably apply native select-all.
-      if (key === 'a') {
-        const editableTarget = getEditableTarget(event.target);
-        if (
-          enableCopyCut &&
-          editableTarget &&
-          (editableTarget instanceof HTMLInputElement ||
-            editableTarget instanceof HTMLTextAreaElement)
-        ) {
-          if (!container.contains(editableTarget)) return;
-          event.preventDefault();
-          event.stopPropagation();
-          editableTarget.focus();
-          editableTarget.setSelectionRange(0, editableTarget.value.length);
-        }
-        return;
-      }
-
-      // Handle Ctrl+C/X for copy/cut
-      if (key === 'c' || key === 'x') {
-        const editableTarget = getEditableTarget(event.target);
-
-        // Handle editable targets (enableCopyCut)
-        if (enableCopyCut && editableTarget) {
-          if (
-            editableTarget instanceof HTMLInputElement ||
-            editableTarget instanceof HTMLTextAreaElement
-          ) {
-            if (!container.contains(editableTarget)) return;
-            const selectedText = getSelectedText(editableTarget);
-            if (!selectedText) return;
-
-            event.preventDefault();
-            event.stopPropagation();
-            const success = await writeClipboardText(selectedText);
-            if (success && key === 'x' && onInsertText) {
-              onInsertText(editableTarget, '');
-            }
-          }
-          return;
-        }
-
-        // Handle read-only content (enableReadOnlyCopy) - only for copy, not cut
-        if (enableReadOnlyCopy && key === 'c') {
-          const selectedText = getSelectionTextInContainer(container);
-          if (selectedText) {
-            event.preventDefault();
-            event.stopPropagation();
-            await writeClipboardText(selectedText);
-          }
-        }
-        return;
-      }
-
-      // Handle Ctrl+V for paste
-      if (key === 'v' && onInsertText) {
-        if (isProcessingPaste) {
-          event.preventDefault();
-          event.stopPropagation();
-          return;
-        }
-
-        const editableTarget = getEditableTarget(event.target);
-        if (!editableTarget) return;
-        if (!container.contains(editableTarget)) return;
-
-        event.preventDefault();
-        event.stopPropagation();
-        isProcessingPaste = true;
-
-        try {
-          const text = await readClipboardText();
-          if (text) {
-            onInsertText(editableTarget, text);
-          }
-        } finally {
-          setTimeout(() => {
-            isProcessingPaste = false;
-          }, 50);
-        }
-      }
+      if (handleSelectAllShortcut(event, container)) return;
+      if (await handleEditableCopyCutShortcut(event, container)) return;
+      if (await handleReadOnlyCopyShortcut(event, container)) return;
+      await handlePasteShortcut(event, container);
     };
 
     // Add paste handler only if onInsertText is provided
