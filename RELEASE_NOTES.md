@@ -1,1 +1,1 @@
-This release fixes **Insights day range** per **server**, so each connection remembers its own default range. For development on this codebase, **Fallow** is now configured.
+This release improves the **Users & Groups** modal with server-side paging, so large directories stay responsive while you browse, filter, and manage accounts. 👥 Desktop **clipboard** handling is more robust in the Neutralino shell for copy, cut, and paste.
