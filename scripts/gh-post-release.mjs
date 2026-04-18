@@ -27,6 +27,68 @@ const ISSUE_BRANCH_PATTERNS = [
   /-#(\d+)\b/g, // matches -#123 in branch names
 ];
 
+function findIssueIdsInBranchName(branchName) {
+  const issues = new Set();
+  for (const pattern of ISSUE_BRANCH_PATTERNS) {
+    let match;
+    pattern.lastIndex = 0;
+    while ((match = pattern.exec(branchName)) !== null) {
+      if (match[1]) {
+        issues.add(match[1]);
+      }
+    }
+  }
+  return Array.from(issues);
+}
+
+function sortIssueIds(issueIds) {
+  return [...issueIds].sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+}
+
+function closeLinkedIssues(issueIds, currentTag) {
+  if (issueIds.length === 0) {
+    return;
+  }
+
+  const repo = process.env.GITHUB_REPOSITORY;
+  if (!repo) {
+    console.warn('GITHUB_REPOSITORY not set, skipping issue close');
+    return;
+  }
+
+  const sorted = sortIssueIds(issueIds);
+  console.log(`Closing linked issues: ${sorted.map(id => `#${id}`).join(', ')}`);
+
+  sorted.forEach(id => {
+    try {
+      const commentLink = `[${currentTag}](https://github.com/${repo}/releases/tag/${currentTag})`;
+      const commentBody = `🚀 Released in ${commentLink}`;
+
+      let state;
+      try {
+        const stateJson = execFileSync(
+          'gh',
+          ['issue', 'view', id, '--json', 'state', '--jq', '.state'],
+          { encoding: 'utf-8', stdio: 'pipe' }
+        );
+        state = stateJson.trim();
+      } catch (e) {
+        console.warn(`Skipping #${id}: Unable to fetch details (might be a PR or not found)`);
+        return;
+      }
+
+      if (state === 'OPEN') {
+        console.log(`Closing #${id}...`);
+        execFileSync('gh', ['issue', 'close', id, '--comment', commentBody], { stdio: 'inherit' });
+      } else {
+        console.log(`Skipping #${id}: Issue is already closed.`);
+      }
+    } catch (e) {
+      console.error(`Failed to process issue #${id}: ${e.message}`);
+    }
+  });
+}
+
 function getTags() {
   try {
     const output = execSync('git tag --sort=-creatordate', { encoding: 'utf-8' });
@@ -213,14 +275,8 @@ function findIssuesInPRs(prs) {
   for (const pr of prs) {
     // Check branch name - use branch-specific patterns
     if (pr.headRefName) {
-      for (const pattern of ISSUE_BRANCH_PATTERNS) {
-        let match;
-        pattern.lastIndex = 0;
-        while ((match = pattern.exec(pr.headRefName)) !== null) {
-          if (match[1]) {
-            issues.add(match[1]);
-          }
-        }
+      for (const id of findIssueIdsInBranchName(pr.headRefName)) {
+        issues.add(id);
       }
     }
 
@@ -279,7 +335,7 @@ function processIssues() {
   const issueIds = Array.from(allIssueIds).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
 
   if (issueIds.length === 0) {
-    console.log('No linked issues found to close.');
+    console.log('No linked issues found in release range (commits / PRs).');
     return;
   }
 
@@ -291,35 +347,7 @@ function processIssues() {
     console.log(`  (from ${sources.join(', ')})`);
   }
 
-  issueIds.forEach(id => {
-    try {
-      const commentLink = `[${currentTag}](https://github.com/${process.env.GITHUB_REPOSITORY}/releases/tag/${currentTag})`;
-      const commentBody = `🚀 Released in ${commentLink}`;
-
-      // Check current status - use execFileSync to avoid shell quoting issues
-      let state;
-      try {
-        const stateJson = execFileSync(
-          'gh',
-          ['issue', 'view', id, '--json', 'state', '--jq', '.state'],
-          { encoding: 'utf-8', stdio: 'pipe' }
-        );
-        state = stateJson.trim();
-      } catch (e) {
-        console.warn(`Skipping #${id}: Unable to fetch details (might be a PR or not found)`);
-        return;
-      }
-
-      if (state === 'OPEN') {
-        console.log(`Closing #${id}...`);
-        execFileSync('gh', ['issue', 'close', id, '--comment', commentBody], { stdio: 'inherit' });
-      } else {
-        console.log(`Skipping #${id}: Issue is already closed.`);
-      }
-    } catch (e) {
-      console.error(`Failed to process issue #${id}: ${e.message}`);
-    }
-  });
+  closeLinkedIssues(issueIds, currentTag);
 }
 
 function cleanupBranches() {
@@ -361,6 +389,23 @@ function cleanupBranches() {
 
   console.log(`Found ${branchesToDelete.length} merged branches to delete:`);
   branchesToDelete.forEach(b => console.log(` - ${b}`));
+
+  const issueIdsFromBranches = new Set();
+  for (const branch of branchesToDelete) {
+    for (const id of findIssueIdsInBranchName(branch)) {
+      issueIdsFromBranches.add(id);
+    }
+  }
+
+  const currentTag = getTags()[0];
+  if (issueIdsFromBranches.size > 0 && currentTag) {
+    console.log(
+      `\nClosing issues referenced by merged branch names (${sortIssueIds(Array.from(issueIdsFromBranches)).join(', ')})...`
+    );
+    closeLinkedIssues(Array.from(issueIdsFromBranches), currentTag);
+  } else if (issueIdsFromBranches.size > 0) {
+    console.warn('No current tag found; skipping issue close from branch names.');
+  }
 
   branchesToDelete.forEach(branch => {
     try {
