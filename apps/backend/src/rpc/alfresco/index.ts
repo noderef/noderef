@@ -23,6 +23,12 @@ import * as authSvc from '../../services/alfresco/authService.js';
 import { getAuthenticatedClientWithRefresh } from '../../services/alfresco/authenticationHelper.js';
 import { callMethod } from '../../services/alfresco/proxyService.js';
 import { getCurrentUserId } from '../../services/userBootstrap.js';
+import {
+  EMPTY_CLASS_NAMES,
+  EMPTY_SEARCH_DICTIONARY,
+  EMPTY_TERN_DEFINITIONS,
+  withOptionalAlfrescoResponse,
+} from './fallbacks.js';
 
 const log = createLogger('alfresco.rpc');
 
@@ -178,17 +184,24 @@ export function registerAlfrescoRpc(
 
   routes['alfresco.search.getDictionary'] = {
     schema: contracts.GetSearchDictionaryReqSchema as unknown as ZSchema,
-    handler: async params => {
-      const { serverId, baseUrl } = contracts.GetSearchDictionaryReqSchema.parse(params);
-      const { getSearchDictionary } = await import('../../services/alfresco/dictionaryService.js');
+    handler: async params =>
+      withOptionalAlfrescoResponse(
+        'Optional search dictionary lookup failed; returning empty response',
+        EMPTY_SEARCH_DICTIONARY,
+        async () => {
+          const { serverId, baseUrl } = contracts.GetSearchDictionaryReqSchema.parse(params);
+          const { getSearchDictionary } = await import(
+            '../../services/alfresco/dictionaryService.js'
+          );
 
-      const api = await authenticateWithStoredCredentials(serverId, baseUrl);
-      if (!api) {
-        AppErrors.unauthorized('Failed to authenticate');
-      }
-      // TypeScript doesn't recognize never-return, so we assert api is defined
-      return getSearchDictionary(api!, serverId);
-    },
+          const api = await authenticateWithStoredCredentials(serverId, baseUrl);
+          if (!api) {
+            AppErrors.unauthorized('Failed to authenticate');
+          }
+          // TypeScript doesn't recognize never-return, so we assert api is defined
+          return getSearchDictionary(api!, serverId);
+        }
+      ),
   };
 
   routes['alfresco.search.propertiesByPrefix'] = {
@@ -197,24 +210,29 @@ export function registerAlfrescoRpc(
       baseUrl: z.string().url(),
       prefix: z.string().min(1),
     }),
-    handler: async params => {
-      const { serverId, baseUrl, prefix } = params as {
-        serverId: number;
-        baseUrl: string;
-        prefix: string;
-      };
-      const { getPropertiesByPrefix } = await import(
-        '../../services/alfresco/dictionaryService.js'
-      );
+    handler: async params =>
+      withOptionalAlfrescoResponse(
+        'Optional property-prefix lookup failed; returning empty response',
+        [],
+        async () => {
+          const { serverId, baseUrl, prefix } = params as {
+            serverId: number;
+            baseUrl: string;
+            prefix: string;
+          };
+          const { getPropertiesByPrefix } = await import(
+            '../../services/alfresco/dictionaryService.js'
+          );
 
-      const api = await authenticateWithStoredCredentials(serverId, baseUrl);
-      if (!api) {
-        AppErrors.unauthorized('Failed to authenticate');
-      }
-      // TypeScript doesn't recognize never-return, so we assert api is defined
-      const apiDefined = api!;
-      return getPropertiesByPrefix(apiDefined, serverId, prefix);
-    },
+          const api = await authenticateWithStoredCredentials(serverId, baseUrl);
+          if (!api) {
+            AppErrors.unauthorized('Failed to authenticate');
+          }
+          // TypeScript doesn't recognize never-return, so we assert api is defined
+          const apiDefined = api!;
+          return getPropertiesByPrefix(apiDefined, serverId, prefix);
+        }
+      ),
   };
 
   routes['alfresco.search.propertyDataTypesByPrefix'] = {
@@ -223,22 +241,27 @@ export function registerAlfrescoRpc(
       baseUrl: z.string().url(),
       prefix: z.string().min(1),
     }),
-    handler: async params => {
-      const { serverId, baseUrl, prefix } = params as {
-        serverId: number;
-        baseUrl: string;
-        prefix: string;
-      };
-      const { getPropertyDataTypesByPrefix } = await import(
-        '../../services/alfresco/dictionaryService.js'
-      );
+    handler: async params =>
+      withOptionalAlfrescoResponse(
+        'Optional property data-type lookup failed; returning empty response',
+        {},
+        async () => {
+          const { serverId, baseUrl, prefix } = params as {
+            serverId: number;
+            baseUrl: string;
+            prefix: string;
+          };
+          const { getPropertyDataTypesByPrefix } = await import(
+            '../../services/alfresco/dictionaryService.js'
+          );
 
-      const api = await authenticateWithStoredCredentials(serverId, baseUrl);
-      if (!api) {
-        AppErrors.unauthorized('Failed to authenticate');
-      }
-      return getPropertyDataTypesByPrefix(api!, serverId, prefix);
-    },
+          const api = await authenticateWithStoredCredentials(serverId, baseUrl);
+          if (!api) {
+            AppErrors.unauthorized('Failed to authenticate');
+          }
+          return getPropertyDataTypesByPrefix(api!, serverId, prefix);
+        }
+      ),
   };
 
   routes['alfresco.search.classesByPrefix'] = {
@@ -247,24 +270,29 @@ export function registerAlfrescoRpc(
       baseUrl: z.string().url(),
       prefix: z.string().min(1),
     }),
-    handler: async params => {
-      const { serverId, baseUrl, prefix } = params as {
-        serverId: number;
-        baseUrl: string;
-        prefix: string;
-      };
-      const { getClassNamesByPrefix } = await import(
-        '../../services/alfresco/dictionaryService.js'
-      );
+    handler: async params =>
+      withOptionalAlfrescoResponse(
+        'Optional class-prefix lookup failed; returning empty response',
+        EMPTY_CLASS_NAMES,
+        async () => {
+          const { serverId, baseUrl, prefix } = params as {
+            serverId: number;
+            baseUrl: string;
+            prefix: string;
+          };
+          const { getClassNamesByPrefix } = await import(
+            '../../services/alfresco/dictionaryService.js'
+          );
 
-      const api = await authenticateWithStoredCredentials(serverId, baseUrl);
-      if (!api) {
-        AppErrors.unauthorized('Failed to authenticate');
-      }
-      // TypeScript doesn't recognize never-return, so we assert api is defined
-      const apiDefined = api!;
-      return getClassNamesByPrefix(apiDefined, serverId, prefix);
-    },
+          const api = await authenticateWithStoredCredentials(serverId, baseUrl);
+          if (!api) {
+            AppErrors.unauthorized('Failed to authenticate');
+          }
+          // TypeScript doesn't recognize never-return, so we assert api is defined
+          const apiDefined = api!;
+          return getClassNamesByPrefix(apiDefined, serverId, prefix);
+        }
+      ),
   };
 
   routes['alfresco.search.searchPaths'] = {
@@ -626,15 +654,20 @@ export function registerAlfrescoRpc(
 
   routes['alfresco.getTernDefinitions'] = {
     schema: GetTernDefinitionsReqSchema as unknown as ZSchema,
-    handler: async params => {
-      const { serverId, baseUrl } = GetTernDefinitionsReqSchema.parse(params);
-      const { getTernDefinitions } = await import('../../services/alfresco/ternService.js');
+    handler: async params =>
+      withOptionalAlfrescoResponse(
+        'Optional Tern definition lookup failed; returning empty response',
+        EMPTY_TERN_DEFINITIONS,
+        async () => {
+          const { serverId, baseUrl } = GetTernDefinitionsReqSchema.parse(params);
+          const { getTernDefinitions } = await import('../../services/alfresco/ternService.js');
 
-      const api = await authenticateWithStoredCredentials(serverId, baseUrl);
-      if (!api) {
-        AppErrors.unauthorized('Failed to authenticate');
-      }
-      return getTernDefinitions(api!);
-    },
+          const api = await authenticateWithStoredCredentials(serverId, baseUrl);
+          if (!api) {
+            AppErrors.unauthorized('Failed to authenticate');
+          }
+          return getTernDefinitions(api!);
+        }
+      ),
   };
 }
