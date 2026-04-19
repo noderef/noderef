@@ -1,6 +1,6 @@
 {
   "applicationId": "nl.noderef.desktop",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "defaultMode": "window",
   "documentRoot": "/resources/",
   "url": "/",
