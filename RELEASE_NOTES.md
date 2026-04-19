@@ -1,1 +1,1 @@
-This release improves the **Users & Groups** modal with server-side paging, so large directories stay responsive while you browse, filter, and manage accounts. 👥 Desktop **clipboard** handling is more robust in the Neutralino shell for copy, cut, and paste.
+This release fixed server connectivity by preventing optional Alfresco failures from taking the local backend down.
