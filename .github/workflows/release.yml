@@ -27,8 +27,6 @@ jobs:
 
       - name: Set up PNPM
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -84,8 +82,6 @@ jobs:
 
       - name: Set up PNPM
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -121,8 +117,6 @@ jobs:
 
       - name: Set up PNPM
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -201,8 +195,6 @@ jobs:
 
       - name: Set up PNPM
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Set up Node
         uses: actions/setup-node@v4
