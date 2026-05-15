@@ -4,6 +4,7 @@
   "private": true,
   "license": "Apache-2.0",
   "description": "NodeRef - The desktop app every Alfresco admin deserves",
+  "packageManager": "pnpm@10.27.0",
   "scripts": {
     "test": "pnpm --filter @app/backend test:run",
     "sync:meta": "node ./scripts/sync-meta.mjs",
