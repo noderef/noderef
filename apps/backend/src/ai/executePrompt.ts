@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import type { LoadedLibs } from './loadLibs.js';
+import type { LoadedLibs } from './types/manifest.js';
 
 interface ExecutionPromptOptions {
   question: string;

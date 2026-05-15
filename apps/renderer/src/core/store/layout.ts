@@ -17,7 +17,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type ContentViewMode = 'monaco' | 'webview';
+type ContentViewMode = 'monaco' | 'webview';
 
 interface MonacoContent {
   content: string;
@@ -33,7 +33,7 @@ interface ContentData {
   webview?: WebViewContent;
 }
 
-export interface LayoutState {
+interface LayoutState {
   selectedServerId: string | null;
   activeTab: string | null;
   selectedMenuItem: string | null;
@@ -42,7 +42,7 @@ export interface LayoutState {
   submenuWidth: number;
 }
 
-export interface LayoutActions {
+interface LayoutActions {
   selectServer: (serverId: string | null) => void;
   setActiveTab: (tabId: string | null) => void;
   setSelectedMenuItem: (menuItemId: string | null) => void;

@@ -33,9 +33,9 @@ import { rpc } from './rpc.js';
 
 export type AppServer = PublicServer;
 
-export type AppCreateServer = Omit<CreateServer, 'userId'>;
+type AppCreateServer = Omit<CreateServer, 'userId'>;
 
-export type AppUpdateServer = UpdateServer;
+type AppUpdateServer = UpdateServer;
 
 /**
  * Backend data services RPC client
@@ -1079,7 +1079,7 @@ export interface RepositoryPaginationInfo {
 
 export type SiteVisibility = 'PUBLIC' | 'PRIVATE' | 'MODERATED';
 
-export interface SiteEntry {
+interface SiteEntry {
   id: string;
   guid?: string;
   title: string;

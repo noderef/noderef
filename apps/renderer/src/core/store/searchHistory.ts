@@ -17,13 +17,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export interface SearchHistoryState {
+interface SearchHistoryState {
   recentTypes: string[]; // Array of type names, most recent first
   recentAspects: string[]; // Array of aspect names, most recent first
   recentProps: string[]; // Array of property names, most recent first
 }
 
-export interface SearchHistoryActions {
+interface SearchHistoryActions {
   addType: (type: string) => void;
   addAspect: (aspect: string) => void;
   addProp: (prop: string) => void;

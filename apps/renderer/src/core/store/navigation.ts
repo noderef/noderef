@@ -19,13 +19,13 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import type { PageKey } from './keys';
 import { PAGE_KEYS } from './keys';
 
-export interface NavigationState {
+interface NavigationState {
   activePage: PageKey;
   history: PageKey[];
   activeServerId: number | null;
 }
 
-export interface NavigationActions {
+interface NavigationActions {
   navigate: (page: PageKey, params?: Record<string, unknown>) => void;
   setActiveServer: (serverId: number | null) => void;
   reset: () => void;

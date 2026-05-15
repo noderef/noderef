@@ -7,5 +7,33 @@
     "scripts/gh-post-release.mjs",
     "scripts/gh-release-generate-changelog.mjs"
   ],
-  "ignorePatterns": ["apps/renderer/public/neutralino.js", "**/neutralino.js"]
+  "ignorePatterns": ["apps/renderer/public/neutralino.js", "**/neutralino.js"],
+  "ignoreDependencies": ["recharts", "@app/contracts"],
+  "overrides": [
+    {
+      "files": ["apps/renderer/index.html"],
+      "rules": {
+        "unresolved-imports": "off"
+      }
+    },
+    {
+      "files": [
+        "apps/backend/src/repositories/aiSettingsRepository.ts",
+        "apps/backend/src/repositories/localFileRepository.ts",
+        "apps/backend/src/repositories/serverRepository.ts",
+        "apps/backend/src/repositories/userRepository.ts",
+        "apps/backend/src/services/agent/AgentService.ts",
+        "apps/backend/src/services/insightGraphService.ts",
+        "apps/backend/src/services/jsConsoleHistoryService.ts",
+        "apps/backend/src/services/localFileService.ts",
+        "apps/backend/src/services/nodeHistoryService.ts",
+        "apps/backend/src/services/savedSearchService.ts",
+        "apps/backend/src/services/searchHistoryService.ts",
+        "apps/backend/src/services/serverService.ts"
+      ],
+      "rules": {
+        "unused-class-members": "off"
+      }
+    }
+  ]
 }

@@ -35,7 +35,7 @@ export interface MentionListRef {
   onKeyDown: (props: { event: KeyboardEvent }) => boolean;
 }
 
-export interface NodeMentionSuggestionProps extends SuggestionProps {
+interface NodeMentionSuggestionProps extends SuggestionProps {
   items: AgentMentionSuggestion[];
   hasMore: boolean;
   loading: boolean;

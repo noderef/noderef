@@ -16,7 +16,7 @@
 
 import { create } from 'zustand';
 
-export interface FileFolderBrowserTab {
+interface FileFolderBrowserTab {
   id: string;
   nodeId: string;
   nodeName: string;

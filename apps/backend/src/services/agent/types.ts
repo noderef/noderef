@@ -23,8 +23,8 @@ import type { AgentMention } from '@app/contracts';
 
 // ── Manifest types (used by agentManifest.ts) ─────────────────────────────────
 
-export type ActionKind = 'read' | 'write';
-export type OperationName =
+type ActionKind = 'read' | 'write';
+type OperationName =
   | 'search'
   | 'search_export_text'
   | 'text_write_begin'
@@ -51,7 +51,7 @@ export type OperationName =
   | 'script_create'
   | 'script_execute';
 
-export interface ActionDefinition {
+interface ActionDefinition {
   description: string;
   tags: string[];
   kind: ActionKind;
@@ -61,12 +61,12 @@ export interface ActionDefinition {
   executor: OperationName;
 }
 
-export interface LibDefinition {
+interface LibDefinition {
   description: string;
   tags: string[];
 }
 
-export interface AgentManifest {
+interface AgentManifest {
   libs: Record<string, LibDefinition>;
   actions: Record<string, ActionDefinition>;
 }
@@ -106,7 +106,7 @@ export interface ResolvedAiRuntime {
   temperature: number;
 }
 
-export interface StructuredPrompt {
+interface StructuredPrompt {
   system: string;
   user: string;
   prefill: string;

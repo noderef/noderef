@@ -18,7 +18,7 @@ import type * as monaco from 'monaco-editor';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export interface ConsoleOutput {
+interface ConsoleOutput {
   id: string;
   timestamp: Date;
   type: 'result' | 'error' | 'log';
@@ -26,7 +26,7 @@ export interface ConsoleOutput {
   serverId?: number;
 }
 
-export interface ConsoleHistoryItem {
+interface ConsoleHistoryItem {
   id: string;
   timestamp: Date;
   code: string;

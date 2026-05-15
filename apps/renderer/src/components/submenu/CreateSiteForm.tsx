@@ -19,7 +19,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SiteVisibility } from '@/core/ipc/backend';
 
-export interface CreateSiteFormValues {
+interface CreateSiteFormValues {
   title: string;
   siteId?: string;
   description?: string;

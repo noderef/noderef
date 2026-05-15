@@ -392,5 +392,4 @@ function TextEditorPage() {
   );
 }
 
-// fallow-ignore-next-line unused-export
 export default TextEditorPage;

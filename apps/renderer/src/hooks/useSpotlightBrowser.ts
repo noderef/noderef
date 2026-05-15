@@ -18,7 +18,7 @@ import { backendRpc, type RepositoryNode } from '@/core/ipc/backend';
 import { useServersStore } from '@/core/store/servers';
 import { useCallback, useState } from 'react';
 
-export type BrowserView = 'HOME' | 'SERVER_LIST' | 'FOLDER';
+type BrowserView = 'HOME' | 'SERVER_LIST' | 'FOLDER';
 
 interface HistoryItem {
   serverId: number;

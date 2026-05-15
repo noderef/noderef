@@ -45,7 +45,7 @@ import type { AlfrescoApi } from '@alfresco/js-api';
 
 export type ApiClass = new (api: AlfrescoApi) => any;
 
-export interface ApiRegistryEntry {
+interface ApiRegistryEntry {
   namespace: string;
   ApiClass: ApiClass;
 }

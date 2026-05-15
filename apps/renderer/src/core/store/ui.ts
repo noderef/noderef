@@ -19,16 +19,16 @@ import { persist } from 'zustand/middleware';
 import type { ModalKey } from './keys';
 import { i18n, getInitialLanguage } from '@/core/i18n';
 
-export type Theme = 'light' | 'dark' | 'auto';
-export type Language = 'en' | string; // Extend as needed
+type Theme = 'light' | 'dark' | 'auto';
+type Language = 'en' | string; // Extend as needed
 
-export interface NotificationPreferences {
+interface NotificationPreferences {
   enabled: boolean;
   sound: boolean;
   desktop: boolean;
 }
 
-export interface UIState {
+interface UIState {
   activeModal: ModalKey | null;
   modalPayload: unknown;
   theme: Theme;
@@ -38,7 +38,7 @@ export interface UIState {
   _hasHydrated: boolean; // Internal flag to track hydration status
 }
 
-export interface UIActions {
+interface UIActions {
   openModal: (name: ModalKey, payload?: unknown) => void;
   closeModal: () => void;
   setTheme: (theme: Theme) => void;

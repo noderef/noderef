@@ -23,7 +23,6 @@ import { z } from 'zod';
 /**
  * Server reference schema (used across all Alfresco RPC methods)
  */
-// fallow-ignore-next-line unused-export
 export const ServerRefSchema = z.object({
   baseUrl: z.string().url(),
 });
@@ -33,13 +32,11 @@ export type ServerRef = z.infer<typeof ServerRefSchema>;
 /**
  * Login request and response
  */
-// fallow-ignore-next-line unused-export
 export const LoginReqSchema = ServerRefSchema.extend({
   username: z.string().min(1),
   password: z.string().min(1),
 });
 
-// fallow-ignore-next-line unused-export
 export const LoginResSchema = z.object({
   user: z.object({
     id: z.string(),
@@ -54,10 +51,8 @@ export type LoginRes = z.infer<typeof LoginResSchema>;
 /**
  * Logout request and response
  */
-// fallow-ignore-next-line unused-export
 export const LogoutReqSchema = ServerRefSchema;
 
-// fallow-ignore-next-line unused-export
 export const LogoutResSchema = z.object({
   success: z.boolean(),
 });
@@ -68,10 +63,8 @@ export type LogoutRes = z.infer<typeof LogoutResSchema>;
 /**
  * Get current user request and response
  */
-// fallow-ignore-next-line unused-export
 export const GetCurrentUserReqSchema = ServerRefSchema;
 
-// fallow-ignore-next-line unused-export
 export const GetCurrentUserResSchema = z.object({
   user: z.object({
     id: z.string(),
@@ -86,14 +79,12 @@ export type GetCurrentUserRes = z.infer<typeof GetCurrentUserResSchema>;
 /**
  * Validate credentials request and response
  */
-// fallow-ignore-next-line unused-export
 export const ValidateCredentialsReqSchema = z.object({
   baseUrl: z.string().url(),
   username: z.string().min(1),
   password: z.string().min(1),
 });
 
-// fallow-ignore-next-line unused-export
 export const ValidateCredentialsResSchema = z.object({
   valid: z.boolean(),
   isAdmin: z.boolean().optional(),
@@ -113,7 +104,6 @@ export type ValidateCredentialsRes = z.infer<typeof ValidateCredentialsResSchema
 /**
  * Validate OIDC credentials request and response
  */
-// fallow-ignore-next-line unused-export
 export const ValidateOidcCredentialsReqSchema = z.object({
   baseUrl: z.string().url(),
   accessToken: z.string().min(1),
@@ -122,7 +112,6 @@ export const ValidateOidcCredentialsReqSchema = z.object({
   oidcClientId: z.string().min(1),
 });
 
-// fallow-ignore-next-line unused-export
 export const ValidateOidcCredentialsResSchema = ValidateCredentialsResSchema;
 
 export type ValidateOidcCredentialsReq = z.infer<typeof ValidateOidcCredentialsReqSchema>;
@@ -131,12 +120,10 @@ export type ValidateOidcCredentialsRes = z.infer<typeof ValidateOidcCredentialsR
 /**
  * List sites request and response
  */
-// fallow-ignore-next-line unused-export
 export const ListSitesReqSchema = ServerRefSchema.extend({
   maxItems: z.number().int().min(1).max(1000).optional().default(100),
 });
 
-// fallow-ignore-next-line unused-export
 export const ListSitesResSchema = z.object({
   sites: z.array(
     z.object({
@@ -153,13 +140,11 @@ export type ListSitesRes = z.infer<typeof ListSitesResSchema>;
 /**
  * List groups request and response (with pagination)
  */
-// fallow-ignore-next-line unused-export
 export const ListGroupsReqSchema = ServerRefSchema.extend({
   maxItems: z.number().int().min(1).max(1000).optional().default(100),
   skipCount: z.number().int().min(0).optional().default(0),
 });
 
-// fallow-ignore-next-line unused-export
 export const ListGroupsResSchema = z.object({
   groups: z.array(
     z.object({
@@ -183,14 +168,12 @@ export type ListGroupsRes = z.infer<typeof ListGroupsResSchema>;
 /**
  * Get group members request and response (with pagination)
  */
-// fallow-ignore-next-line unused-export
 export const GetGroupMembersReqSchema = ServerRefSchema.extend({
   groupId: z.string().min(1),
   maxItems: z.number().int().min(1).max(1000).optional().default(100),
   skipCount: z.number().int().min(0).optional().default(0),
 });
 
-// fallow-ignore-next-line unused-export
 export const GetGroupMembersResSchema = z.object({
   members: z.array(
     z.object({
@@ -214,7 +197,6 @@ export type GetGroupMembersRes = z.infer<typeof GetGroupMembersResSchema>;
 /**
  * OAuth2 configuration request and response
  */
-// fallow-ignore-next-line unused-export
 export const ConfigureOAuth2ReqSchema = ServerRefSchema.extend({
   clientId: z.string().min(1),
   host: z.string().url(), // OAuth2 server host (e.g., Keycloak)
@@ -224,7 +206,6 @@ export const ConfigureOAuth2ReqSchema = ServerRefSchema.extend({
   implicitFlow: z.boolean().optional().default(false),
 });
 
-// fallow-ignore-next-line unused-export
 export const ConfigureOAuth2ResSchema = z.object({
   success: z.boolean(),
 });
@@ -235,7 +216,6 @@ export type ConfigureOAuth2Res = z.infer<typeof ConfigureOAuth2ResSchema>;
 /**
  * OAuth2 token exchange request and response
  */
-// fallow-ignore-next-line unused-export
 export const ExchangeOAuth2TokenReqSchema = ServerRefSchema.extend({
   clientId: z.string().min(1),
   host: z.string().url(),
@@ -245,7 +225,6 @@ export const ExchangeOAuth2TokenReqSchema = ServerRefSchema.extend({
   codeVerifier: z.string().optional(), // PKCE code verifier
 });
 
-// fallow-ignore-next-line unused-export
 export const ExchangeOAuth2TokenResSchema = z.object({
   accessToken: z.string(),
   refreshToken: z.string().optional(),
@@ -258,10 +237,8 @@ export type ExchangeOAuth2TokenRes = z.infer<typeof ExchangeOAuth2TokenResSchema
 /**
  * Poll for OAuth2 authorization code (for desktop OAuth flow)
  */
-// fallow-ignore-next-line unused-export
 export const PollOAuth2CodeReqSchema = z.object({});
 
-// fallow-ignore-next-line unused-export
 export const PollOAuth2CodeResSchema = z.object({
   code: z.string().optional(),
   state: z.string().optional(),
@@ -274,12 +251,10 @@ export type PollOAuth2CodeRes = z.infer<typeof PollOAuth2CodeResSchema>;
 /**
  * Get search dictionary request and response
  */
-// fallow-ignore-next-line unused-export
 export const GetSearchDictionaryReqSchema = ServerRefSchema.extend({
   serverId: z.number().int(),
 });
 
-// fallow-ignore-next-line unused-export
 export const GetSearchDictionaryResSchema = z.object({
   types: z.array(z.string()),
   aspects: z.array(z.string()),
@@ -294,12 +269,10 @@ export type GetSearchDictionaryRes = z.infer<typeof GetSearchDictionaryResSchema
 /**
  * Get Tern definitions request and response
  */
-// fallow-ignore-next-line unused-export
 export const GetTernDefinitionsReqSchema = ServerRefSchema.extend({
   serverId: z.number().int(),
 });
 
-// fallow-ignore-next-line unused-export
 export const GetTernDefinitionsResSchema = z.object({
   typeDefinitions: z.array(z.any()),
 });

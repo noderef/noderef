@@ -60,7 +60,7 @@ export interface AgentChatInputRef {
   focus: () => void;
 }
 
-export interface AgentChatInputProps {
+interface AgentChatInputProps {
   value: string;
   onChange: (value: string) => void;
   onSend: (text: string, mentions: AgentMention[]) => void;

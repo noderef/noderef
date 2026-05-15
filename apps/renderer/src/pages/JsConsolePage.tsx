@@ -899,5 +899,4 @@ function computeCommandRange(
   };
 }
 
-// fallow-ignore-next-line unused-export
 export default JsConsolePage;

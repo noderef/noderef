@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import type { Manifest } from './loadLibs.js';
+import type { Manifest } from './types/manifest.js';
 
 export function buildRouterPrompt(question: string, manifest: Manifest): string {
   const list = Object.entries(manifest)

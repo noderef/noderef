@@ -37,7 +37,7 @@ export interface SearchResult {
   serverName: string;
 }
 
-export interface SearchServerTarget {
+interface SearchServerTarget {
   id: number;
   baseUrl: string;
   name: string;
@@ -56,7 +56,7 @@ interface ServerSearchState {
   };
 }
 
-export interface SearchState {
+interface SearchState {
   query: string;
   results: SearchResult[];
   isLoading: boolean;
@@ -73,7 +73,7 @@ export interface SearchState {
   selectedServerIds: number[];
 }
 
-export interface SearchActions {
+interface SearchActions {
   setQuery: (query: string) => void;
   setResults: (results: SearchResult[]) => void;
   setIsLoading: (isLoading: boolean) => void;

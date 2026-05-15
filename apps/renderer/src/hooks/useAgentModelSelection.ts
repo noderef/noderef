@@ -24,13 +24,13 @@ import { useEffect, useState } from 'react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export interface AiProviderOption {
+interface AiProviderOption {
   value: string;
   label: string;
   defaultModel: string;
 }
 
-export interface AiModelChoice {
+interface AiModelChoice {
   value: string;
   label: string;
   provider: string;

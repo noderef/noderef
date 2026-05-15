@@ -22,13 +22,13 @@
 import { create } from 'zustand';
 import type { AppServer } from '@/core/ipc/backend';
 
-export interface ServersState {
+interface ServersState {
   servers: AppServer[];
   loading: boolean;
   error: string | null;
 }
 
-export interface ServersActions {
+interface ServersActions {
   setServers: (servers: AppServer[]) => void;
   addServer: (server: AppServer) => void;
   updateServer: (id: number, updates: Partial<AppServer>) => void;

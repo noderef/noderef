@@ -35,9 +35,7 @@ import {
   webPasswordGateMiddleware,
 } from './webAuth.js';
 
-// Re-export types
-export type { HealthRouteOptions } from './health.js';
-export { type Routes, type ZSchema } from './rpc.js';
+export type { Routes } from './rpc.js';
 
 export interface RegisterRoutesOptions {
   app: Express;

@@ -33,7 +33,7 @@ export interface QNameListRef {
   onKeyDown: (props: { event: KeyboardEvent }) => boolean;
 }
 
-export interface QNameSuggestionListProps extends SuggestionProps {
+interface QNameSuggestionListProps extends SuggestionProps {
   suggestions: QNameGroupedSuggestions;
   popupWidth?: number;
 }

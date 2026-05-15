@@ -16,8 +16,6 @@
 
 import type { TreeNodeData } from '@mantine/core';
 
-export type DisplayMode = 'menu' | 'tree';
-
 export interface MenuItem {
   id: string;
   label: string;
@@ -60,13 +58,4 @@ export interface TreeNode extends TreeNodeData {
   viewMode?: 'monaco' | 'webview';
   content?: string;
   url?: string;
-}
-
-export interface Tab {
-  id: string;
-  label: string;
-  icon?: string;
-  displayMode: DisplayMode;
-  sections?: MenuSection[];
-  treeData?: TreeNode[];
 }

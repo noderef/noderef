@@ -18,18 +18,7 @@ import { existsSync, readFileSync } from 'fs';
 import path from 'path';
 import { buildSync } from 'esbuild';
 import manifestData from './manifest.js';
-
-export interface ManifestEntry {
-  description: string;
-  tags: string[];
-}
-
-export type Manifest = Record<string, ManifestEntry>;
-
-export interface LoadedLibs {
-  manifest: Manifest;
-  libs: Record<string, { text: string }>;
-}
+import type { LoadedLibs } from './types/manifest.js';
 
 let cachedLibs: LoadedLibs | null = null;
 const shouldCache = process.env.NODE_ENV === 'production';

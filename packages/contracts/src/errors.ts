@@ -16,6 +16,8 @@
 
 import { z } from 'zod';
 
+// fallow-ignore-file unused-enum-member
+
 /**
  * Error types and schemas for RPC communication
  */

@@ -14,9 +14,14 @@
  * limitations under the License.
  */
 
-/**
- * Middleware barrel export
- */
+export interface ManifestEntry {
+  description: string;
+  tags: string[];
+}
 
-export { corsMiddleware } from './cors.js';
-export { applySecurityMiddleware } from './security.js';
+export type Manifest = Record<string, ManifestEntry>;
+
+export interface LoadedLibs {
+  manifest: Manifest;
+  libs: Record<string, { text: string }>;
+}

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import type { Manifest } from './loadLibs.js';
+import type { Manifest } from './types/manifest.js';
 
 const manifest: Manifest = {
   node: {

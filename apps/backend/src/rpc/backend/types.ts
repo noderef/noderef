@@ -59,4 +59,4 @@ export interface RpcContext {
 /**
  * Function signature for registering domain-specific RPC handlers
  */
-export type RegisterDomainHandlers = (routes: Routes, ctx: RpcContext) => void | Promise<void>;
+type RegisterDomainHandlers = (routes: Routes, ctx: RpcContext) => void | Promise<void>;
