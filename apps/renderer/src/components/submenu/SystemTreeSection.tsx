@@ -884,7 +884,7 @@ export function SystemTreeSection({
       </UnstyledButton>
 
       {/* Tree Content */}
-      <Collapse in={opened}>
+      <Collapse expanded={opened}>
         <Box
           style={{
             position: 'relative',

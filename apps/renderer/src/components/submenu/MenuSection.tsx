@@ -230,7 +230,7 @@ export function MenuSection({
           ) : null}
         </Group>
       )}
-      <Collapse in={opened}>
+      <Collapse expanded={opened}>
         <Box
           style={{
             position: 'relative',

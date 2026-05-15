@@ -131,7 +131,7 @@ export function SavedSearchPage() {
     };
 
     loadSavedSearch();
-  }, [activeSavedSearchId, savedSearches, getSavedSearchById, t]);
+  }, [activeSavedSearchId, addSavedSearch, getSavedSearchById, savedSearches, t]);
 
   const server = useMemo(
     () => (savedSearch ? servers.find(s => s.id === savedSearch.serverId) || null : null),

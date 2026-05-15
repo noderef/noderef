@@ -65,7 +65,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
         withStaticClasses
       >
         <ModalsProvider>
-          <Notifications position="bottom-center" zIndex={1000} />
+          <Notifications position="bottom-center" zIndex={1000} pauseResetOnHover="notification" />
           {children}
         </ModalsProvider>
       </MantineProvider>

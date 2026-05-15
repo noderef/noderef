@@ -36,7 +36,15 @@ import {
   useComputedColorScheme,
 } from '@mantine/core';
 import { IconSearch } from '@tabler/icons-react';
-import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import {
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 type SearchTokenKind = 'type' | 'aspect' | 'site' | 'prop' | 'operator' | 'text' | 'path';
@@ -333,7 +341,7 @@ export function SearchQueryBuilder({
   }, [isDisabled, pendingPropField]);
 
   // Auto-scroll to keep input visible
-  const scrollToInput = () => {
+  const scrollToInput = useCallback(() => {
     if (isDisabled) {
       return;
     }
@@ -342,7 +350,7 @@ export function SearchQueryBuilder({
         scrollContainerRef.current.scrollLeft = scrollContainerRef.current.scrollWidth;
       }
     });
-  };
+  }, [isDisabled]);
 
   const applyInputText = (
     target: HTMLInputElement | HTMLTextAreaElement,
@@ -394,7 +402,7 @@ export function SearchQueryBuilder({
     if (!isDisabled) {
       scrollToInput();
     }
-  }, [tokens, inputValue, pendingPropField, isDisabled]);
+  }, [tokens, inputValue, pendingPropField, isDisabled, scrollToInput]);
 
   const propertyPrefixes = useMemo(() => {
     const prefixes = new Set<string>();

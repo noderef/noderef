@@ -226,7 +226,7 @@ export function LocalFilesPage() {
         }
       }
     },
-    [pageSize, setError, setInitialized, setLoading, setLoadingMore, setPage, sortBy, sortDir]
+    [pageSize, setError, setInitialized, setLoading, setLoadingMore, setPage, sortBy, sortDir, t]
   );
 
   useEffect(() => {
@@ -289,76 +289,79 @@ export function LocalFilesPage() {
     setRefreshing(false);
   };
 
-  const handleDrop = async (droppedFiles: File[]) => {
-    if (droppedFiles.length === 0) return;
-    setDropLoading(true);
+  const handleDrop = useCallback(
+    async (droppedFiles: File[]) => {
+      if (droppedFiles.length === 0) return;
+      setDropLoading(true);
 
-    let imported = 0;
-    let failed = 0;
+      let imported = 0;
+      let failed = 0;
 
-    for (const file of droppedFiles) {
-      try {
-        const text = await file.text();
-        const bytes = getByteLength(text);
-        if (bytes > MAX_FILE_BYTES) {
+      for (const file of droppedFiles) {
+        try {
+          const text = await file.text();
+          const bytes = getByteLength(text);
+          if (bytes > MAX_FILE_BYTES) {
+            failed += 1;
+            notifications.show({
+              title: t('localFiles:fileTooLargeTitle'),
+              message: t('localFiles:fileTooLargeMessage', {
+                name: file.name,
+                limit: formatBytes(MAX_FILE_BYTES),
+              }),
+              color: 'orange',
+            });
+            continue;
+          }
+
+          const created = await backendRpc.localFiles.create({
+            name: file.name,
+            content: text,
+            type: file.type || guessMimeFromName(file.name) || 'text/plain',
+          });
+          addFile(created);
+          imported += 1;
+        } catch (err) {
           failed += 1;
           notifications.show({
-            title: t('localFiles:fileTooLargeTitle'),
-            message: t('localFiles:fileTooLargeMessage', {
-              name: file.name,
-              limit: formatBytes(MAX_FILE_BYTES),
-            }),
-            color: 'orange',
+            title: t('localFiles:importFailedTitle'),
+            message:
+              err instanceof Error
+                ? err.message
+                : t('localFiles:importFailedMessage', {
+                    name: file.name,
+                  }),
+            color: 'red',
           });
-          continue;
         }
+      }
 
-        const created = await backendRpc.localFiles.create({
-          name: file.name,
-          content: text,
-          type: file.type || guessMimeFromName(file.name) || 'text/plain',
-        });
-        addFile(created);
-        imported += 1;
-      } catch (err) {
-        failed += 1;
+      if (imported > 0) {
         notifications.show({
-          title: t('localFiles:importFailedTitle'),
-          message:
-            err instanceof Error
-              ? err.message
-              : t('localFiles:importFailedMessage', {
-                  name: file.name,
-                }),
-          color: 'red',
+          title: t('localFiles:importedTitle'),
+          message: t('localFiles:importedMessage', {
+            count: imported,
+            plural: imported === 1 ? '' : 's',
+          }),
+          color: 'green',
+        });
+        await fetchPage({ reset: true, query: filter, offset: 0, sort: { sortBy, sortDir } });
+        setSelectedIds([]);
+      }
+      if (failed > 0 && imported === 0) {
+        notifications.show({
+          title: t('localFiles:nothingImportedTitle'),
+          message: t('localFiles:nothingImportedMessage', {
+            limit: formatBytes(MAX_FILE_BYTES),
+          }),
+          color: 'orange',
         });
       }
-    }
 
-    if (imported > 0) {
-      notifications.show({
-        title: t('localFiles:importedTitle'),
-        message: t('localFiles:importedMessage', {
-          count: imported,
-          plural: imported === 1 ? '' : 's',
-        }),
-        color: 'green',
-      });
-      await fetchPage({ reset: true, query: filter, offset: 0, sort: { sortBy, sortDir } });
-      setSelectedIds([]);
-    }
-    if (failed > 0 && imported === 0) {
-      notifications.show({
-        title: t('localFiles:nothingImportedTitle'),
-        message: t('localFiles:nothingImportedMessage', {
-          limit: formatBytes(MAX_FILE_BYTES),
-        }),
-        color: 'orange',
-      });
-    }
-
-    setDropLoading(false);
-  };
+      setDropLoading(false);
+    },
+    [addFile, fetchPage, filter, sortBy, sortDir, t]
+  );
 
   const handleReject = () => {
     notifications.show({

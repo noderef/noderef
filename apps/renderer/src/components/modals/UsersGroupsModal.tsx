@@ -56,6 +56,7 @@ import {
 } from './authorityUtils';
 
 const PAGE_SIZE = 50;
+const USERS_TAB_PEOPLE_ORDER_BY = ['lastName', 'firstName'] as const;
 /** Groups shown in Create User multi-select (separate from groups-tab list / search). */
 const GROUP_PICKER_MAX = 200;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -138,8 +139,6 @@ export function UsersGroupsModal() {
 
   /* ---- Data loading ---- */
 
-  const PEOPLE_LIST_ORDER_BY = ['lastName', 'firstName'] as const;
-
   const fetchUsersTab = useCallback(
     async ({ reset, append }: { reset: boolean; append: boolean }) => {
       if (!server?.baseUrl || !modalPayload) return;
@@ -156,7 +155,7 @@ export function UsersGroupsModal() {
       }
 
       const skipCount = reset ? 0 : usersTabNextSkipRef.current;
-      const orderBy = [...PEOPLE_LIST_ORDER_BY];
+      const orderBy = [...USERS_TAB_PEOPLE_ORDER_BY];
 
       try {
         let response: unknown;

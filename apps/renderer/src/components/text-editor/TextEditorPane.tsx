@@ -76,6 +76,8 @@ export function TextEditorPane({
       editorRef.current = null;
       onEditorMount?.(null);
     };
+    // Single mount: sibling effects keep value/language/wordWrap/theme in sync without recreating the editor.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onChange/onEditorMount closures are intentional initial wiring only
   }, []);
 
   useEffect(() => {

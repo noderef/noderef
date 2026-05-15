@@ -163,7 +163,7 @@ export function ServerEditModal() {
           setUsageLoading(false);
         });
     }
-  }, [server, isOpen, activeSection]);
+  }, [server, isOpen, activeSection, t, usageData, usageError, usageLoading]);
 
   const validateJsconsoleEndpoint = (value: string): boolean => {
     if (!value.trim()) return true; // Optional field

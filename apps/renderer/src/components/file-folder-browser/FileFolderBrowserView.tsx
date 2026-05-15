@@ -1374,7 +1374,7 @@ export function FileFolderBrowserView({
         color: 'red',
       });
     }
-  }, [backendRpc.repository, loadChildren, modals, notifications, selectedItem, serverId, t]);
+  }, [loadChildren, selectedItem, serverId, t]);
 
   const handleDeleteSite = useCallback(() => {
     if (!selectedItem || selectedItem.nodeType !== 'st:site') return;
@@ -1414,7 +1414,7 @@ export function FileFolderBrowserView({
       ),
       withCloseButton: false,
     });
-  }, [backendRpc.repository, loadChildren, modals, notifications, selectedItem, serverId, t]);
+  }, [loadChildren, selectedItem, serverId, t]);
 
   const isJavaScriptFile = (node: RepositoryNode): boolean => {
     // Check mimeType for JavaScript files

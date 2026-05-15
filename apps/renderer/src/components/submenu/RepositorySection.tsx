@@ -1079,7 +1079,7 @@ export function RepositorySection({
         }
       }
     },
-    [convertNodesToTree, loadingMoreNodes, paginationState, updatePaginationState]
+    [convertNodesToTree, activeServerId, loadingMoreNodes, paginationState, updatePaginationState]
   );
 
   const renderTreeIcon = (node: TreeNode, expanded: boolean) => {
@@ -1259,7 +1259,7 @@ export function RepositorySection({
       </UnstyledButton>
 
       {/* Tree Content */}
-      <Collapse in={opened}>
+      <Collapse expanded={opened}>
         <Box
           style={{
             position: 'relative',

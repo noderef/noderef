@@ -333,7 +333,7 @@ export function SaveSearchModal() {
         prop => !columns.includes(prop) && (term.length === 0 || prop.toLowerCase().includes(term))
       )
       .slice(0, 50);
-  }, [columns, dictionary.properties, propertyInput]);
+  }, [columns, currentProperties, dictionary.properties, propertyInput]);
 
   const isValidPropertyFormat = (input: string) => /^[a-z0-9_-]+:[^:]+$/i.test(input.trim());
 

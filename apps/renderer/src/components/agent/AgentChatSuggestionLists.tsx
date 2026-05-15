@@ -136,10 +136,11 @@ function getMentionIcon(item: AgentMentionSuggestion): {
 export const NodeMentionList = forwardRef<MentionListRef, NodeMentionSuggestionProps>(
   (props, ref) => {
     const { t } = useTranslation('agent');
+    const { items, hasMore, loading, onLoadMore, command } = props;
     const [selectedIndex, setSelectedIndex] = useState(0);
     const listRef = useRef<HTMLDivElement | null>(null);
     const autoLoadRequestedForCountRef = useRef<number | null>(null);
-    const selectableCount = props.items.length;
+    const selectableCount = items.length;
     const popupWidth = Math.max(320, Math.round(props.popupWidth ?? 560));
     const popupWidthStyle: CSSProperties = {
       width: `${popupWidth}px`,
@@ -147,9 +148,9 @@ export const NodeMentionList = forwardRef<MentionListRef, NodeMentionSuggestionP
     };
 
     const selectItem = (index: number) => {
-      const item = props.items[index];
+      const item = items[index];
       if (item) {
-        props.command({
+        command({
           id: item.id,
           label: item.label,
           type: item.type,
@@ -185,27 +186,27 @@ export const NodeMentionList = forwardRef<MentionListRef, NodeMentionSuggestionP
     }, [selectableCount]);
 
     useEffect(() => {
-      if (!props.hasMore) {
+      if (!hasMore) {
         autoLoadRequestedForCountRef.current = null;
         return;
       }
 
-      if (!props.onLoadMore || props.loading || props.items.length === 0) {
+      if (!onLoadMore || loading || items.length === 0) {
         return;
       }
 
-      const thresholdIndex = Math.max(0, props.items.length - 2);
+      const thresholdIndex = Math.max(0, items.length - 2);
       if (selectedIndex < thresholdIndex) {
         return;
       }
 
-      if (autoLoadRequestedForCountRef.current === props.items.length) {
+      if (autoLoadRequestedForCountRef.current === items.length) {
         return;
       }
 
-      autoLoadRequestedForCountRef.current = props.items.length;
-      props.onLoadMore();
-    }, [props.hasMore, props.items.length, props.loading, props.onLoadMore, selectedIndex]);
+      autoLoadRequestedForCountRef.current = items.length;
+      onLoadMore();
+    }, [hasMore, items.length, loading, onLoadMore, selectedIndex]);
 
     useEffect(() => {
       const listElement = listRef.current;
@@ -231,7 +232,7 @@ export const NodeMentionList = forwardRef<MentionListRef, NodeMentionSuggestionP
         }
 
         if (event.key === 'Enter') {
-          if (!selectableCount && !props.loading) {
+          if (!selectableCount && !loading) {
             return false;
           }
           enterHandler();
@@ -242,11 +243,11 @@ export const NodeMentionList = forwardRef<MentionListRef, NodeMentionSuggestionP
       },
     }));
 
-    if (!props.items.length && !props.loading) {
+    if (!items.length && !loading) {
       return null;
     }
 
-    if (props.loading && !props.items.length) {
+    if (loading && !items.length) {
       return (
         <Stack gap={4} style={popupWidthStyle}>
           <Paper
@@ -290,7 +291,7 @@ export const NodeMentionList = forwardRef<MentionListRef, NodeMentionSuggestionP
             }}
           >
             <Stack gap={4}>
-              {props.items.map((item, index) => (
+              {items.map((item, index) => (
                 <Button
                   key={`${item.type}-${item.id}`}
                   data-mention-index={index}
@@ -343,7 +344,7 @@ export const NodeMentionList = forwardRef<MentionListRef, NodeMentionSuggestionP
               ))}
             </Stack>
           </div>
-          {props.loading && (
+          {loading && (
             <Group
               justify="center"
               mt="xs"

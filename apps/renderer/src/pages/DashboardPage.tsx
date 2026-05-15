@@ -45,7 +45,7 @@ import {
   useMantineTheme,
   rgba,
 } from '@mantine/core';
-import { useElementSize } from '@mantine/hooks';
+import { useElementSize, useMergedRef } from '@mantine/hooks';
 import {
   IconAlertCircle,
   IconClockHour4,
@@ -133,7 +133,9 @@ export function DashboardPage() {
   const servers = useServersStore(state => state.servers);
   const theme = useMantineTheme();
   const colorScheme = useComputedColorScheme('light', { getInitialValueInEffect: true });
-  const { ref: heatmapRef, width: heatmapWidth } = useElementSize();
+  const heatmapDomRef = useRef<HTMLDivElement>(null);
+  const { ref: heatmapSizeRef, width: heatmapWidth } = useElementSize();
+  const heatmapRef = useMergedRef(heatmapSizeRef, heatmapDomRef);
   const [heatmapSvgWidth, setHeatmapSvgWidth] = useState<number | null>(null);
   const [activity, setActivity] = useState<NodeHistoryActivitySummary | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -298,13 +300,13 @@ export function DashboardPage() {
 
   // Measure actual heatmap SVG width
   useEffect(() => {
-    if (!heatmapRef.current || !hasActivity) {
+    if (!heatmapDomRef.current || !hasActivity) {
       return;
     }
 
     const updateWidth = () => {
       // Find the SVG element inside the heatmap container
-      const svgElement = heatmapRef.current?.querySelector('svg');
+      const svgElement = heatmapDomRef.current?.querySelector('svg');
       if (svgElement) {
         const svgWidth = svgElement.getBoundingClientRect().width;
         if (svgWidth > 0) {
@@ -317,9 +319,9 @@ export function DashboardPage() {
     const timeoutId = setTimeout(updateWidth, 100);
 
     // Use ResizeObserver to track changes
-    if (heatmapRef.current) {
+    if (heatmapDomRef.current) {
       const resizeObserver = new ResizeObserver(updateWidth);
-      resizeObserver.observe(heatmapRef.current);
+      resizeObserver.observe(heatmapDomRef.current);
 
       return () => {
         clearTimeout(timeoutId);
@@ -330,7 +332,7 @@ export function DashboardPage() {
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [activity, heatmapRef, heatmapWidth, hasActivity]);
+  }, [activity, heatmapWidth, hasActivity]);
 
   const palette = theme.colors.blue ?? theme.colors[theme.primaryColor] ?? theme.colors.green;
   const primaryShadeValue = useMemo(() => {
