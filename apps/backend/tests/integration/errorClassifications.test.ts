@@ -32,10 +32,46 @@ describe('errorClassifications', () => {
   it('treats expected auth errors as non-fatal', () => {
     expect(isExpectedAuthFailure({ status: 401 })).toBe(true);
     expect(isExpectedAuthFailure({ message: 'Authentication failed for user admin' })).toBe(true);
+    expect(
+      isExpectedAuthFailure({
+        response: {
+          body: {
+            error: {
+              statusCode: 403,
+              errorKey: 'Login failed',
+              briefSummary: '06100023 Login failed',
+            },
+          },
+        },
+      })
+    ).toBe(true);
+    expect(
+      isExpectedAuthFailure({
+        message:
+          '{"error":{"statusCode":401,"errorKey":"Login failed","briefSummary":"06100023 Login failed"}}',
+      })
+    ).toBe(true);
   });
 
   it('treats upstream HTTP failures as non-fatal', () => {
     expect(isExpectedUpstreamHttpFailure({ status: 404 })).toBe(true);
+    expect(
+      isExpectedUpstreamHttpFailure({
+        response: {
+          body: {
+            error: {
+              statusCode: 500,
+              briefSummary: '06200001 Something went wrong',
+            },
+          },
+        },
+      })
+    ).toBe(true);
+    expect(
+      isExpectedUpstreamHttpFailure({
+        message: '{"error":{"statusCode":"502","briefSummary":"Bad gateway"}}',
+      })
+    ).toBe(true);
     expect(
       isExpectedUpstreamHttpFailure({
         message:

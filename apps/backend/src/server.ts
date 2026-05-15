@@ -47,10 +47,32 @@ import { ServerService } from './services/serverService.js';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
+function isHandledProcessError(reason: unknown): 'network' | 'auth' | 'http' | null {
+  if (isTransientNetworkFailure(reason)) {
+    return 'network';
+  }
+
+  if (isExpectedAuthFailure(reason)) {
+    return 'auth';
+  }
+
+  if (isExpectedUpstreamHttpFailure(reason)) {
+    return 'http';
+  }
+
+  return null;
+}
+
 // Safety net: catch uncaught exceptions
 // In dev: log and continue
 // In prod: log and exit to let supervisor/container restart
 process.on('uncaughtException', err => {
+  const handledKind = isHandledProcessError(err);
+  if (handledKind) {
+    log.warn({ err }, `Non-fatal ${handledKind} error (uncaught exception)`);
+    return;
+  }
+
   log.error({ err }, 'Uncaught exception - process will exit in production');
   if (!isDev) {
     process.exit(1);
@@ -58,19 +80,9 @@ process.on('uncaughtException', err => {
 });
 
 process.on('unhandledRejection', (reason: unknown) => {
-  // Connection refusals are expected when user adds an offline server; keep the process alive.
-  if (isTransientNetworkFailure(reason)) {
-    log.warn({ reason }, 'Non-fatal network error (unhandled rejection)');
-    return;
-  }
-
-  if (isExpectedAuthFailure(reason)) {
-    log.warn({ reason }, 'Non-fatal auth error (unhandled rejection)');
-    return;
-  }
-
-  if (isExpectedUpstreamHttpFailure(reason)) {
-    log.warn({ reason }, 'Non-fatal upstream HTTP error (unhandled rejection)');
+  const handledKind = isHandledProcessError(reason);
+  if (handledKind) {
+    log.warn({ reason }, `Non-fatal ${handledKind} error (unhandled rejection)`);
     return;
   }
 
