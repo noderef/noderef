@@ -31,6 +31,7 @@ import {
 import { applyPendingPrismaMigrations } from './lib/migrations.js';
 import { log } from './lib/logger.js';
 import {
+  cleanupRuntimeFiles,
   getHost,
   getPort,
   getPreferredPortRange,
@@ -39,6 +40,7 @@ import {
   shouldUseEphemeralPort,
   tryListen,
 } from './lib/port.js';
+import { registerShutdownRoute } from './lib/shutdownRoute.js';
 import { disconnectPrisma, getPrismaClient } from './lib/prisma.js';
 import { corsMiddleware } from './middleware/cors.js';
 import { applySecurityMiddleware } from './middleware/security.js';
@@ -226,13 +228,22 @@ async function startServer(app: express.Express): Promise<net.Server> {
  * Setup graceful shutdown handlers
  */
 function setupShutdownHandlers(server: net.Server): void {
+  let shutdownInProgress = false;
   const shutdown = async (signal: string) => {
+    if (shutdownInProgress) return; // Prevent double shutdown
+    shutdownInProgress = true;
     log.info({ signal }, 'Received shutdown signal');
+    cleanupRuntimeFiles();
     server.close(async () => {
       await disconnectPrisma();
       log.info('Backend shutdown complete');
       process.exit(0);
     });
+    // Force exit after 5s if graceful shutdown hangs (e.g. open connections)
+    setTimeout(() => {
+      log.warn('Graceful shutdown timeout — forcing exit');
+      process.exit(1);
+    }, 5000).unref();
   };
 
   process.on('SIGINT', () => shutdown('SIGINT'));
@@ -315,6 +326,10 @@ async function main() {
     exposeDebug,
   });
 
+  registerShutdownRoute(app, () => {
+    process.emit('SIGTERM', 'SIGTERM');
+  });
+
   // Final fallback for SPA: serve index.html for everything except API routes
   if (process.env.SERVE_STATIC === '1') {
     const staticRoot = path.resolve(__dirname, '../../../resources');
@@ -323,7 +338,8 @@ async function main() {
         req.path.startsWith('/rpc') ||
         req.path.startsWith('/web-auth') ||
         req.path.startsWith('/health') ||
-        req.path.startsWith('/debug')
+        req.path.startsWith('/debug') ||
+        req.path.startsWith('/shutdown')
       ) {
         return next();
       }
