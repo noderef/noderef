@@ -715,33 +715,86 @@ export function UsersGroupsModal() {
       setMemberSearchLoading(true);
       try {
         if (type === 'PERSON') {
-          const response = await alfrescoRpc.call(
-            'people.listPeople',
-            { skipCount: 0, maxItems: 25 },
-            server.baseUrl,
-            modalPayload.serverId
-          );
-          const mapped = mapPublicApiPeopleResponse(response);
-          const filtered = query
-            ? mapped.filter(item =>
-                `${item.displayName} ${item.id}`.toLowerCase().includes(query.toLowerCase())
-              )
-            : mapped;
-          setMemberResults(filtered.slice(0, 20));
+          let mapped: AuthorityResult[] = [];
+          if (query) {
+            const response = await alfrescoRpc.call(
+              'queries.findPeople',
+              [query, { skipCount: 0, maxItems: 25, orderBy: ['lastName', 'firstName'] }],
+              server.baseUrl,
+              modalPayload.serverId
+            );
+            // findPeople returns PersonDetail objects; map them to AuthorityResult
+            const people = mapPublicApiPeopleDetailResponse(response);
+            mapped = people.map(p => ({ id: p.id, displayName: p.displayName, type: 'PERSON' }));
+          } else {
+            const response = await alfrescoRpc.call(
+              'people.listPeople',
+              { skipCount: 0, maxItems: 25 },
+              server.baseUrl,
+              modalPayload.serverId
+            );
+            mapped = mapPublicApiPeopleResponse(response);
+          }
+          setMemberResults(mapped.slice(0, 20));
         } else {
-          const response = await alfrescoRpc.call(
-            'groups.listGroups',
-            { skipCount: 0, maxItems: 25 },
-            server.baseUrl,
-            modalPayload.serverId
-          );
-          const mapped = mapPublicApiGroupsResponse(response);
-          const filtered = query
-            ? mapped.filter(item =>
-                `${item.displayName} ${item.id}`.toLowerCase().includes(query.toLowerCase())
-              )
-            : mapped;
-          setMemberResults(filtered.slice(0, 20));
+          let mapped: AuthorityResult[] = [];
+          if (query) {
+            const literalForSearch = query.replace(/\*/g, '').trim();
+            if (literalForSearch) {
+              const where = buildGroupListWhereDisplayNameContains(query);
+              try {
+                const response = await alfrescoRpc.call(
+                  'groups.listGroups',
+                  { skipCount: 0, maxItems: 25, orderBy: ['displayName'], where },
+                  server.baseUrl,
+                  modalPayload.serverId
+                );
+                mapped = mapPublicApiGroupsResponse(response);
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                const tryFallback =
+                  /\b400\b/i.test(msg) ||
+                  /where/i.test(msg) ||
+                  /predicate/i.test(msg) ||
+                  /bad request/i.test(msg);
+                if (!tryFallback) throw err;
+                const response = await alfrescoRpc.call(
+                  'webscript.executeWebScript',
+                  [
+                    'GET',
+                    'api/groups',
+                    {
+                      shortNameFilter: query,
+                      skipCount: 0,
+                      maxItems: 25,
+                      sortBy: 'displayName',
+                      dir: 'asc',
+                    },
+                  ],
+                  server.baseUrl,
+                  modalPayload.serverId
+                );
+                mapped = mapGroupsWebscriptResponse(response);
+              }
+            } else {
+              const response = await alfrescoRpc.call(
+                'groups.listGroups',
+                { skipCount: 0, maxItems: 25 },
+                server.baseUrl,
+                modalPayload.serverId
+              );
+              mapped = mapPublicApiGroupsResponse(response);
+            }
+          } else {
+            const response = await alfrescoRpc.call(
+              'groups.listGroups',
+              { skipCount: 0, maxItems: 25 },
+              server.baseUrl,
+              modalPayload.serverId
+            );
+            mapped = mapPublicApiGroupsResponse(response);
+          }
+          setMemberResults(mapped.slice(0, 20));
         }
       } catch (err) {
         console.error('[UsersGroupsModal] Failed to search members', err);
@@ -813,10 +866,6 @@ export function UsersGroupsModal() {
   useEffect(() => {
     if (!membersModalOpen) return;
     const query = memberSearchQuery.trim();
-    if (!query) {
-      setMemberResults([]);
-      return;
-    }
     const handle = window.setTimeout(() => {
       searchMembers(memberSearchType, query);
     }, 300);
@@ -1271,6 +1320,8 @@ function MembersModal({
     onDropdownClose: () => combobox.resetSelectedOption(),
   });
 
+  const filteredMembers = members.filter(member => member.type === memberSearchType);
+
   return (
     <Modal
       opened={opened}
@@ -1359,13 +1410,13 @@ function MembersModal({
                 {t('common:loading')}
               </Text>
             </Group>
-          ) : members.length === 0 ? (
+          ) : filteredMembers.length === 0 ? (
             <Text size="sm" c="dimmed" py="xs">
               {t('usersGroups:noMembers')}
             </Text>
           ) : (
             <Stack gap="xs">
-              {members.map(member => (
+              {filteredMembers.map(member => (
                 <Paper key={member.id} withBorder p="xs">
                   <Group justify="space-between" align="center" wrap="nowrap">
                     <Stack gap={2} style={{ overflow: 'hidden', flex: 1 }}>
