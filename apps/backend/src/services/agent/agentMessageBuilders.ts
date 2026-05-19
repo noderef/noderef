@@ -162,6 +162,10 @@ export function extractPrimaryNodeIdFromOutput(
     const id = node?.id;
     return typeof id === 'string' && id.trim() ? id.trim() : null;
   }
+  if (operation === 'version_revert') {
+    const id = output.nodeId;
+    return typeof id === 'string' && id.trim() ? id.trim() : null;
+  }
   return null;
 }
 
@@ -207,6 +211,18 @@ const OPERATION_FAILURE_LABELS: Record<string, { title: string; action: string }
   category_manage: { title: 'Category change failed', action: 'update categories' },
   people_create: { title: 'Create person failed', action: 'create the user' },
   people_update: { title: 'Update person failed', action: 'update the user' },
+  audit_apps: { title: 'List audit apps failed', action: 'list audit applications' },
+  audit_list: { title: 'List audit entries failed', action: 'list audit entries' },
+  action_list: { title: 'List actions failed', action: 'list action definitions' },
+  action_execute: { title: 'Action execution failed', action: 'execute the action' },
+  node_lock: { title: 'Lock node failed', action: 'lock the node' },
+  node_unlock: { title: 'Unlock node failed', action: 'unlock the node' },
+  version_revert: { title: 'Revert version failed', action: 'revert the version' },
+  version_delete: { title: 'Delete version failed', action: 'delete the version' },
+  association_list: { title: 'List associations failed', action: 'list associations' },
+  association_manage: { title: 'Association change failed', action: 'change associations' },
+  comment_list: { title: 'List comments failed', action: 'list comments' },
+  comment_manage: { title: 'Comment change failed', action: 'change comments' },
 };
 
 const OPERATION_SUCCESS_LABELS: Record<string, string> = {
@@ -242,6 +258,18 @@ const OPERATION_SUCCESS_LABELS: Record<string, string> = {
   category_manage: 'Categories updated',
   people_create: 'Person created',
   people_update: 'Person updated',
+  audit_apps: 'Audit applications listed',
+  audit_list: 'Audit entries listed',
+  action_list: 'Actions listed',
+  action_execute: 'Action executed',
+  node_lock: 'Node locked',
+  node_unlock: 'Node unlocked',
+  version_revert: 'Version reverted',
+  version_delete: 'Version deleted',
+  association_list: 'Associations listed',
+  association_manage: 'Associations updated',
+  comment_list: 'Comments listed',
+  comment_manage: 'Comments updated',
 };
 
 export function buildOperationFailureMessage(operation: string, rawMessage: string): string {

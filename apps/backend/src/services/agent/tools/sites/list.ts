@@ -31,8 +31,7 @@ export const siteListTool: ToolDefinition = {
     properties: {
       where: {
         type: 'string',
-        description:
-          'Optional predicate (Alfresco where clause), e.g. (visibility=\'PUBLIC\')',
+        description: "Optional predicate (Alfresco where clause), e.g. (visibility='PUBLIC')",
       },
       maxItems: { type: 'number', description: 'Page size (default 25, max 100)' },
       skipCount: { type: 'number', description: 'Paging offset (default 0)' },

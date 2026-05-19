@@ -20,6 +20,7 @@ import { normalizeBaseUrl } from '../../../../lib/alfresco-url.js';
 import type { AgentExecutionContext } from '../../types.js';
 import { buildAuthHeader } from '../helpers/authHeaders.js';
 import { isRecord } from '../helpers/nodeResultHelpers.js';
+import { parseSkipMax, summarizeAlfrescoListPagination } from '../helpers/paginationArgs.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
 
 export const peopleListTool: ToolDefinition = {
@@ -48,15 +49,7 @@ export const peopleListTool: ToolDefinition = {
   async execute(ctx: AgentExecutionContext, args: Record<string, unknown>): Promise<ToolResult> {
     try {
       const filter = typeof args.filter === 'string' ? args.filter.trim() : '';
-      const maxItemsRaw =
-        typeof args.maxItems === 'number' && Number.isFinite(args.maxItems)
-          ? Math.max(0, Math.min(Math.floor(args.maxItems), 100))
-          : 25;
-      const maxItems = Math.max(1, maxItemsRaw);
-      const skipCount =
-        typeof args.skipCount === 'number' && Number.isFinite(args.skipCount)
-          ? Math.max(0, Math.floor(args.skipCount))
-          : 0;
+      const { skipCount, maxItems } = parseSkipMax(args, { defaultMax: 25, maxCap: 100 });
 
       const requestQuery: Record<string, unknown> = {
         skipCount,
@@ -86,7 +79,11 @@ export const peopleListTool: ToolDefinition = {
       const entries = Array.isArray(list.entries) ? list.entries : [];
 
       const people = entries
-        .map((item: unknown) => (isRecord((item as any)?.entry) ? (item as any).entry : null))
+        .map((item: unknown) =>
+          isRecord((item as { entry?: unknown })?.entry)
+            ? (item as { entry: Record<string, unknown> }).entry
+            : null
+        )
         .filter((entry: Record<string, unknown> | null): entry is Record<string, unknown> =>
           Boolean(entry)
         )
@@ -107,15 +104,11 @@ export const peopleListTool: ToolDefinition = {
           };
         });
 
-      const totalCount =
-        typeof pagination.totalItems === 'number' && Number.isFinite(pagination.totalItems)
-          ? pagination.totalItems
-          : people.length;
-      const hasMoreItems =
-        typeof pagination.hasMoreItems === 'boolean'
-          ? pagination.hasMoreItems
-          : skipCount + people.length < totalCount;
-      const nextSkipCount = hasMoreItems ? skipCount + people.length : null;
+      const { totalCount, hasMoreItems, nextSkipCount } = summarizeAlfrescoListPagination(
+        pagination,
+        people.length,
+        skipCount
+      );
 
       return {
         ok: true,

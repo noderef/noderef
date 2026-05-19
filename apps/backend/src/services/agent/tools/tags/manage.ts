@@ -27,8 +27,7 @@ type TagAction = 'add_to_node' | 'remove_from_node' | 'rename_global' | 'delete_
 
 export const tagManageTool: ToolDefinition = {
   name: 'tag_manage',
-  description:
-    'Create/remove tags on a node, or rename/delete a tag globally in the tag service.',
+  description: 'Create/remove tags on a node, or rename/delete a tag globally in the tag service.',
   skill: { kind: 'local_md', path: '../skills/tag_manage.md', version: 1 },
   inputSchema: {
     type: 'object',
@@ -43,7 +42,10 @@ export const tagManageTool: ToolDefinition = {
         type: 'string',
         description: 'Tag text for add_to_node, or new name for rename_global',
       },
-      tagId: { type: 'string', description: 'Tag id for remove_from_node / rename_global / delete_global' },
+      tagId: {
+        type: 'string',
+        description: 'Tag id for remove_from_node / rename_global / delete_global',
+      },
     },
     required: ['action'],
   },

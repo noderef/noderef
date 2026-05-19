@@ -22,12 +22,7 @@ import {
 import type { AgentExecutionContext } from '../../types.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
 
-const SITE_ROLES = [
-  'SiteConsumer',
-  'SiteCollaborator',
-  'SiteContributor',
-  'SiteManager',
-] as const;
+const SITE_ROLES = ['SiteConsumer', 'SiteCollaborator', 'SiteContributor', 'SiteManager'] as const;
 
 function normalizeRole(role: string): string | null {
   const r = role.trim();

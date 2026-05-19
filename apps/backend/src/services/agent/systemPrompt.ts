@@ -177,6 +177,11 @@ CRITICAL RULES — you MUST follow these:
    - site_list, site_get, site_create, site_update, site_delete, site_members for Alfresco sites
    - trashcan_list, trashcan_restore, trashcan_purge for deleted-node recovery and permanent removal
    - tag_list, tag_manage for tags; category_list, category_manage for taxonomy/category links
+   - audit_apps, audit_list for audit applications and entries (app or node scope)
+   - action_list, action_execute for repository actions
+   - node_lock, node_unlock for document locks; version_revert, version_delete after node_versions
+   - association_list, association_manage for peer and secondary associations
+   - comment_list, comment_manage for node comments
    - search for repository-wide queries
    - search_export_text for text exports saved as repository files (csv/tsv/jsonl/md/xml/plain/custom), especially for large result sets
    - text_write_begin/text_write_append/text_write_commit for arbitrary large text writes (any text format)

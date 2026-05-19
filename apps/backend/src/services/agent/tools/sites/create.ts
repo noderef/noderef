@@ -63,7 +63,8 @@ export const siteCreateTool: ToolDefinition = {
       const idRaw = typeof args.id === 'string' ? args.id.trim() : '';
       const description =
         typeof args.description === 'string' ? args.description.trim() : undefined;
-      const visRaw = typeof args.visibility === 'string' ? args.visibility.trim().toUpperCase() : '';
+      const visRaw =
+        typeof args.visibility === 'string' ? args.visibility.trim().toUpperCase() : '';
       const visibility = (VISIBILITY as readonly string[]).includes(visRaw)
         ? (visRaw as (typeof VISIBILITY)[number])
         : 'PUBLIC';

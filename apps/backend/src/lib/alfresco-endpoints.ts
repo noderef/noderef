@@ -24,8 +24,7 @@ const ALFRESCO_PUBLIC_V1_SITES_BASE_PATH =
   '/alfresco/api/-default-/public/alfresco/versions/1/sites';
 const ALFRESCO_PUBLIC_V1_DELETED_NODES_BASE_PATH =
   '/alfresco/api/-default-/public/alfresco/versions/1/deleted-nodes';
-const ALFRESCO_PUBLIC_V1_TAGS_BASE_PATH =
-  '/alfresco/api/-default-/public/alfresco/versions/1/tags';
+const ALFRESCO_PUBLIC_V1_TAGS_BASE_PATH = '/alfresco/api/-default-/public/alfresco/versions/1/tags';
 const ALFRESCO_PUBLIC_V1_CATEGORIES_BASE_PATH =
   '/alfresco/api/-default-/public/alfresco/versions/1/categories';
 
@@ -52,6 +51,27 @@ const ALFRESCO_CATEGORY_PATH_TEMPLATE = `${ALFRESCO_PUBLIC_V1_CATEGORIES_BASE_PA
 const ALFRESCO_CATEGORY_SUBCATEGORIES_PATH_TEMPLATE = `${ALFRESCO_PUBLIC_V1_CATEGORIES_BASE_PATH}/{categoryId}/subcategories`;
 const ALFRESCO_NODE_CATEGORY_LINKS_PATH_TEMPLATE = `${ALFRESCO_PUBLIC_V1_NODES_BASE_PATH}/{nodeId}/category-links`;
 const ALFRESCO_NODE_CATEGORY_LINK_PATH_TEMPLATE = `${ALFRESCO_PUBLIC_V1_NODES_BASE_PATH}/{nodeId}/category-links/{categoryId}`;
+const ALFRESCO_PUBLIC_V1_AUDIT_APPLICATIONS_PATH =
+  '/alfresco/api/-default-/public/alfresco/versions/1/audit-applications';
+const ALFRESCO_AUDIT_APP_ENTRIES_PATH_TEMPLATE = `${ALFRESCO_PUBLIC_V1_AUDIT_APPLICATIONS_PATH}/{auditApplicationId}/audit-entries`;
+const ALFRESCO_NODE_AUDIT_ENTRIES_PATH_TEMPLATE = `${ALFRESCO_PUBLIC_V1_NODES_BASE_PATH}/{nodeId}/audit-entries`;
+const ALFRESCO_ACTION_DEFINITIONS_PATH =
+  '/alfresco/api/-default-/public/alfresco/versions/1/action-definitions';
+const ALFRESCO_ACTION_EXECUTIONS_PATH =
+  '/alfresco/api/-default-/public/alfresco/versions/1/action-executions';
+const ALFRESCO_NODE_ACTION_DEFINITIONS_PATH_TEMPLATE = `${ALFRESCO_PUBLIC_V1_NODES_BASE_PATH}/{nodeId}/action-definitions`;
+const ALFRESCO_NODE_LOCK_PATH_TEMPLATE = `${ALFRESCO_PUBLIC_V1_NODES_BASE_PATH}/{nodeId}/lock`;
+const ALFRESCO_NODE_UNLOCK_PATH_TEMPLATE = `${ALFRESCO_PUBLIC_V1_NODES_BASE_PATH}/{nodeId}/unlock`;
+const ALFRESCO_NODE_VERSION_PATH_TEMPLATE = `${ALFRESCO_PUBLIC_V1_NODES_BASE_PATH}/{nodeId}/versions/{versionId}`;
+const ALFRESCO_NODE_VERSION_REVERT_PATH_TEMPLATE = `${ALFRESCO_PUBLIC_V1_NODES_BASE_PATH}/{nodeId}/versions/{versionId}/revert`;
+const ALFRESCO_NODE_COMMENTS_PATH_TEMPLATE = `${ALFRESCO_PUBLIC_V1_NODES_BASE_PATH}/{nodeId}/comments`;
+const ALFRESCO_NODE_COMMENT_PATH_TEMPLATE = `${ALFRESCO_PUBLIC_V1_NODES_BASE_PATH}/{nodeId}/comments/{commentId}`;
+const ALFRESCO_NODE_PARENTS_PATH_TEMPLATE = `${ALFRESCO_PUBLIC_V1_NODES_BASE_PATH}/{nodeId}/parents`;
+const ALFRESCO_NODE_SECONDARY_CHILDREN_PATH_TEMPLATE = `${ALFRESCO_PUBLIC_V1_NODES_BASE_PATH}/{nodeId}/secondary-children`;
+const ALFRESCO_NODE_SECONDARY_CHILD_PATH_TEMPLATE = `${ALFRESCO_PUBLIC_V1_NODES_BASE_PATH}/{nodeId}/secondary-children/{childId}`;
+const ALFRESCO_NODE_TARGETS_PATH_TEMPLATE = `${ALFRESCO_PUBLIC_V1_NODES_BASE_PATH}/{nodeId}/targets`;
+const ALFRESCO_NODE_TARGET_PATH_TEMPLATE = `${ALFRESCO_PUBLIC_V1_NODES_BASE_PATH}/{nodeId}/targets/{targetId}`;
+const ALFRESCO_NODE_SOURCES_PATH_TEMPLATE = `${ALFRESCO_PUBLIC_V1_NODES_BASE_PATH}/{nodeId}/sources`;
 
 export function getAlfrescoNodePath(nodeId: string): string {
   return ALFRESCO_NODE_PATH_TEMPLATE.replace('{nodeId}', nodeId);
@@ -173,10 +193,7 @@ export function getAlfrescoCategorySubcategoriesPath(categoryId: string): string
 }
 
 export function getAlfrescoNodeCategoryLinksPath(nodeId: string): string {
-  return ALFRESCO_NODE_CATEGORY_LINKS_PATH_TEMPLATE.replace(
-    '{nodeId}',
-    encodeURIComponent(nodeId)
-  );
+  return ALFRESCO_NODE_CATEGORY_LINKS_PATH_TEMPLATE.replace('{nodeId}', encodeURIComponent(nodeId));
 }
 
 export function getAlfrescoNodeCategoryLinkPath(nodeId: string, categoryId: string): string {
@@ -184,4 +201,100 @@ export function getAlfrescoNodeCategoryLinkPath(nodeId: string, categoryId: stri
     '{nodeId}',
     encodeURIComponent(nodeId)
   ).replace('{categoryId}', encodeURIComponent(categoryId));
+}
+
+export function getAlfrescoAuditApplicationsPath(): string {
+  return ALFRESCO_PUBLIC_V1_AUDIT_APPLICATIONS_PATH;
+}
+
+export function getAlfrescoAuditAppEntriesPath(auditApplicationId: string): string {
+  return ALFRESCO_AUDIT_APP_ENTRIES_PATH_TEMPLATE.replace(
+    '{auditApplicationId}',
+    encodeURIComponent(auditApplicationId)
+  );
+}
+
+export function getAlfrescoNodeAuditEntriesPath(nodeId: string): string {
+  return ALFRESCO_NODE_AUDIT_ENTRIES_PATH_TEMPLATE.replace('{nodeId}', encodeURIComponent(nodeId));
+}
+
+export function getAlfrescoActionDefinitionsPath(): string {
+  return ALFRESCO_ACTION_DEFINITIONS_PATH;
+}
+
+export function getAlfrescoActionExecutionsPath(): string {
+  return ALFRESCO_ACTION_EXECUTIONS_PATH;
+}
+
+export function getAlfrescoNodeActionDefinitionsPath(nodeId: string): string {
+  return ALFRESCO_NODE_ACTION_DEFINITIONS_PATH_TEMPLATE.replace(
+    '{nodeId}',
+    encodeURIComponent(nodeId)
+  );
+}
+
+export function getAlfrescoNodeLockPath(nodeId: string): string {
+  return ALFRESCO_NODE_LOCK_PATH_TEMPLATE.replace('{nodeId}', encodeURIComponent(nodeId));
+}
+
+export function getAlfrescoNodeUnlockPath(nodeId: string): string {
+  return ALFRESCO_NODE_UNLOCK_PATH_TEMPLATE.replace('{nodeId}', encodeURIComponent(nodeId));
+}
+
+export function getAlfrescoNodeVersionPath(nodeId: string, versionId: string): string {
+  return ALFRESCO_NODE_VERSION_PATH_TEMPLATE.replace(
+    '{nodeId}',
+    encodeURIComponent(nodeId)
+  ).replace('{versionId}', encodeURIComponent(versionId));
+}
+
+export function getAlfrescoNodeVersionRevertPath(nodeId: string, versionId: string): string {
+  return ALFRESCO_NODE_VERSION_REVERT_PATH_TEMPLATE.replace(
+    '{nodeId}',
+    encodeURIComponent(nodeId)
+  ).replace('{versionId}', encodeURIComponent(versionId));
+}
+
+export function getAlfrescoNodeCommentsPath(nodeId: string): string {
+  return ALFRESCO_NODE_COMMENTS_PATH_TEMPLATE.replace('{nodeId}', encodeURIComponent(nodeId));
+}
+
+export function getAlfrescoNodeCommentPath(nodeId: string, commentId: string): string {
+  return ALFRESCO_NODE_COMMENT_PATH_TEMPLATE.replace(
+    '{nodeId}',
+    encodeURIComponent(nodeId)
+  ).replace('{commentId}', encodeURIComponent(commentId));
+}
+
+export function getAlfrescoNodeParentsPath(nodeId: string): string {
+  return ALFRESCO_NODE_PARENTS_PATH_TEMPLATE.replace('{nodeId}', encodeURIComponent(nodeId));
+}
+
+export function getAlfrescoNodeSecondaryChildrenPath(nodeId: string): string {
+  return ALFRESCO_NODE_SECONDARY_CHILDREN_PATH_TEMPLATE.replace(
+    '{nodeId}',
+    encodeURIComponent(nodeId)
+  );
+}
+
+export function getAlfrescoNodeSecondaryChildPath(nodeId: string, childId: string): string {
+  return ALFRESCO_NODE_SECONDARY_CHILD_PATH_TEMPLATE.replace(
+    '{nodeId}',
+    encodeURIComponent(nodeId)
+  ).replace('{childId}', encodeURIComponent(childId));
+}
+
+export function getAlfrescoNodeTargetsPath(nodeId: string): string {
+  return ALFRESCO_NODE_TARGETS_PATH_TEMPLATE.replace('{nodeId}', encodeURIComponent(nodeId));
+}
+
+export function getAlfrescoNodeTargetPath(nodeId: string, targetId: string): string {
+  return ALFRESCO_NODE_TARGET_PATH_TEMPLATE.replace('{nodeId}', encodeURIComponent(nodeId)).replace(
+    '{targetId}',
+    encodeURIComponent(targetId)
+  );
+}
+
+export function getAlfrescoNodeSourcesPath(nodeId: string): string {
+  return ALFRESCO_NODE_SOURCES_PATH_TEMPLATE.replace('{nodeId}', encodeURIComponent(nodeId));
 }

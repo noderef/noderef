@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+import { isRecord } from './nodeResultHelpers.js';
+
 export interface PaginationBounds {
   /** Default when maxItems omitted */
   defaultMax: number;
@@ -38,4 +40,21 @@ export function parseSkipMax(
       ? Math.max(0, Math.floor(args.skipCount))
       : 0;
   return { skipCount, maxItems };
+}
+
+/**
+ * Build pagination fields from an Alfresco `list.pagination` object (or fallbacks).
+ */
+export function summarizeAlfrescoListPagination(
+  paginationRaw: unknown,
+  rowCount: number,
+  skipCount: number
+): { totalCount: number; hasMoreItems: boolean; nextSkipCount: number | null } {
+  const p = isRecord(paginationRaw) ? paginationRaw : {};
+  const totalCount =
+    typeof p.totalItems === 'number' && Number.isFinite(p.totalItems) ? p.totalItems : rowCount;
+  const hasMoreItems =
+    typeof p.hasMoreItems === 'boolean' ? p.hasMoreItems : skipCount + rowCount < totalCount;
+  const nextSkipCount = hasMoreItems ? skipCount + rowCount : null;
+  return { totalCount, hasMoreItems, nextSkipCount };
 }

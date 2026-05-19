@@ -21,6 +21,7 @@ import {
 } from '../../../../lib/alfresco-endpoints.js';
 import type { AgentExecutionContext } from '../../types.js';
 import { isRecord } from '../helpers/nodeResultHelpers.js';
+import { parseSkipMax, summarizeAlfrescoListPagination } from '../helpers/paginationArgs.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
 
 export const nodeVersionsTool: ToolDefinition = {
@@ -54,16 +55,7 @@ export const nodeVersionsTool: ToolDefinition = {
         return { ok: false, error: 'nodeId is required' };
       }
 
-      const maxItemsRaw =
-        typeof args.maxItems === 'number' && Number.isFinite(args.maxItems)
-          ? Math.max(0, Math.min(Math.floor(args.maxItems), 100))
-          : 25;
-      const maxItems = Math.max(1, maxItemsRaw);
-      const skipCount =
-        typeof args.skipCount === 'number' && Number.isFinite(args.skipCount)
-          ? Math.max(0, Math.floor(args.skipCount))
-          : 0;
-
+      const { skipCount, maxItems } = parseSkipMax(args, { defaultMax: 25, maxCap: 100 });
       const nodeQuery = {
         fields: ['id', 'name'],
       };
@@ -121,15 +113,11 @@ export const nodeVersionsTool: ToolDefinition = {
           };
         });
 
-      const totalCount =
-        typeof paginationRaw.totalItems === 'number' && Number.isFinite(paginationRaw.totalItems)
-          ? paginationRaw.totalItems
-          : versions.length;
-      const hasMoreItems =
-        typeof paginationRaw.hasMoreItems === 'boolean'
-          ? paginationRaw.hasMoreItems
-          : skipCount + versions.length < totalCount;
-      const nextSkipCount = hasMoreItems ? skipCount + versions.length : null;
+      const { totalCount, hasMoreItems, nextSkipCount } = summarizeAlfrescoListPagination(
+        paginationRaw,
+        versions.length,
+        skipCount
+      );
 
       return {
         ok: true,

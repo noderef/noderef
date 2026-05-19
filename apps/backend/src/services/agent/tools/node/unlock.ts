@@ -14,28 +14,24 @@
  * limitations under the License.
  */
 
-import { TrashcanApi } from '@alfresco/js-api';
-import { getAlfrescoDeletedNodeRestorePath } from '../../../../lib/alfresco-endpoints.js';
+import { NodesApi } from '@alfresco/js-api';
+import { getAlfrescoNodeUnlockPath } from '../../../../lib/alfresco-endpoints.js';
 import type { AgentExecutionContext } from '../../types.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
 
-export const trashcanRestoreTool: ToolDefinition = {
-  name: 'trashcan_restore',
-  description:
-    'Restore a deleted node from the trashcan to its original or a new parent (targetParentId).',
-  skill: { kind: 'local_md', path: '../skills/trashcan_restore.md', version: 1 },
+export const nodeUnlockTool: ToolDefinition = {
+  name: 'node_unlock',
+  description: 'Unlock a node (POST /nodes/{nodeId}/unlock).',
+  skill: { kind: 'local_md', path: '../skills/node_unlock.md', version: 1 },
   inputSchema: {
     type: 'object',
     properties: {
-      nodeId: { type: 'string', description: 'Deleted node id (UUID) from trashcan_list' },
-      targetParentId: {
-        type: 'string',
-        description: 'Optional parent folder node id; omit to restore to original location',
-      },
+      nodeId: { type: 'string', description: 'Node UUID' },
     },
     required: ['nodeId'],
   },
-  requiresConfirmation: false,
+  requiresConfirmation: true,
+  confirmation: { phrase: 'CONFIRM' },
 
   async execute(ctx: AgentExecutionContext, args: Record<string, unknown>): Promise<ToolResult> {
     try {
@@ -43,33 +39,19 @@ export const trashcanRestoreTool: ToolDefinition = {
       if (!nodeId) {
         return { ok: false, error: 'nodeId is required' };
       }
-      const targetParentId =
-        typeof args.targetParentId === 'string' ? args.targetParentId.trim() : '';
-
-      const deletedNodeBodyRestore = targetParentId
-        ? ({ targetParentId } as Record<string, unknown>)
-        : undefined;
 
       if (ctx.signal.aborted) {
         throw new Error('Run was cancelled');
       }
 
-      const trashApi = new TrashcanApi(ctx.api);
-      const path = getAlfrescoDeletedNodeRestorePath(nodeId);
-      const result = await trashApi.restoreDeletedNode(
-        nodeId,
-        deletedNodeBodyRestore ? { deletedNodeBodyRestore } : {}
-      );
+      const nodesApi = new NodesApi(ctx.api);
+      const path = getAlfrescoNodeUnlockPath(nodeId);
+      const result = await nodesApi.unlockNode(nodeId, {});
 
       return {
         ok: true,
         data: {
-          apiTrace: {
-            method: 'POST',
-            path,
-            request: { body: deletedNodeBodyRestore ?? {} },
-            responseBody: result,
-          },
+          apiTrace: { method: 'POST', path, request: {}, responseBody: result },
           node: (result as any)?.entry ?? result,
         },
       };

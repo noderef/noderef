@@ -21,15 +21,27 @@
 
 import type { AgentToolSchema } from '../../../ai/anthropic.js';
 import { existsSync } from 'node:fs';
+import { actionExecuteTool } from './actions/execute.js';
+import { actionListTool } from './actions/list.js';
+import { associationListTool } from './associations/list.js';
+import { associationManageTool } from './associations/manage.js';
+import { auditAppsTool } from './audit/apps.js';
+import { auditListTool } from './audit/list.js';
+import { commentListTool } from './comments/list.js';
+import { commentManageTool } from './comments/manage.js';
 import { nodeCopyTool } from './node/copy.js';
 import { nodeCreateTool } from './node/create.js';
 import { nodeDeleteTool } from './node/delete.js';
 import { nodeGetTool } from './node/get.js';
 import { nodeGetContentTool } from './node/get_content.js';
 import { nodeListChildrenTool } from './node/list_children.js';
+import { nodeLockTool } from './node/lock.js';
 import { nodeMoveTool } from './node/move.js';
+import { nodeUnlockTool } from './node/unlock.js';
 import { nodeUpdateTool } from './node/update.js';
 import { nodeUpdateContentTool } from './node/update_content.js';
+import { versionDeleteTool } from './node/version_delete.js';
+import { versionRevertTool } from './node/version_revert.js';
 import { nodeVersionsTool } from './node/versions.js';
 import { groupGetTool } from './groups/get.js';
 import { groupMembersTool } from './groups/members.js';
@@ -84,7 +96,11 @@ export const ALL_TOOLS: ToolDefinition[] = [
   nodeUpdateContentTool,
   nodeMoveTool,
   nodeCopyTool,
+  nodeLockTool,
+  nodeUnlockTool,
   nodeVersionsTool,
+  versionRevertTool,
+  versionDeleteTool,
   nodeDeleteTool,
   permissionsGetTool,
   permissionsSetTool,
@@ -107,6 +123,14 @@ export const ALL_TOOLS: ToolDefinition[] = [
   tagManageTool,
   categoryListTool,
   categoryManageTool,
+  auditAppsTool,
+  auditListTool,
+  actionListTool,
+  actionExecuteTool,
+  associationListTool,
+  associationManageTool,
+  commentListTool,
+  commentManageTool,
   scriptCreateTool,
   scriptExecuteTool,
 ];
@@ -169,6 +193,18 @@ const TOOL_NAME_ALIASES: Record<string, string> = {
   manage_categories: 'category_manage',
   create_person: 'people_create',
   update_person: 'people_update',
+  list_audit_apps: 'audit_apps',
+  list_audit_entries: 'audit_list',
+  list_actions: 'action_list',
+  execute_action: 'action_execute',
+  lock_node: 'node_lock',
+  unlock_node: 'node_unlock',
+  revert_version: 'version_revert',
+  delete_version: 'version_delete',
+  list_associations: 'association_list',
+  manage_associations: 'association_manage',
+  list_comments: 'comment_list',
+  manage_comments: 'comment_manage',
 };
 
 export function resolveToolName(name: string): string {

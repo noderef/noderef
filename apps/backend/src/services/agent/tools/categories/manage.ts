@@ -58,7 +58,10 @@ export const categoryManageTool: ToolDefinition = {
         type: 'string',
         description: 'Target category id (update/delete/link target)',
       },
-      name: { type: 'string', description: 'Display name for create_subcategory or update_category' },
+      name: {
+        type: 'string',
+        description: 'Display name for create_subcategory or update_category',
+      },
       nodeId: { type: 'string', description: 'Node id for link_node / unlink_node' },
     },
     required: ['action'],
@@ -168,7 +171,10 @@ export const categoryManageTool: ToolDefinition = {
       const nodeId = typeof args.nodeId === 'string' ? args.nodeId.trim() : '';
       const categoryId = typeof args.categoryId === 'string' ? args.categoryId.trim() : '';
       if (!nodeId || !categoryId) {
-        return { ok: false, error: 'nodeId and categoryId are required for link_node and unlink_node' };
+        return {
+          ok: false,
+          error: 'nodeId and categoryId are required for link_node and unlink_node',
+        };
       }
 
       if (action === 'unlink_node') {

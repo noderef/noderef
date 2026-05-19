@@ -27,7 +27,7 @@ import { normalizeBaseUrl } from '../lib/alfresco-url.js';
 import { sendAppError } from '../lib/errorHandler.js';
 import { log } from '../lib/logger.js';
 import { getPrismaClient } from '../lib/prisma.js';
-import { getAuthenticatedClient } from '../services/alfresco/clientFactory.js';
+import { authenticateAlfrescoRpcRequest } from './rpcServerAuth.js';
 import { callMethod } from '../services/alfresco/proxyService.js';
 import { ServerService } from '../services/serverService.js';
 import { getCurrentUserId } from '../services/userBootstrap.js';
@@ -49,33 +49,6 @@ function coerceQueryValue(value: string | string[]): unknown {
   if (/^\d+$/.test(value)) return parseInt(value, 10);
   if (/^\d+\.\d+$/.test(value)) return parseFloat(value);
   return value;
-}
-
-/**
- * Authenticate a server request for stream downloads
- */
-async function authenticateServerRequest(
-  serverService: ServerService,
-  baseUrl: string,
-  serverId: number
-): Promise<AlfrescoApi | undefined> {
-  const userId = await getCurrentUserId();
-  const creds = await serverService.getCredentialsForBackend(userId, serverId);
-
-  if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
-    log.warn(
-      { serverId, authType: creds?.authType },
-      'Missing credentials for server stream request'
-    );
-    return undefined;
-  }
-
-  try {
-    return await getAuthenticatedClient(baseUrl, creds);
-  } catch (error) {
-    log.error({ serverId, error }, 'Failed to authenticate stream request');
-    throw error;
-  }
 }
 
 /**
@@ -500,7 +473,12 @@ export function rpcStreamHandler({ serverService, contracts }: RpcStreamOptions)
       const args = parseStreamArgs(parsed.rest);
       const authenticatedApi =
         parsed.serverId !== undefined
-          ? await authenticateServerRequest(serverService, parsed.baseUrl, parsed.serverId)
+          ? await authenticateAlfrescoRpcRequest(
+              serverService,
+              parsed.baseUrl,
+              parsed.serverId,
+              'stream'
+            )
           : undefined;
 
       if (await maybeHandleNodeContentDownload({ parsed, args, authenticatedApi, res })) {

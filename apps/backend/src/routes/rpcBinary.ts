@@ -23,10 +23,9 @@ import type { RequestHandler } from 'express';
 import multer from 'multer';
 import { sendAppError } from '../lib/errorHandler.js';
 import { log } from '../lib/logger.js';
-import { getAuthenticatedClient } from '../services/alfresco/clientFactory.js';
+import { authenticateAlfrescoRpcRequest } from './rpcServerAuth.js';
 import { callMethod } from '../services/alfresco/proxyService.js';
-import { ServerService } from '../services/serverService.js';
-import { getCurrentUserId } from '../services/userBootstrap.js';
+import type { ServerService } from '../services/serverService.js';
 
 export interface RpcBinaryOptions {
   serverService: ServerService;
@@ -40,33 +39,6 @@ export function createUploadMiddleware() {
   return multer({
     storage: multer.memoryStorage(),
   });
-}
-
-/**
- * Authenticate a server request for binary uploads
- */
-async function authenticateServerRequest(
-  serverService: ServerService,
-  baseUrl: string,
-  serverId: number
-): Promise<AlfrescoApi | undefined> {
-  const userId = await getCurrentUserId();
-  const creds = await serverService.getCredentialsForBackend(userId, serverId);
-
-  if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
-    log.warn(
-      { serverId, authType: creds?.authType },
-      'Missing credentials for server binary request'
-    );
-    return undefined;
-  }
-
-  try {
-    return await getAuthenticatedClient(baseUrl, creds);
-  } catch (error) {
-    log.error({ serverId, error }, 'Failed to authenticate binary request');
-    throw error;
-  }
 }
 
 /**
@@ -172,7 +144,12 @@ export function rpcBinaryHandler({ serverService, contracts }: RpcBinaryOptions)
 
       let authenticatedApi: AlfrescoApi | undefined;
       if (serverId !== undefined) {
-        authenticatedApi = await authenticateServerRequest(serverService, baseUrl, serverId);
+        authenticatedApi = await authenticateAlfrescoRpcRequest(
+          serverService,
+          baseUrl,
+          serverId,
+          'binary'
+        );
       }
 
       const result = await callMethod(baseUrl, method, args, authenticatedApi);
