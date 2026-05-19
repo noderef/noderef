@@ -33,14 +33,29 @@ import { nodeUpdateContentTool } from './node/update_content.js';
 import { nodeVersionsTool } from './node/versions.js';
 import { groupGetTool } from './groups/get.js';
 import { groupMembersTool } from './groups/members.js';
+import { categoryListTool } from './categories/list.js';
+import { categoryManageTool } from './categories/manage.js';
+import { peopleCreateTool } from './people/create.js';
 import { peopleGetTool } from './people/get.js';
 import { peopleListTool } from './people/list.js';
+import { peopleUpdateTool } from './people/update.js';
 import { permissionsGetTool } from './permissions/get.js';
 import { permissionsSetTool } from './permissions/set.js';
 import { searchExportTextTool } from './search/export_text.js';
 import { searchTool } from './search/query.js';
 import { scriptCreateTool } from './script/create.js';
 import { scriptExecuteTool } from './script/execute.js';
+import { siteCreateTool } from './sites/create.js';
+import { siteDeleteTool } from './sites/delete.js';
+import { siteGetTool } from './sites/get.js';
+import { siteListTool } from './sites/list.js';
+import { siteMembersTool } from './sites/members.js';
+import { siteUpdateTool } from './sites/update.js';
+import { tagListTool } from './tags/list.js';
+import { tagManageTool } from './tags/manage.js';
+import { trashcanListTool } from './trashcan/list.js';
+import { trashcanPurgeTool } from './trashcan/purge.js';
+import { trashcanRestoreTool } from './trashcan/restore.js';
 import { textWriteAbortTool } from './text/write_abort.js';
 import { textWriteAppendTool } from './text/write_append.js';
 import { textWriteBeginTool } from './text/write_begin.js';
@@ -75,8 +90,23 @@ export const ALL_TOOLS: ToolDefinition[] = [
   permissionsSetTool,
   peopleGetTool,
   peopleListTool,
+  peopleCreateTool,
+  peopleUpdateTool,
   groupGetTool,
   groupMembersTool,
+  siteListTool,
+  siteGetTool,
+  siteCreateTool,
+  siteUpdateTool,
+  siteDeleteTool,
+  siteMembersTool,
+  trashcanListTool,
+  trashcanRestoreTool,
+  trashcanPurgeTool,
+  tagListTool,
+  tagManageTool,
+  categoryListTool,
+  categoryManageTool,
   scriptCreateTool,
   scriptExecuteTool,
 ];
@@ -124,6 +154,21 @@ const TOOL_NAME_ALIASES: Record<string, string> = {
   text_write_start: 'text_write_begin',
   text_write_finish: 'text_write_commit',
   delete: 'node_delete',
+  list_sites: 'site_list',
+  get_site: 'site_get',
+  create_site: 'site_create',
+  update_site: 'site_update',
+  delete_site: 'site_delete',
+  manage_site_members: 'site_members',
+  list_deleted_nodes: 'trashcan_list',
+  restore_deleted_node: 'trashcan_restore',
+  purge_deleted_node: 'trashcan_purge',
+  list_tags: 'tag_list',
+  manage_tags: 'tag_manage',
+  list_categories: 'category_list',
+  manage_categories: 'category_manage',
+  create_person: 'people_create',
+  update_person: 'people_update',
 };
 
 export function resolveToolName(name: string): string {

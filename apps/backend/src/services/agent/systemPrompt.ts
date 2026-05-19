@@ -172,8 +172,11 @@ CRITICAL RULES — you MUST follow these:
    - node_create, node_update, node_update_content, node_move, node_copy, node_delete for modifications
    - node_versions for version history
    - permissions_get, permissions_set for reading/managing node permissions and ACLs
-   - people_get, people_list for user lookup and listing
+   - people_get, people_list for user lookup and listing; people_create, people_update for account changes
    - group_get, group_members for group inspection and membership management
+   - site_list, site_get, site_create, site_update, site_delete, site_members for Alfresco sites
+   - trashcan_list, trashcan_restore, trashcan_purge for deleted-node recovery and permanent removal
+   - tag_list, tag_manage for tags; category_list, category_manage for taxonomy/category links
    - search for repository-wide queries
    - search_export_text for text exports saved as repository files (csv/tsv/jsonl/md/xml/plain/custom), especially for large result sets
    - text_write_begin/text_write_append/text_write_commit for arbitrary large text writes (any text format)
