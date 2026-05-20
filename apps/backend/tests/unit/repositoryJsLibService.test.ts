@@ -24,9 +24,10 @@ vi.mock('../../src/services/alfresco/authenticationHelper.js', () => ({
 }));
 
 function pathChainResponse(nodeId: string) {
+  // Alfresco "-root-" alias resolves to Company Home directly, so the first
+  // hop already lists Data Dictionary as a child.
   const chain: Record<string, { id: string; name: string }> = {
-    '-root-': { id: 'company', name: 'Company Home' },
-    company: { id: 'dict', name: 'Data Dictionary' },
+    '-root-': { id: 'dict', name: 'Data Dictionary' },
     dict: { id: 'noderef', name: 'NodeRef' },
     noderef: { id: 'libs', name: 'js-libs' },
   };
@@ -64,6 +65,51 @@ describe('RepositoryJsLibService', () => {
     const result = await service.refresh(1, 9);
     expect(result.ok).toBe(true);
     expect(result.libCount).toBe(0);
+  });
+
+  it('collects .js files recursively from subfolders under js-libs', async () => {
+    mockListNodeChildren.mockImplementation(async (nodeId: string) => {
+      if (nodeId === 'libs') {
+        return {
+          list: {
+            entries: [
+              { entry: { id: 'root-js', name: 'root.js', modifiedAt: '2026-01-01' } },
+              { entry: { id: 'sub-folder', name: 'sub', isFolder: true } },
+            ],
+          },
+        };
+      }
+      if (nodeId === 'sub-folder') {
+        return {
+          list: {
+            entries: [{ entry: { id: 'nested-js', name: 'nested.js', modifiedAt: '2026-01-01' } }],
+          },
+        };
+      }
+      return pathChainResponse(nodeId);
+    });
+
+    mockGetNodeContent.mockImplementation(async (nodeId: string) => {
+      if (nodeId === 'root-js') {
+        return `/**
+ * @description Root lib.
+ */
+logger.log('root');`;
+      }
+      return `/**
+ * @description Nested lib.
+ */
+logger.log('nested');`;
+    });
+
+    const service = createService();
+    const result = await service.refresh(1, 9);
+    expect(result.ok).toBe(true);
+    expect(result.libCount).toBe(2);
+
+    const snapshot = await service.getSnapshot(1, 9);
+    expect(snapshot.manifest['custom_root']).toBeDefined();
+    expect(snapshot.manifest['custom_nested']).toBeDefined();
   });
 
   it('loads valid files and skips invalid ones', async () => {

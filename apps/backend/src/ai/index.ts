@@ -22,12 +22,18 @@ import { resolveUserAiConfig } from '../services/ai/userSettingsService.js';
 import { getCurrentUserId } from '../services/userBootstrap.js';
 import { getAiAssistantEnabled } from '../services/userSettings.js';
 import { callAnthropic } from './anthropic.js';
+import { DslParseError, parseDslResponseWithRepair, type DslResponse } from './dslResponse.js';
 import { buildExecutionPrompt } from './executePrompt.js';
 import { loadMergedLibs } from './loadMergedLibs.js';
 import type { RepositoryJsLibService } from '../services/repositoryJsLibService.js';
 import { getAiProvider, providerSupportsCapability } from './providers.js';
 import { buildRouterPrompt } from './routerPrompt.js';
 import type { AiInputImage, AiInputImageMediaType } from './types.js';
+import type { Manifest } from './types/manifest.js';
+import {
+  resolveRouterLibrarySelection,
+  suggestedLibrariesForRouter,
+} from './selectPreferredLibraries.js';
 
 export interface CreateAiRouterOptions {
   repositoryJsLibService: RepositoryJsLibService;
@@ -123,10 +129,25 @@ export function createAiRouter({ repositoryJsLibService }: CreateAiRouterOptions
       const images = parseInputImages(req.body?.images);
 
       const serverId = parseOptionalServerId(req.body?.serverId);
+      const refreshResult =
+        serverId != null ? await repositoryJsLibService.refresh(userId, serverId) : null;
+
       const libs = await loadMergedLibs({ userId, serverId, repositoryJsLibService });
-      const { manifest } = libs;
-      const prompt = buildRouterPrompt(question, manifest);
-      const maskedPrompt = await maskPromptForUser(userId, prompt);
+      const manifest = libs.manifest as Manifest;
+      const customLibNames = Object.keys(manifest).filter(name => name.startsWith('custom_'));
+
+      if (serverId != null && customLibNames.length === 0) {
+        log.warn(
+          { userId, serverId, refreshOk: refreshResult?.ok, refreshError: refreshResult?.error },
+          'AI router: no custom libs loaded from Alfresco (check js-libs folder and file JSDoc)'
+        );
+      }
+
+      const suggested = suggestedLibrariesForRouter(question, manifest);
+      const maskedPrompt = await maskPromptForUser(
+        userId,
+        buildRouterPrompt(question, manifest, { suggestedLibraries: suggested })
+      );
 
       const raw = await callProvider(aiConfig.provider, {
         apiKey: aiConfig.apiKey,
@@ -136,14 +157,22 @@ export function createAiRouter({ repositoryJsLibService }: CreateAiRouterOptions
         images,
       });
 
-      const selected = parseSelectedLibraries(raw, manifest);
+      const resolution = parseRouterSelectionOrThrow(question, manifest, raw);
+      const { selected, parsedBeforeFallback, rankedCustom } = resolution;
+
       log.info(
         {
           route: 'router',
           userId,
           provider: aiConfig.provider,
           durationMs: Date.now() - started,
+          serverId,
+          customLibNames,
+          suggestedLibraries: suggested,
+          rankedCustomTop: rankedCustom.slice(0, 5),
+          routerSelectedRaw: parsedBeforeFallback,
           selected,
+          injectedFallback: parsedBeforeFallback.length === 0 && selected.length > 0,
         },
         'AI router success'
       );
@@ -191,13 +220,14 @@ export function createAiRouter({ repositoryJsLibService }: CreateAiRouterOptions
         images,
       });
 
-      const parsed = await parseDslResponseWithRepair({
-        raw,
-        userId,
-        provider: aiConfig.provider,
-        apiKey: aiConfig.apiKey,
-        model: aiConfig.model,
-        maxTokens: 1200,
+      const parsed = await parseDslResponseOrThrow(raw, async repairPrompt => {
+        const repairedPrompt = await maskPromptForUser(userId, repairPrompt);
+        return callProvider(aiConfig.provider, {
+          apiKey: aiConfig.apiKey,
+          model: aiConfig.model,
+          prompt: repairedPrompt,
+          maxTokens: 900,
+        });
       });
       log.info(
         {
@@ -292,23 +322,6 @@ export function createAiRouter({ repositoryJsLibService }: CreateAiRouterOptions
     });
   }
 
-  function parseSelectedLibraries(raw: string, manifest: Record<string, unknown>): string[] {
-    try {
-      const sanitized = extractJsonArray(raw);
-      const parsed = JSON.parse(sanitized);
-      if (!Array.isArray(parsed)) {
-        throw new Error('Router response must be an array.');
-      }
-
-      return parsed.filter(name => typeof name === 'string' && name in manifest).slice(0, 5);
-    } catch (err) {
-      throw new AiError({
-        code: 'AI_ROUTER_PARSE_FAILED',
-        message: `Failed to parse router response: ${(err as Error).message}`,
-      });
-    }
-  }
-
   function parseInputImages(raw: unknown): AiInputImage[] {
     if (raw === undefined || raw === null) {
       return [];
@@ -384,191 +397,37 @@ export function createAiRouter({ repositoryJsLibService }: CreateAiRouterOptions
     return { mediaType, data: match[2].replace(/\s+/g, '') };
   }
 
-  function extractJson(raw: string, charPair: [string, string]): string {
-    const trimmed = raw.trim();
-    if (trimmed.startsWith('```')) {
-      const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
-      if (fenceMatch?.[1]) {
-        return fenceMatch[1].trim();
-      }
-    }
-    const firstChar = trimmed.indexOf(charPair[0]);
-    const lastChar = trimmed.lastIndexOf(charPair[1]);
-    if (firstChar !== -1 && lastChar !== -1 && lastChar > firstChar) {
-      return trimmed.slice(firstChar, lastChar + 1);
-    }
-    return trimmed;
-  }
-
-  function extractJsonArray(raw: string): string {
-    return extractJson(raw, ['[', ']']);
-  }
-
-  const VALID_DSL_TYPES = new Set(['replace_selection', 'replace_file'] as const);
-  type DslChangeType = 'replace_selection' | 'replace_file';
-  interface DslResponse {
-    type: DslChangeType;
-    code: string;
-  }
-
-  function parseDslResponse(raw: string): DslResponse {
-    const match = raw.match(/<changes>([\s\S]*?)<\/changes>/i);
-    const candidates = [match?.[1], raw].filter(Boolean) as string[];
-
-    for (const candidate of candidates) {
-      const parsedFromJson = tryParseDslJson(extractJsonObject(candidate.trim()));
-      if (parsedFromJson) {
-        return parsedFromJson;
-      }
-
-      const recoveredFromDslLikeText = tryRecoverDslLikePayload(candidate);
-      if (recoveredFromDslLikeText) {
-        return recoveredFromDslLikeText;
-      }
-    }
-
-    // Fallback: if model returned plain fenced JS/TS instead of DSL JSON, use it directly.
-    if (!match) {
-      const fencedCode = extractCodeFence(raw);
-      if (fencedCode) {
-        return {
-          type: 'replace_selection',
-          code: fencedCode,
-        };
-      }
-    }
-
-    if (!match) {
-      throw new AiError({
-        code: 'AI_DSL_MISSING',
-        message: 'AI response is missing the <changes> block and no valid JSON was found.',
-      });
-    }
-
-    throw new AiError({
-      code: 'AI_DSL_INVALID',
-      message: 'Failed to parse DSL response.',
-    });
-  }
-
-  async function parseDslResponseWithRepair(args: {
-    raw: string;
-    userId: number;
-    provider: string;
-    apiKey: string;
-    model: string;
-    maxTokens?: number;
-  }): Promise<DslResponse> {
+  function parseRouterSelectionOrThrow(
+    question: string,
+    manifest: Manifest,
+    raw: string
+  ): ReturnType<typeof resolveRouterLibrarySelection> {
     try {
-      return parseDslResponse(args.raw);
+      return resolveRouterLibrarySelection(question, manifest, raw);
     } catch (err) {
-      if (!(err instanceof AiError) || !shouldAttemptDslRepair(err.code)) {
-        throw err;
-      }
-
-      const repairedPrompt = await maskPromptForUser(args.userId, buildDslRepairPrompt(args.raw));
-      const repairedRaw = await callProvider(args.provider, {
-        apiKey: args.apiKey,
-        model: args.model,
-        prompt: repairedPrompt,
-        maxTokens: Math.min(args.maxTokens ?? 1200, 900),
+      throw new AiError({
+        code: 'AI_ROUTER_PARSE_FAILED',
+        message: `Failed to parse router response: ${(err as Error).message}`,
       });
-
-      return parseDslResponse(repairedRaw);
     }
   }
 
-  function shouldAttemptDslRepair(code: string): boolean {
-    return code === 'AI_DSL_MISSING' || code === 'AI_DSL_INVALID';
-  }
-
-  function buildDslRepairPrompt(rawResponse: string): string {
-    return [
-      'Convert the following assistant response into a STRICT DSL payload.',
-      'Return only this format and nothing else:',
-      '',
-      '<changes>',
-      '{"type":"replace_selection","code":"...escaped json string..."}',
-      '</changes>',
-      '',
-      'Rules:',
-      '1. JSON must be valid.',
-      '2. "type" must be either "replace_selection" or "replace_file".',
-      '3. "code" must contain valid JavaScript code as a single JSON string with escaped newlines.',
-      '4. Do not include commentary outside <changes>.',
-      '',
-      'Input to convert:',
-      rawResponse,
-    ].join('\n');
-  }
-
-  function tryParseDslJson(payload: string): DslResponse | null {
+  async function parseDslResponseOrThrow(
+    raw: string,
+    repair: (repairPrompt: string) => Promise<string>
+  ): Promise<DslResponse> {
     try {
-      const json = JSON.parse(payload);
-      if (!VALID_DSL_TYPES.has(json?.type) || typeof json?.code !== 'string') {
-        return null;
+      return await parseDslResponseWithRepair(raw, repair);
+    } catch (err) {
+      if (err instanceof DslParseError) {
+        log.warn(
+          { code: err.code, rawPreview: raw.slice(0, 400) },
+          'AI execute response could not be parsed as DSL'
+        );
+        throw new AiError({ code: err.code, message: err.message });
       }
-
-      return {
-        type: json.type as DslChangeType,
-        code: json.code,
-      };
-    } catch {
-      return null;
+      throw err;
     }
-  }
-
-  function tryRecoverDslLikePayload(raw: string): DslResponse | null {
-    const typeMatch = raw.match(/"type"\s*:\s*"(replace_selection|replace_file)"/i);
-    if (!typeMatch?.[1]) {
-      return null;
-    }
-
-    const codeMatch = raw.match(/"code"\s*:\s*"([\s\S]*?)"\s*(?:,|\})/i);
-    if (!codeMatch?.[1]) {
-      return null;
-    }
-
-    return {
-      type: typeMatch[1] as DslChangeType,
-      code: decodeJsonStringFragment(codeMatch[1]),
-    };
-  }
-
-  function decodeJsonStringFragment(value: string): string {
-    return value
-      .replace(/\\n/g, '\n')
-      .replace(/\\r/g, '\r')
-      .replace(/\\t/g, '\t')
-      .replace(/\\"/g, '"')
-      .replace(/\\\\/g, '\\');
-  }
-
-  function extractCodeFence(raw: string): string | null {
-    const fenceMatch = raw.match(/```(?:javascript|js|typescript|ts)?\s*([\s\S]*?)```/i);
-    const code = fenceMatch?.[1]?.trim();
-    return code && code.length > 0 ? code : null;
-  }
-
-  function extractJsonObject(raw: string): string {
-    const trimmed = raw.trim();
-    // Handle markdown code blocks if present
-    if (trimmed.startsWith('```')) {
-      const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
-      if (fenceMatch?.[1]) {
-        return fenceMatch[1].trim();
-      }
-    }
-
-    // Find outer-most braces
-    const firstBrace = trimmed.indexOf('{');
-    const lastBrace = trimmed.lastIndexOf('}');
-
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      return trimmed.slice(firstBrace, lastBrace + 1);
-    }
-
-    return '';
   }
 
   function handleError(res: Response, err: Error, durationMs: number, route: string) {
@@ -596,8 +455,12 @@ export function createAiRouter({ repositoryJsLibService }: CreateAiRouterOptions
     try {
       const serverId = parseRequiredServerId(req.body?.serverId);
       const userId = await getCurrentUserId();
-      const status = await repositoryJsLibService.warm(userId, serverId);
-      res.json(status);
+      const result = await repositoryJsLibService.refresh(userId, serverId);
+      res.json({
+        status: result.ok ? 'ready' : 'error',
+        libCount: result.libCount,
+        error: result.error,
+      });
     } catch (err) {
       handleError(res, err as Error, 0, 'libs/warm');
     }

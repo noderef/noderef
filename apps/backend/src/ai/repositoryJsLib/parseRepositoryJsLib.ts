@@ -66,14 +66,20 @@ export function parseRepositoryJsLib(
 
   const docMatch = content.match(TOP_JSDOC_RE);
   if (!docMatch) {
-    log.debug({ fileName, nodeId }, 'Skipping repository JS lib: missing top-level JSDoc');
+    log.debug(
+      { fileName, nodeId },
+      'Skipping repository JS lib: missing top-level JSDoc (must start with /** ... */)'
+    );
     return null;
   }
 
   const docTags = parseJsDocTags(docMatch[1]);
   const description = docTags.description;
   if (!description) {
-    log.debug({ fileName, nodeId }, 'Skipping repository JS lib: missing @description');
+    log.debug(
+      { fileName, nodeId },
+      'Skipping repository JS lib: top JSDoc missing @description tag'
+    );
     return null;
   }
 

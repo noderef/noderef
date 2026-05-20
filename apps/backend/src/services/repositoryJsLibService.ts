@@ -30,7 +30,13 @@ import { log } from '../lib/logger.js';
 import { getAuthenticatedClientWithRefresh } from './alfresco/authenticationHelper.js';
 import type { ServerService } from './serverService.js';
 
-const PATH_SEGMENTS = ['Company Home', 'Data Dictionary', 'NodeRef', 'js-libs'] as const;
+/**
+ * Folder path (under Company Home) that contains custom JS libs. Alfresco's
+ * `-root-` alias resolves directly to Company Home, so the first segment below
+ * is a direct child of Company Home.
+ */
+const PATH_SEGMENTS = ['Data Dictionary', 'NodeRef', 'js-libs'] as const;
+const MAX_FOLDER_DEPTH = 5;
 const DEFAULT_TTL_MS = 5 * 60 * 1000;
 const EMPTY_REPO_LIBS: LoadedLibs = { manifest: {}, libs: {} };
 
@@ -67,22 +73,27 @@ export class RepositoryJsLibService {
     const entry = this.cache.get(key);
     const now = Date.now();
 
+    // Fresh cache — return immediately
     if (entry && now - entry.loadedAt < this.ttlMs) {
       return entry.snapshot;
     }
 
+    // Stale cache with data — serve stale, refresh in background
     if (entry?.snapshot && Object.keys(entry.snapshot.manifest).length > 0) {
       this.scheduleBackgroundRefresh(userId, serverId, key, entry);
       return entry.snapshot;
     }
 
+    // Stale cache without data — also refresh in background, serve what we have
     if (entry) {
       this.scheduleBackgroundRefresh(userId, serverId, key, entry);
       return entry.snapshot;
     }
 
-    this.scheduleBackgroundRefresh(userId, serverId, key);
-    return EMPTY_REPO_LIBS;
+    // Cold cache — await the first load so the caller gets real data
+    await this.refresh(userId, serverId);
+    const loaded = this.cache.get(key);
+    return loaded?.snapshot ?? EMPTY_REPO_LIBS;
   }
 
   async loadMergedLibs(userId: number, serverId?: number | null): Promise<LoadedLibs> {
@@ -166,6 +177,7 @@ export class RepositoryJsLibService {
     try {
       const server = await this.serverService.findById(userId, serverId);
       if (!server) {
+        log.warn({ userId, serverId }, 'Repository JS lib refresh: server not found');
         return this.recordRefreshFailure(key, existing, 'Server not found');
       }
 
@@ -176,6 +188,10 @@ export class RepositoryJsLibService {
         this.prisma
       );
       if (!api) {
+        log.warn(
+          { userId, serverId, baseUrl: server.baseUrl },
+          'Repository JS lib refresh: authentication failed'
+        );
         return this.recordRefreshFailure(key, existing, 'Authentication failed');
       }
 
@@ -186,7 +202,22 @@ export class RepositoryJsLibService {
         jsLibsFolderId,
       });
 
-      return { ok: true, libCount: Object.keys(snapshot.manifest).length };
+      const manifestKeys = Object.keys(snapshot.manifest);
+      log.info(
+        {
+          userId,
+          serverId,
+          baseUrl: server.baseUrl,
+          jsLibsFolderId: jsLibsFolderId ?? null,
+          libCount: manifestKeys.length,
+          libNames: manifestKeys,
+        },
+        jsLibsFolderId
+          ? 'Repository JS libs refreshed from Alfresco'
+          : 'Repository JS libs refresh: Alfresco folder "Data Dictionary/NodeRef/js-libs" not found'
+      );
+
+      return { ok: true, libCount: manifestKeys.length };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       log.warn({ err, userId, serverId }, 'Repository JS lib refresh failed');
@@ -224,6 +255,12 @@ export class RepositoryJsLibService {
   }
 }
 
+interface JsFileNode {
+  id: string;
+  name: string;
+  modifiedAt?: Date | string;
+}
+
 async function fetchRepositoryLibs(
   api: AlfrescoApi
 ): Promise<{ snapshot: LoadedLibs; jsLibsFolderId?: string }> {
@@ -234,46 +271,47 @@ async function fetchRepositoryLibs(
     return { snapshot: EMPTY_REPO_LIBS };
   }
 
-  const listResult = await nodesApi.listNodeChildren(jsLibsFolderId, {
-    include: ['properties'],
-    fields: ['id', 'name', 'nodeType', 'modifiedAt'],
-    maxItems: 200,
-  });
+  const jsEntries = await collectJsFilesRecursively(nodesApi, jsLibsFolderId);
+  log.debug(
+    {
+      jsLibsFolderId,
+      jsFileCount: jsEntries.length,
+      jsFileNames: jsEntries.map(e => e.name),
+    },
+    'Alfresco js-libs recursive listing'
+  );
 
-  const jsEntries =
-    listResult.list?.entries?.filter(entry => {
-      const name = entry.entry?.name ?? '';
-      return name.toLowerCase().endsWith('.js');
-    }) ?? [];
+  const parsedEntries = await parseRepositoryEntries(nodesApi, jsEntries, jsLibsFolderId);
+  return {
+    snapshot: repositoryLibsToLoadedLibs(parsedEntries),
+    jsLibsFolderId,
+  };
+}
 
-  const parsedEntries: Array<{
-    name: string;
-    description: string;
-    tags: string[];
-    text: string;
-  }> = [];
+type ParsedRepositoryEntry = {
+  name: string;
+  description: string;
+  tags: string[];
+  text: string;
+};
+
+async function parseRepositoryEntries(
+  nodesApi: NodesApi,
+  jsEntries: ReadonlyArray<JsFileNode>,
+  jsLibsFolderId: string
+): Promise<ParsedRepositoryEntry[]> {
+  const parsedEntries: ParsedRepositoryEntry[] = [];
   let totalChars = 0;
 
-  for (const entry of jsEntries) {
-    const node = entry.entry;
-    if (!node?.id || !node.name) {
-      continue;
-    }
-
+  for (const node of jsEntries) {
     try {
       const content = await readNodeContent(nodesApi, node.id);
       const parsed = parseRepositoryJsLib({
         fileName: node.name,
         content,
         nodeId: node.id,
-        modifiedAt:
-          node.modifiedAt instanceof Date
-            ? node.modifiedAt.toISOString()
-            : typeof node.modifiedAt === 'string'
-              ? node.modifiedAt
-              : undefined,
+        modifiedAt: toIsoString(node.modifiedAt),
       });
-
       if (!parsed) {
         continue;
       }
@@ -301,29 +339,89 @@ async function fetchRepositoryLibs(
     }
   }
 
-  return {
-    snapshot: repositoryLibsToLoadedLibs(parsedEntries),
-    jsLibsFolderId,
-  };
+  return parsedEntries;
+}
+
+function toIsoString(value: Date | string | undefined): string | undefined {
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  return typeof value === 'string' ? value : undefined;
 }
 
 async function resolveJsLibsFolderId(nodesApi: NodesApi): Promise<string | null> {
   let currentId = '-root-';
-
   for (const segment of PATH_SEGMENTS) {
     const result = await nodesApi.listNodeChildren(currentId, {
       fields: ['id', 'name', 'nodeType', 'isFolder'],
       maxItems: 200,
     });
-
     const match = result.list?.entries?.find(entry => entry.entry?.name === segment);
     if (!match?.entry?.id) {
+      log.debug(
+        {
+          parentNodeId: currentId,
+          missingSegment: segment,
+          availableChildren: result.list?.entries?.map(e => e.entry?.name).filter(Boolean),
+        },
+        `js-libs path resolution failed at segment "${segment}"`
+      );
       return null;
     }
     currentId = match.entry.id;
   }
-
   return currentId;
+}
+
+async function collectJsFilesRecursively(
+  nodesApi: NodesApi,
+  rootFolderId: string
+): Promise<JsFileNode[]> {
+  const collected: JsFileNode[] = [];
+  const visited = new Set<string>();
+
+  async function walk(folderId: string, depth: number): Promise<void> {
+    if (depth > MAX_FOLDER_DEPTH || visited.has(folderId)) {
+      return;
+    }
+    visited.add(folderId);
+
+    let skipCount = 0;
+    while (true) {
+      const result = await nodesApi.listNodeChildren(folderId, {
+        include: ['properties'],
+        fields: ['id', 'name', 'nodeType', 'isFolder', 'isFile', 'modifiedAt'],
+        maxItems: 200,
+        skipCount,
+      });
+      const entries = result.list?.entries ?? [];
+      for (const entry of entries) {
+        const node = entry.entry;
+        if (!node?.id || !node.name) {
+          continue;
+        }
+        if (node.isFolder) {
+          await walk(node.id, depth + 1);
+          continue;
+        }
+        if (node.name.toLowerCase().endsWith('.js')) {
+          collected.push({
+            id: node.id,
+            name: node.name,
+            modifiedAt: node.modifiedAt,
+          });
+        }
+      }
+      const pagination = result.list?.pagination;
+      if (!pagination?.hasMoreItems) {
+        break;
+      }
+      skipCount += entries.length;
+    }
+  }
+
+  await walk(rootFolderId, 0);
+  return collected;
 }
 
 async function readNodeContent(nodesApi: NodesApi, nodeId: string): Promise<string> {

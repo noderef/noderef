@@ -433,8 +433,16 @@ function JsConsolePage() {
         applyAiChanges(result.code, targetRange);
         addOutput({
           type: 'log',
-          content: `// AI inserted response (${selectedLibs.length} libraries used)`,
+          content:
+            selectedLibs.length > 0
+              ? `// AI inserted response (${selectedLibs.length} libraries used: ${selectedLibs.join(', ')})`
+              : `// AI inserted response (0 libraries used)`,
         });
+        if (selectedLibs.length === 0) {
+          console.warn(
+            '[AI] No libraries selected by router. If you expected a custom lib, ensure it is uploaded to Alfresco at Data Dictionary/NodeRef/js-libs and exposes a /** @description ... */ JSDoc.'
+          );
+        }
       } catch (error) {
         console.error('[AI] Request failed', error);
         addOutput({

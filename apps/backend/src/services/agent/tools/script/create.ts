@@ -15,25 +15,32 @@
  */
 
 import { callAnthropic } from '../../../../ai/anthropic.js';
+import {
+  DslParseError,
+  parseDslResponseWithRepair,
+  type DslResponse,
+} from '../../../../ai/dslResponse.js';
 import { buildExecutionPrompt } from '../../../../ai/executePrompt.js';
 import { loadMergedLibs } from '../../../../ai/loadMergedLibs.js';
 import { loadStaticLibs } from '../../../../ai/loadLibs.js';
 import { getRepositoryJsLibService } from '../../../repositoryJsLibService.js';
 import { buildRouterPrompt } from '../../../../ai/routerPrompt.js';
+import {
+  resolveRouterLibrarySelection,
+  suggestedLibrariesForRouter,
+} from '../../../../ai/selectPreferredLibraries.js';
+import type { Manifest } from '../../../../ai/types/manifest.js';
+import { log } from '../../../../lib/logger.js';
 import { maskString } from '../../../ai/maskingEngine.js';
 import { getMaskingSettings } from '../../../ai/maskingSettings.js';
 import type { AgentExecutionContext, ResolvedAiRuntime } from '../../types.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
 
 const MAX_SELECTED_LIBS = 5;
-const VALID_DSL_TYPES = new Set(['replace_selection', 'replace_file'] as const);
-
-type DslChangeType = 'replace_selection' | 'replace_file';
-
-interface DslResponse {
-  type: DslChangeType;
-  code: string;
-}
+/** Generous budget for the executor: long scripts with comments are easily 1500+ tokens. */
+const EXECUTE_MAX_TOKENS = 2400;
+/** Smaller budget for the repair pass — it only reformats existing text. */
+const REPAIR_MAX_TOKENS = 1200;
 
 class ScriptCreateError extends Error {
   constructor(
@@ -94,12 +101,27 @@ export const scriptCreateTool: ToolDefinition = {
             })
           : loadStaticLibs();
 
+      const manifestTyped = libs.manifest as Manifest;
+      const suggested = suggestedLibrariesForRouter(request, manifestTyped);
       const routerPrompt = await maskPromptForUser(
         ctx.userId,
-        buildRouterPrompt(request, libs.manifest)
+        buildRouterPrompt(request, manifestTyped, { suggestedLibraries: suggested })
       );
       const routerRaw = await callTextModel(runtime, routerPrompt, 400);
-      const selectedLibraries = parseSelectedLibraries(routerRaw, libs.manifest);
+      let selectedLibraries: string[];
+      try {
+        selectedLibraries = resolveRouterLibrarySelection(
+          request,
+          manifestTyped,
+          routerRaw,
+          MAX_SELECTED_LIBS
+        ).selected;
+      } catch (err) {
+        throw new ScriptCreateError(
+          'AI_ROUTER_PARSE_FAILED',
+          `Failed to parse selected helper libraries: ${(err as Error).message}`
+        );
+      }
 
       const executePrompt = await maskPromptForUser(
         ctx.userId,
@@ -111,8 +133,8 @@ export const scriptCreateTool: ToolDefinition = {
           contextSnippet,
         })
       );
-      const raw = await callTextModel(runtime, executePrompt, 1400);
-      const parsed = await parseDslResponseWithRepair({
+      const raw = await callTextModel(runtime, executePrompt, EXECUTE_MAX_TOKENS);
+      const parsed = await parseDslWithRepairOrThrow({
         raw,
         userId: ctx.userId,
         runtime,
@@ -167,171 +189,24 @@ async function maskPromptForUser(userId: number | undefined, prompt: string): Pr
   return prompt;
 }
 
-function parseSelectedLibraries(raw: string, manifest: Record<string, unknown>): string[] {
-  try {
-    const sanitized = extractJsonArray(raw);
-    const parsed = JSON.parse(sanitized);
-    if (!Array.isArray(parsed)) {
-      throw new Error('Router response must be an array.');
-    }
-
-    return parsed
-      .filter(name => typeof name === 'string' && name in manifest)
-      .slice(0, MAX_SELECTED_LIBS);
-  } catch (err) {
-    throw new ScriptCreateError(
-      'AI_ROUTER_PARSE_FAILED',
-      `Failed to parse selected helper libraries: ${(err as Error).message}`
-    );
-  }
-}
-
-function extractJson(raw: string, charPair: [string, string]): string {
-  const trimmed = raw.trim();
-  if (trimmed.startsWith('```')) {
-    const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
-    if (fenceMatch?.[1]) {
-      return fenceMatch[1].trim();
-    }
-  }
-  const firstChar = trimmed.indexOf(charPair[0]);
-  const lastChar = trimmed.lastIndexOf(charPair[1]);
-  if (firstChar !== -1 && lastChar !== -1 && lastChar > firstChar) {
-    return trimmed.slice(firstChar, lastChar + 1);
-  }
-  return trimmed;
-}
-
-function extractJsonArray(raw: string): string {
-  return extractJson(raw, ['[', ']']);
-}
-
-function extractJsonObject(raw: string): string {
-  return extractJson(raw, ['{', '}']);
-}
-
-async function parseDslResponseWithRepair(args: {
+async function parseDslWithRepairOrThrow(args: {
   raw: string;
   userId: number | undefined;
   runtime: ResolvedAiRuntime;
 }): Promise<DslResponse> {
   try {
-    return parseDslResponse(args.raw);
+    return await parseDslResponseWithRepair(args.raw, async repairPrompt => {
+      const masked = await maskPromptForUser(args.userId, repairPrompt);
+      return callTextModel(args.runtime, masked, REPAIR_MAX_TOKENS);
+    });
   } catch (err) {
-    if (!(err instanceof ScriptCreateError) || !shouldAttemptDslRepair(err.code)) {
-      throw err;
+    if (err instanceof DslParseError) {
+      log.warn(
+        { code: err.code, rawPreview: args.raw.slice(0, 400) },
+        'script_create: AI response could not be parsed as DSL'
+      );
+      throw new ScriptCreateError(err.code, err.message);
     }
-
-    const repairedPrompt = await maskPromptForUser(args.userId, buildDslRepairPrompt(args.raw));
-    const repairedRaw = await callTextModel(args.runtime, repairedPrompt, 900);
-    return parseDslResponse(repairedRaw);
+    throw err;
   }
-}
-
-function parseDslResponse(raw: string): DslResponse {
-  const match = raw.match(/<changes>([\s\S]*?)<\/changes>/i);
-  const candidates = [match?.[1], raw].filter(Boolean) as string[];
-
-  for (const candidate of candidates) {
-    const parsedFromJson = tryParseDslJson(extractJsonObject(candidate.trim()));
-    if (parsedFromJson) {
-      return parsedFromJson;
-    }
-
-    const recoveredFromDslLikeText = tryRecoverDslLikePayload(candidate);
-    if (recoveredFromDslLikeText) {
-      return recoveredFromDslLikeText;
-    }
-  }
-
-  if (!match) {
-    const fencedCode = extractCodeFence(raw);
-    if (fencedCode) {
-      return {
-        type: 'replace_selection',
-        code: fencedCode,
-      };
-    }
-  }
-
-  if (!match) {
-    throw new ScriptCreateError(
-      'AI_DSL_MISSING',
-      'AI response is missing the <changes> block and no valid JSON was found.'
-    );
-  }
-
-  throw new ScriptCreateError('AI_DSL_INVALID', 'Failed to parse generated script response.');
-}
-
-function shouldAttemptDslRepair(code: string): boolean {
-  return code === 'AI_DSL_MISSING' || code === 'AI_DSL_INVALID';
-}
-
-function buildDslRepairPrompt(rawResponse: string): string {
-  return [
-    'Convert the following assistant response into a STRICT DSL payload.',
-    'Return only this format and nothing else:',
-    '',
-    '<changes>',
-    '{"type":"replace_selection","code":"...escaped json string..."}',
-    '</changes>',
-    '',
-    'Rules:',
-    '1. JSON must be valid.',
-    '2. "type" must be either "replace_selection" or "replace_file".',
-    '3. "code" must contain valid JavaScript code as a single JSON string with escaped newlines.',
-    '4. Do not include commentary outside <changes>.',
-    '',
-    'Input to convert:',
-    rawResponse,
-  ].join('\n');
-}
-
-function tryParseDslJson(payload: string): DslResponse | null {
-  try {
-    const json = JSON.parse(payload);
-    if (!VALID_DSL_TYPES.has(json?.type) || typeof json?.code !== 'string') {
-      return null;
-    }
-
-    return {
-      type: json.type as DslChangeType,
-      code: json.code,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function tryRecoverDslLikePayload(raw: string): DslResponse | null {
-  const typeMatch = raw.match(/"type"\s*:\s*"(replace_selection|replace_file)"/i);
-  if (!typeMatch?.[1]) {
-    return null;
-  }
-
-  const codeMatch = raw.match(/"code"\s*:\s*"([\s\S]*?)"\s*(?:,|\})/i);
-  if (!codeMatch?.[1]) {
-    return null;
-  }
-
-  return {
-    type: typeMatch[1] as DslChangeType,
-    code: decodeJsonStringFragment(codeMatch[1]),
-  };
-}
-
-function decodeJsonStringFragment(value: string): string {
-  return value
-    .replace(/\\n/g, '\n')
-    .replace(/\\r/g, '\r')
-    .replace(/\\t/g, '\t')
-    .replace(/\\"/g, '"')
-    .replace(/\\\\/g, '\\');
-}
-
-function extractCodeFence(raw: string): string | null {
-  const fenceMatch = raw.match(/```(?:javascript|js|typescript|ts)?\s*([\s\S]*?)```/i);
-  const code = fenceMatch?.[1]?.trim();
-  return code && code.length > 0 ? code : null;
 }
