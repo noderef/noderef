@@ -4,6 +4,7 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
+    "predev": "node ../../scripts/bin/free-dev-backend-port.mjs",
     "dev": "run-p ai:watch dev:server",
     "dev:server": "NODE_OPTIONS='--disable-warning=DEP0128' nodemon",
     "test": "vitest",
