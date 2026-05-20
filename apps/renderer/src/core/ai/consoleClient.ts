@@ -66,11 +66,15 @@ export async function fetchAiStatus(): Promise<AiStatusResponse> {
 
 export async function callAiRouter(
   question: string,
-  options?: { images?: AiInputImage[] }
+  options?: { serverId?: number | null; images?: AiInputImage[] }
 ): Promise<string[]> {
   const result = await request<{ selected: string[] }>('/rpc/ai/router', {
     method: 'POST',
-    body: JSON.stringify({ question, images: options?.images }),
+    body: JSON.stringify({
+      question,
+      serverId: options?.serverId ?? undefined,
+      images: options?.images,
+    }),
   });
   return Array.isArray(result.selected) ? result.selected : [];
 }
@@ -78,9 +82,25 @@ export async function callAiRouter(
 export interface ExecutePayload {
   question: string;
   selected: string[];
+  serverId?: number | null;
   selection?: string;
   context?: string;
   images?: AiInputImage[];
+}
+
+export type AiLibsWarmStatus = 'queued' | 'fresh' | 'refreshing';
+
+export async function warmAiLibs(serverId: number): Promise<AiLibsWarmStatus> {
+  try {
+    const result = await request<{ status: AiLibsWarmStatus }>('/rpc/ai/libs/warm', {
+      method: 'POST',
+      body: JSON.stringify({ serverId }),
+    });
+    return result.status ?? 'queued';
+  } catch (err) {
+    console.warn('[AI] Failed to warm repository libs', err);
+    return 'queued';
+  }
 }
 
 export async function callAiExecute(payload: ExecutePayload): Promise<AiExecuteResult> {

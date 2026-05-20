@@ -22,7 +22,8 @@
 import pino from 'pino';
 
 // Determine environment
-const isDev = process.env.NODE_ENV !== 'production';
+const isTest = process.env.NODE_ENV === 'test';
+const isDev = !isTest && process.env.NODE_ENV !== 'production';
 
 // Allow DEBUG (alias) or EXPOSE_DEBUG to influence verbosity when LOG_LEVEL isn't set explicitly.
 // Explicitly turning debug "off" (0/false) will quiet logs to "warn" to avoid
@@ -33,7 +34,8 @@ const debugEnabled = debugFlag === '1' || debugFlag === 'true' || debugFlag === 
 const debugDisabled = debugFlag === '0' || debugFlag === 'false' || debugFlag === 'no';
 
 const resolvedLevel =
-  process.env.LOG_LEVEL || (isDev || debugEnabled ? 'debug' : debugDisabled ? 'warn' : 'info');
+  process.env.LOG_LEVEL ||
+  (isTest ? 'silent' : isDev || debugEnabled ? 'debug' : debugDisabled ? 'warn' : 'info');
 
 const prettyTarget = (() => {
   if (!isDev) return undefined;

@@ -412,10 +412,12 @@ function JsConsolePage() {
       try {
         const selectionText = getSelectionText();
         const hasSelection = Boolean(selectionText && selectionText.trim().length > 0);
-        const selectedLibs = await callAiRouter(command.question);
+        const aiServerId = activeServerId ?? selectedServerIds[0] ?? null;
+        const selectedLibs = await callAiRouter(command.question, { serverId: aiServerId });
         const result = await callAiExecute({
           question: command.question,
           selected: selectedLibs,
+          serverId: aiServerId,
           selection: hasSelection ? selectionText : undefined,
           context: buildContextSnippet(code),
         });
@@ -443,7 +445,17 @@ function JsConsolePage() {
         setIsAiExecuting(false);
       }
     },
-    [isAiExecuting, aiStatus, addOutput, applyAiChanges, code, editorInstance, getSelectionText]
+    [
+      isAiExecuting,
+      aiStatus,
+      addOutput,
+      applyAiChanges,
+      code,
+      editorInstance,
+      getSelectionText,
+      activeServerId,
+      selectedServerIds,
+    ]
   );
 
   const handleExecute = useCallback(async () => {

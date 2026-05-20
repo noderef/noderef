@@ -16,7 +16,9 @@
 
 import { callAnthropic } from '../../../../ai/anthropic.js';
 import { buildExecutionPrompt } from '../../../../ai/executePrompt.js';
-import { loadLibs } from '../../../../ai/loadLibs.js';
+import { loadMergedLibs } from '../../../../ai/loadMergedLibs.js';
+import { loadStaticLibs } from '../../../../ai/loadLibs.js';
+import { getRepositoryJsLibService } from '../../../repositoryJsLibService.js';
 import { buildRouterPrompt } from '../../../../ai/routerPrompt.js';
 import { maskString } from '../../../ai/maskingEngine.js';
 import { getMaskingSettings } from '../../../ai/maskingSettings.js';
@@ -83,7 +85,14 @@ export const scriptCreateTool: ToolDefinition = {
       const selection = typeof args.selection === 'string' ? args.selection : undefined;
       const contextSnippet = typeof args.context === 'string' ? args.context : undefined;
 
-      const libs = loadLibs();
+      const libs =
+        typeof ctx.userId === 'number'
+          ? await loadMergedLibs({
+              userId: ctx.userId,
+              serverId: ctx.serverId,
+              repositoryJsLibService: getRepositoryJsLibService(),
+            })
+          : loadStaticLibs();
 
       const routerPrompt = await maskPromptForUser(
         ctx.userId,

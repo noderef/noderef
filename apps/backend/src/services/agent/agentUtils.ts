@@ -111,6 +111,7 @@ export async function createExecutionContext(
 
   return {
     api,
+    serverId,
     serverBaseUrl: server.baseUrl,
     jsconsoleEndpoint: server.jsconsoleEndpoint ?? null,
     authType: credentials.authType,

@@ -29,7 +29,7 @@ const GENERATED_DIRS = [
   path.resolve(process.cwd(), 'apps/backend/src/ai/.generated'),
 ];
 
-export function loadLibs(): LoadedLibs {
+export function loadStaticLibs(): LoadedLibs {
   if (shouldCache && cachedLibs) {
     return cachedLibs;
   }

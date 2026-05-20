@@ -20,7 +20,8 @@
 
 import type { Express } from 'express';
 import type { z } from 'zod';
-import aiRouter from '../ai/index.js';
+import { createAiRouter } from '../ai/index.js';
+import type { RepositoryJsLibService } from '../services/repositoryJsLibService.js';
 import { log } from '../lib/logger.js';
 import { ServerService } from '../services/serverService.js';
 import { healthHandler, type HealthRouteOptions } from './health.js';
@@ -42,6 +43,7 @@ export interface RegisterRoutesOptions {
   routes: Routes;
   contracts: any;
   serverService: ServerService;
+  repositoryJsLibService: RepositoryJsLibService;
   version: string;
   buildId: string;
   exposeDebug: boolean;
@@ -55,6 +57,7 @@ export async function registerRoutes({
   routes,
   contracts,
   serverService,
+  repositoryJsLibService,
   version,
   buildId,
   exposeDebug,
@@ -125,5 +128,5 @@ export async function registerRoutes({
   app.get('/rpc-stream', rpcStreamHandler({ serverService, contracts }));
 
   // AI endpoints for JS console assistance
-  app.use('/rpc/ai', aiRouter);
+  app.use('/rpc/ai', createAiRouter({ repositoryJsLibService }));
 }
