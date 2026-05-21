@@ -77,6 +77,6 @@ Java class:
 
 ## Notes
 
-`<rootObject>` is the Rhino root object name, such as `people`, `search`, or `apiUtils`. Use it exactly as provided.
+`<rootObject>` is the Rhino root object name, such as `people`, `search`, or `jsonUtils`. Use it exactly as provided.
 
 The filename must contain only letters, digits, `_`, `-`, or `.` and must end in `.js` (for example, `people-samples.js`). Generate the file in the repository root unless another output path is specified, then upload it to `Data Dictionary/NodeRef/js-libs/` in Alfresco.
