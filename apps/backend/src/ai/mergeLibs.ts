@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import type { LoadedLibs, Manifest } from '../types/manifest.js';
+import type { LoadedLibs, Manifest } from './types/manifest.js';
 
 export function mergeStaticAndRepositoryLibs(
   staticLibs: LoadedLibs,

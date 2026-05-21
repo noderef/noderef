@@ -110,7 +110,7 @@ export async function parseDslResponseWithRepair(
   }
 }
 
-export function buildDslRepairPrompt(rawResponse: string): string {
+function buildDslRepairPrompt(rawResponse: string): string {
   return [
     'Convert the following assistant response into a STRICT DSL payload.',
     'Return only this format and nothing else:',

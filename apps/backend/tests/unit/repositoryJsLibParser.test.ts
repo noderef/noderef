@@ -19,8 +19,8 @@ import { loadStaticLibs } from '../../src/ai/loadLibs.js';
 import {
   mergeStaticAndRepositoryLibs,
   repositoryLibsToLoadedLibs,
-} from '../../src/ai/repositoryJsLib/mergeLibs.js';
-import { parseRepositoryJsLib } from '../../src/ai/repositoryJsLib/parseRepositoryJsLib.js';
+} from '../../src/ai/mergeLibs.js';
+import { parseRepositoryJsLib } from '../../src/ai/parseRepositoryJsLib.js';
 
 describe('parseRepositoryJsLib', () => {
   it('creates manifest metadata and lib text from valid file', () => {

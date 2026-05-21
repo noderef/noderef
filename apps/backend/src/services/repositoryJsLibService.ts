@@ -16,14 +16,11 @@
 
 import { NodesApi, type AlfrescoApi } from '@alfresco/js-api';
 import type { PrismaClient } from '@prisma/client';
-import {
-  mergeStaticAndRepositoryLibs,
-  repositoryLibsToLoadedLibs,
-} from '../ai/repositoryJsLib/mergeLibs.js';
+import { mergeStaticAndRepositoryLibs, repositoryLibsToLoadedLibs } from '../ai/mergeLibs.js';
 import {
   MAX_REPOSITORY_LIBS_TOTAL_CHARS,
   parseRepositoryJsLib,
-} from '../ai/repositoryJsLib/parseRepositoryJsLib.js';
+} from '../ai/parseRepositoryJsLib.js';
 import { loadStaticLibs } from '../ai/loadLibs.js';
 import type { LoadedLibs } from '../ai/types/manifest.js';
 import { log } from '../lib/logger.js';

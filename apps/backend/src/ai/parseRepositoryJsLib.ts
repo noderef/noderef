@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { log } from '../../lib/logger.js';
+import { log } from '../lib/logger.js';
 
 export interface ParseRepositoryJsLibInput {
   fileName: string;
