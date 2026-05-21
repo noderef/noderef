@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import type { AgentMention } from '@app/contracts';
+import type { AgentMention, AgentRunEvent, AgentRunSummary } from '@app/contracts';
 import type { PrismaClient } from '@prisma/client';
 import { getAiProvider } from '../../ai/providers.js';
 import { AppErrors } from '../../lib/errors.js';
@@ -23,6 +23,7 @@ import { resolveUserAiConfig, resolveUserAiConfigForProvider } from '../ai/userS
 import { getAuthenticatedClientWithRefresh } from '../alfresco/authenticationHelper.js';
 import type { ServerService } from '../serverService.js';
 import { getAiAssistantEnabled } from '../userSettings.js';
+import { agentRunStreamBroker } from './AgentRunStreamBroker.js';
 import type { AgentExecutionContext, ResolvedAiRuntime } from './types.js';
 
 export const parseMentions = (raw: string | null): AgentMention[] => {
@@ -161,13 +162,82 @@ export async function emitRunEvent(
   type: string,
   level: 'debug' | 'info' | 'warn' | 'error',
   extra?: Record<string, unknown>
-): Promise<void> {
-  await repository.createRunEvent({
+): Promise<AgentRunEvent> {
+  const event = await repository.createRunEvent({
     runId,
     stepId: (extra?.stepId as number) ?? null,
     type,
     level,
     payload: { ...extra, timestamp: nowIso() },
+  });
+
+  agentRunStreamBroker.publish(runId, { type: 'run.event', event }, event.id);
+
+  if (type === 'step.started' && typeof extra?.stepId === 'number') {
+    agentRunStreamBroker.publish(runId, {
+      type: 'step.started',
+      step: {
+        runId,
+        stepId: extra.stepId,
+        operation: String(extra.operation ?? 'unknown'),
+        summary: typeof extra.summary === 'string' ? extra.summary : null,
+      },
+    });
+  }
+
+  if ((type === 'step.completed' || type === 'step.failed') && typeof extra?.stepId === 'number') {
+    agentRunStreamBroker.publish(runId, {
+      type: 'step.completed',
+      step: {
+        runId,
+        stepId: extra.stepId,
+        operation: String(extra.operation ?? 'unknown'),
+        status: type === 'step.failed' ? 'failed' : 'completed',
+        durationMs: typeof extra.durationMs === 'number' ? extra.durationMs : null,
+      },
+    });
+  }
+
+  return event;
+}
+
+export function publishRunStatus(runId: number, run: AgentRunSummary): void {
+  agentRunStreamBroker.publish(runId, { type: 'run.status', run });
+}
+
+export function publishAssistantDelta(runId: number, delta: string): void {
+  agentRunStreamBroker.appendAssistantDelta(runId, delta);
+}
+
+export function publishAssistantClear(runId: number): void {
+  agentRunStreamBroker.clearAssistantBuffer(runId);
+  agentRunStreamBroker.publish(runId, {
+    type: 'assistant.clear',
+    clear: { runId },
+  });
+}
+
+export function publishAssistantDone(
+  runId: number,
+  done: { messageId: number; content: string; stopReason?: string | null }
+): void {
+  agentRunStreamBroker.clearAssistantBuffer(runId);
+  agentRunStreamBroker.publish(runId, {
+    type: 'assistant.done',
+    done: {
+      runId,
+      messageId: done.messageId,
+      content: done.content,
+      stopReason: done.stopReason ?? null,
+    },
+  });
+}
+
+export function publishStreamError(runId: number, message: string, code?: string): void {
+  publishAssistantClear(runId);
+  agentRunStreamBroker.publish(runId, {
+    type: 'error',
+    error: { runId, message, code: code ?? null },
   });
 }
 

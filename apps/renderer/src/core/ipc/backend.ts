@@ -23,6 +23,8 @@
  */
 
 import type {
+  AgentRunEvent,
+  AgentRunSummary,
   LocalFile as ContractsLocalFile,
   CreateServer,
   NodeHistoryActivitySummary,
@@ -1006,47 +1008,7 @@ export interface AgentMessage {
   createdAt: Date;
 }
 
-export interface AgentRunStepSummary {
-  id: number;
-  runId: number;
-  ordinal: number;
-  operation: string;
-  status: 'pending' | 'running' | 'waiting_confirmation' | 'completed' | 'failed' | 'cancelled';
-  summary: string | null;
-  requiresConfirmation: boolean;
-  confirmationToken: string | null;
-  confirmedAt: Date | null;
-  startedAt: Date | null;
-  completedAt: Date | null;
-  createdAt: Date;
-}
-
-export interface AgentRunSummary {
-  id: number;
-  chatId: number;
-  userId: number;
-  serverId: number;
-  triggerMessageId: number | null;
-  status: 'queued' | 'running' | 'waiting_confirmation' | 'completed' | 'failed' | 'cancelled';
-  manifestVersion: string;
-  plan: Record<string, unknown> | null;
-  error: string | null;
-  startedAt: Date | null;
-  finishedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-  pendingStep: AgentRunStepSummary | null;
-}
-
-export interface AgentRunEvent {
-  id: number;
-  runId: number;
-  stepId: number | null;
-  type: string;
-  level: 'debug' | 'info' | 'warn' | 'error';
-  payload: Record<string, unknown> | null;
-  createdAt: Date;
-}
+export type { AgentRunEvent, AgentRunSummary } from '@app/contracts';
 
 export interface RepositoryNode {
   id: string;

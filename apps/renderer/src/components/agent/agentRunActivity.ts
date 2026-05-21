@@ -71,6 +71,7 @@ export interface ContextWindowDisplayState {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const EXECUTION_EVENT_KEYS: Record<string, string> = {
+  'step.started': 'stepStarted',
   'step.completed': 'stepCompleted',
   'step.failed': 'stepFailed',
   'step.waiting_confirmation': 'stepAwaitingConfirmation',
@@ -277,19 +278,37 @@ const formatEventDetail = (event: AgentRunEvent): string | null => {
 
 // ── Build run activity list ───────────────────────────────────────────────────
 
+const isRedundantStepStarted = (
+  item: RunActivityItem,
+  previous: RunActivityItem | null
+): boolean => {
+  if (item.kind !== 'execution' || item.label !== '__i18n:stepStarted' || !previous) {
+    return false;
+  }
+  if (previous.kind === 'note') {
+    return /^running\b/i.test(previous.label);
+  }
+  return false;
+};
+
 export const buildRunActivity = (events: AgentRunEvent[]): RunActivityItem[] => {
   const items: RunActivityItem[] = [];
+  let lastNoteText = '';
 
   for (const event of events) {
     if (SKIP_EVENT_TYPES.has(event.type)) continue;
 
     if (event.type === 'run.note') {
-      const text = (event.payload?.text as string) || '';
-      if (text) {
-        items.push({ kind: 'note', label: text, detail: null, level: 'info' });
+      const text = ((event.payload?.text as string) || '').trim();
+      if (!text || text === lastNoteText) {
+        continue;
       }
+      lastNoteText = text;
+      items.push({ kind: 'note', label: text, detail: null, level: 'info' });
       continue;
     }
+
+    lastNoteText = '';
 
     const key = EXECUTION_EVENT_KEYS[event.type];
     const label = key ? `__i18n:${key}` : event.type;
@@ -301,8 +320,60 @@ export const buildRunActivity = (events: AgentRunEvent[]): RunActivityItem[] => 
         : typeof event.payload?.operation === 'string'
           ? humanizeOperation(event.payload.operation)
           : undefined;
-    items.push({ kind: 'execution', label, detail, level, operation });
+    const item: RunActivityItem = { kind: 'execution', label, detail, level, operation };
+    const previous = items.length ? items[items.length - 1] : null;
+    if (isRedundantStepStarted(item, previous)) {
+      continue;
+    }
+    items.push(item);
   }
 
   return items;
+};
+
+// ── Activity header summary (completed tasks only; extend later for more buckets) ──
+
+const countCompletedTasks = (events: AgentRunEvent[]): number => {
+  let count = 0;
+  for (const event of events) {
+    if (event.type !== 'step.completed') {
+      continue;
+    }
+    if (event.payload?.status === 'failed') {
+      continue;
+    }
+    count += 1;
+  }
+  return count;
+};
+
+type ActivitySummaryT = (key: string, options?: { count: number }) => string;
+
+const formatActivitySummary = (taskCount: number, t: ActivitySummaryT): string | null => {
+  if (taskCount <= 0) {
+    return null;
+  }
+  return t('activitySummary', { count: taskCount });
+};
+
+export const resolveActivityHeaderLabel = (
+  events: AgentRunEvent[],
+  items: RunActivityItem[],
+  t: ActivitySummaryT,
+  options?: { streaming?: boolean }
+): string | null => {
+  const summary = formatActivitySummary(countCompletedTasks(events), t);
+  if (summary) {
+    return summary;
+  }
+  if (options?.streaming) {
+    return null;
+  }
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index];
+    if (item.kind === 'note' && item.label.trim()) {
+      return item.label;
+    }
+  }
+  return null;
 };

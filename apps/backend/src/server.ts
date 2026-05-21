@@ -246,6 +246,9 @@ function setupShutdownHandlers(server: net.Server): void {
 async function main() {
   const app = express();
 
+  // CORS must run before rate limiters so 429/4xx responses still include ACAO headers.
+  app.use(corsMiddleware());
+
   // Apply security middleware (helmet, rate limiting, content-type validation)
   applySecurityMiddleware(app);
 
@@ -262,9 +265,6 @@ async function main() {
       next();
     });
   }
-
-  // CORS middleware
-  app.use(corsMiddleware());
 
   // Apply pending database migrations
   await runMigrations();

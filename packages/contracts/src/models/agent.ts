@@ -115,3 +115,78 @@ export interface AgentMentionSuggestion {
   description?: string | null;
   subtitle?: string | null;
 }
+
+/** Run summary returned by listRuns and run.status SSE snapshots. */
+export interface AgentRunSummary {
+  id: number;
+  chatId: number;
+  userId: number;
+  serverId: number;
+  triggerMessageId: number | null;
+  status: AgentRunStatus;
+  manifestVersion: string;
+  plan: Record<string, unknown> | null;
+  error: string | null;
+  startedAt: Date | null;
+  finishedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  pendingStep: AgentRunStep | null;
+}
+
+// ── Agent run SSE stream ─────────────────────────────────────────────────────
+
+export type AgentStreamEventType =
+  | 'run.status'
+  | 'run.event'
+  | 'step.started'
+  | 'step.completed'
+  | 'assistant.delta'
+  | 'assistant.clear'
+  | 'assistant.done'
+  | 'error';
+
+export interface AgentStreamAssistantDelta {
+  runId: number;
+  sequence: number;
+  delta: string;
+  text: string;
+}
+
+export interface AgentStreamAssistantDone {
+  runId: number;
+  messageId: number;
+  content: string;
+  stopReason?: string | null;
+}
+
+export interface AgentStreamStepStarted {
+  runId: number;
+  stepId: number;
+  operation: string;
+  summary: string | null;
+}
+
+export interface AgentStreamStepCompleted {
+  runId: number;
+  stepId: number;
+  operation: string;
+  status: 'completed' | 'failed';
+  durationMs?: number | null;
+}
+
+export interface AgentStreamError {
+  runId: number;
+  message: string;
+  code?: string | null;
+}
+
+export type AgentStreamEvent =
+  | { type: 'run.status'; run: AgentRunSummary }
+  | { type: 'run.event'; event: AgentRunEvent }
+  | { type: 'step.started'; step: AgentStreamStepStarted }
+  | { type: 'step.completed'; step: AgentStreamStepCompleted }
+  | { type: 'assistant.delta'; delta: AgentStreamAssistantDelta }
+  | { type: 'assistant.clear'; clear: { runId: number } }
+  | { type: 'assistant.done'; done: AgentStreamAssistantDone }
+  | { type: 'error'; error: AgentStreamError };

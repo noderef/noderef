@@ -225,6 +225,130 @@ export async function callWithTools({
   };
 }
 
+export interface CallWithToolsStreamOptions {
+  apiKey: string;
+  model: string;
+  baseURL?: string;
+  system: string;
+  messages: AgentMessageParam[];
+  tools: AgentToolSchema[];
+  maxTokens?: number;
+  temperature?: number;
+  onTextDelta?: (delta: string) => void;
+  onToolUseStarted?: () => void;
+}
+
+/**
+ * Stream a tool-capable model call, accumulating the same result shape as callWithTools.
+ */
+export async function callWithToolsStream({
+  apiKey,
+  model,
+  baseURL,
+  system,
+  messages,
+  tools,
+  maxTokens = 1024,
+  temperature = 0,
+  onTextDelta,
+  onToolUseStarted,
+}: CallWithToolsStreamOptions): Promise<AgentCallResult> {
+  const client = new Anthropic({
+    apiKey,
+    ...(baseURL ? { baseURL } : {}),
+  });
+
+  const stream = client.messages.stream({
+    model,
+    max_tokens: maxTokens,
+    temperature,
+    system,
+    messages,
+    tools: tools as Anthropic.Tool[],
+  } as any);
+
+  let toolUseNotified = false;
+  for await (const event of stream) {
+    if (event.type === 'content_block_start') {
+      const block = (event as { content_block?: { type?: string } }).content_block;
+      if (block?.type === 'tool_use') {
+        if (!toolUseNotified) {
+          toolUseNotified = true;
+          onToolUseStarted?.();
+        }
+      }
+    }
+    if (event.type === 'content_block_delta') {
+      const delta = (event as { delta?: { type?: string; text?: string } }).delta;
+      if (delta?.type === 'text_delta' && typeof delta.text === 'string' && delta.text) {
+        onTextDelta?.(delta.text);
+      }
+    }
+  }
+
+  const response = await stream.finalMessage();
+  const usageRaw = (response as any)?.usage as
+    | {
+        input_tokens?: unknown;
+        output_tokens?: unknown;
+        cache_creation_input_tokens?: unknown;
+        cache_read_input_tokens?: unknown;
+      }
+    | undefined;
+  const usage: AgentUsageMetrics | null = usageRaw
+    ? {
+        inputTokens: typeof usageRaw.input_tokens === 'number' ? usageRaw.input_tokens : null,
+        outputTokens: typeof usageRaw.output_tokens === 'number' ? usageRaw.output_tokens : null,
+        cacheCreationInputTokens:
+          typeof usageRaw.cache_creation_input_tokens === 'number'
+            ? usageRaw.cache_creation_input_tokens
+            : null,
+        cacheReadInputTokens:
+          typeof usageRaw.cache_read_input_tokens === 'number'
+            ? usageRaw.cache_read_input_tokens
+            : null,
+      }
+    : null;
+
+  const textBlocks = response.content.filter((b): b is Anthropic.TextBlock => b.type === 'text');
+  const toolBlocks = response.content.filter(
+    (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'
+  );
+
+  if (toolBlocks.length > 0) {
+    const reasoning =
+      textBlocks.length > 0
+        ? textBlocks
+            .map(b => b.text)
+            .join('\n')
+            .trim()
+        : null;
+    return {
+      type: 'tool_calls',
+      stopReason: response.stop_reason ?? 'tool_use',
+      reasoning,
+      rawContent: response.content,
+      usage,
+      calls: toolBlocks.map(b => ({
+        id: b.id,
+        name: b.name,
+        args: (b.input as Record<string, unknown>) ?? {},
+      })),
+    };
+  }
+
+  const text = textBlocks
+    .map(b => b.text)
+    .join('\n')
+    .trim();
+  return {
+    type: 'text',
+    text: text || '(no response)',
+    stopReason: response.stop_reason ?? 'end_turn',
+    usage,
+  };
+}
+
 /**
  * Build the assistant turn that includes both tool_use blocks and text (if any).
  * Used when appending the model's tool-call turn to the message history.

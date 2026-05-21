@@ -28,6 +28,7 @@ import { healthHandler, type HealthRouteOptions } from './health.js';
 import { oauthCallbackHandler } from './oauth.js';
 import { registerPingRoute, rpcDebugHandler, rpcHandler, type Routes } from './rpc.js';
 import { createUploadMiddleware, rpcBinaryHandler } from './rpcBinary.js';
+import { agentRunStreamHandler } from './agentRunStream.js';
 import { rpcStreamHandler } from './rpcStream.js';
 import {
   webAuthLoginHandler,
@@ -126,6 +127,17 @@ export async function registerRoutes({
 
   // Stream download endpoint
   app.get('/rpc-stream', rpcStreamHandler({ serverService, contracts }));
+
+  const { getPrismaClient } = await import('../lib/prisma.js');
+  const prisma = await getPrismaClient();
+  const { AgentService } = await import('../services/agent/AgentService.js');
+  const agentService = new AgentService(prisma, serverService);
+  app.get(
+    '/rpc/agent/runs/:runId/stream',
+    agentRunStreamHandler({
+      getRunSummary: (userId, runId) => agentService.getRunSummary(userId, runId),
+    })
+  );
 
   // AI endpoints for JS console assistance
   app.use('/rpc/ai', createAiRouter({ repositoryJsLibService }));

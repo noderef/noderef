@@ -14,12 +14,8 @@
  * limitations under the License.
  */
 
-import type {
-  AgentChatSummary,
-  AgentMessage,
-  AgentRunEvent,
-  AgentRunSummary,
-} from '@/core/ipc/backend';
+import type { AgentChatSummary, AgentMessage, AgentRunEvent } from '@/core/ipc/backend';
+import type { AgentRunSummary } from '@app/contracts';
 import { create } from 'zustand';
 
 interface AgentState {
@@ -29,6 +25,8 @@ interface AgentState {
   messagesByChat: Record<number, AgentMessage[]>;
   runsByChat: Record<number, AgentRunSummary[]>;
   eventsByRun: Record<number, AgentRunEvent[]>;
+  streamingAssistantByRun: Record<number, string>;
+  streamHealthyByRun: Record<number, boolean>;
   setChats: (items: AgentChatSummary[]) => void;
   upsertChat: (chat: AgentChatSummary) => void;
   removeChat: (chatId: number) => void;
@@ -36,8 +34,12 @@ interface AgentState {
   setChatAutoConfirm: (chatId: number, enabled: boolean) => void;
   setMessages: (chatId: number, messages: AgentMessage[]) => void;
   addMessage: (chatId: number, message: AgentMessage) => void;
+  upsertMessage: (chatId: number, message: AgentMessage) => void;
   setRuns: (chatId: number, runs: AgentRunSummary[]) => void;
   upsertRun: (chatId: number, run: AgentRunSummary) => void;
+  setStreamingAssistant: (runId: number, text: string) => void;
+  clearStreamingAssistant: (runId: number) => void;
+  setStreamHealthy: (runId: number, healthy: boolean) => void;
   setRunEvents: (runId: number, events: AgentRunEvent[]) => void;
   appendRunEvents: (runId: number, events: AgentRunEvent[]) => void;
   reset: () => void;
@@ -61,6 +63,8 @@ export const useAgentStore = create<AgentState>(set => ({
   messagesByChat: {},
   runsByChat: {},
   eventsByRun: {},
+  streamingAssistantByRun: {},
+  streamHealthyByRun: {},
 
   setChats: items => {
     set(state => {
@@ -102,6 +106,16 @@ export const useAgentStore = create<AgentState>(set => ({
       const eventsByRun = Object.fromEntries(
         Object.entries(state.eventsByRun).filter(([runId]) => !runIdsToRemove.has(Number(runId)))
       ) as Record<number, AgentRunEvent[]>;
+      const streamingAssistantByRun = Object.fromEntries(
+        Object.entries(state.streamingAssistantByRun).filter(
+          ([runId]) => !runIdsToRemove.has(Number(runId))
+        )
+      ) as Record<number, string>;
+      const streamHealthyByRun = Object.fromEntries(
+        Object.entries(state.streamHealthyByRun).filter(
+          ([runId]) => !runIdsToRemove.has(Number(runId))
+        )
+      ) as Record<number, boolean>;
 
       return {
         chats,
@@ -110,6 +124,8 @@ export const useAgentStore = create<AgentState>(set => ({
         messagesByChat,
         runsByChat,
         eventsByRun,
+        streamingAssistantByRun,
+        streamHealthyByRun,
       };
     });
   },
@@ -141,6 +157,23 @@ export const useAgentStore = create<AgentState>(set => ({
         [chatId]: [...(state.messagesByChat[chatId] || []), message],
       },
     }));
+  },
+
+  upsertMessage: (chatId, message) => {
+    set(state => {
+      const current = state.messagesByChat[chatId] || [];
+      const index = current.findIndex(item => item.id === message.id);
+      const next =
+        index >= 0
+          ? current.map((item, idx) => (idx === index ? message : item))
+          : [...current, message].sort((a, b) => a.id - b.id);
+      return {
+        messagesByChat: {
+          ...state.messagesByChat,
+          [chatId]: next,
+        },
+      };
+    });
   },
 
   setRuns: (chatId, runs) => {
@@ -206,6 +239,31 @@ export const useAgentStore = create<AgentState>(set => ({
     });
   },
 
+  setStreamingAssistant: (runId, text) => {
+    set(state => ({
+      streamingAssistantByRun: {
+        ...state.streamingAssistantByRun,
+        [runId]: text,
+      },
+    }));
+  },
+
+  clearStreamingAssistant: runId => {
+    set(state => {
+      const { [runId]: _removed, ...streamingAssistantByRun } = state.streamingAssistantByRun;
+      return { streamingAssistantByRun };
+    });
+  },
+
+  setStreamHealthy: (runId, healthy) => {
+    set(state => ({
+      streamHealthyByRun: {
+        ...state.streamHealthyByRun,
+        [runId]: healthy,
+      },
+    }));
+  },
+
   reset: () =>
     set({
       chats: [],
@@ -214,5 +272,7 @@ export const useAgentStore = create<AgentState>(set => ({
       messagesByChat: {},
       runsByChat: {},
       eventsByRun: {},
+      streamingAssistantByRun: {},
+      streamHealthyByRun: {},
     }),
 }));

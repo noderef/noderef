@@ -37,6 +37,7 @@ import { randomUUID } from 'crypto';
 import {
   callAnthropic,
   callWithTools,
+  callWithToolsStream,
   type AgentCallResult,
   type AgentMessageParam,
   type AgentToolSchema,
@@ -50,7 +51,15 @@ import {
   type LlmMaskingConfig,
 } from '../ai/maskingEngine.js';
 import { getMaskingSettings } from '../ai/maskingSettings.js';
-import { emitRunEvent, formatConversationHistory, stripHorizontalRules } from './agentUtils.js';
+import {
+  emitRunEvent,
+  formatConversationHistory,
+  publishAssistantClear,
+  publishAssistantDelta,
+  publishAssistantDone,
+  publishRunStatus,
+  stripHorizontalRules,
+} from './agentUtils.js';
 import {
   buildChatPresentationPrompt,
   buildFallbackChatTitle,
@@ -71,7 +80,14 @@ import {
   trimHistoricalToolResults,
   type ContextCompactionResult,
 } from './contextWindow.js';
-import { buildDescriptionNote, type ProgressNote } from './progressMessages.js';
+import {
+  buildAnalyzingNote,
+  buildChoosingToolsNote,
+  buildComposingAnswerNote,
+  buildRunningToolNote,
+  buildWaitingConfirmationNote,
+  type ProgressNote,
+} from './progressMessages.js';
 import { buildStepSummary } from './stepSummary.js';
 import { buildSystemPrompt } from './systemPrompt.js';
 import {
@@ -274,10 +290,16 @@ export class AgentRunEngine {
     }
     const maskingTokenMap = maskingConfig?.mode === 'tokenize' ? new Map<string, string>() : null;
 
+    let emittedAnalyzingNote = false;
+
     for (let iteration = 0; iteration < MAX_LOOP_STEPS; iteration++) {
       this.checkAborted();
 
       const iterationIndex = iteration + 1;
+      if (!emittedAnalyzingNote) {
+        await this.emitNote(input.runId, buildAnalyzingNote(input.preferredLanguage));
+        emittedAnalyzingNote = true;
+      }
       const preCompactionEstimate = estimatePromptTokens(systemPrompt, messages, tools);
       const compaction = this.compactMessagesForContextWindow(
         messages,
@@ -325,20 +347,62 @@ export class AgentRunEngine {
           maskedMessages = masked as AgentMessageParam[];
         }
 
+        let streamAssistantText = true;
+        let composingNoteEmitted = false;
+        const invokeModel = async (): Promise<AgentCallResult> => {
+          try {
+            return await callWithToolsStream({
+              apiKey: this.runtime.apiKey,
+              model: this.runtime.model,
+              baseURL: this.runtime.baseURL,
+              system: maskedSystem,
+              messages: maskedMessages,
+              tools,
+              maxTokens: nextCallMaxTokens,
+              temperature: this.runtime.temperature,
+              onTextDelta: delta => {
+                if (!composingNoteEmitted) {
+                  composingNoteEmitted = true;
+                  void this.emitNote(
+                    input.runId,
+                    buildComposingAnswerNote(input.preferredLanguage)
+                  );
+                }
+                if (streamAssistantText) {
+                  publishAssistantDelta(input.runId, delta);
+                }
+              },
+              onToolUseStarted: () => {
+                streamAssistantText = false;
+                publishAssistantClear(input.runId);
+              },
+            });
+          } catch (streamError) {
+            log.warn(
+              { err: streamError, iteration: iterationIndex },
+              'Streaming call failed; falling back'
+            );
+            return callWithTools({
+              apiKey: this.runtime.apiKey,
+              model: this.runtime.model,
+              baseURL: this.runtime.baseURL,
+              system: maskedSystem,
+              messages: maskedMessages,
+              tools,
+              maxTokens: nextCallMaxTokens,
+              temperature: this.runtime.temperature,
+            });
+          }
+        };
+
         response = await withTimeout(
-          callWithTools({
-            apiKey: this.runtime.apiKey,
-            model: this.runtime.model,
-            baseURL: this.runtime.baseURL,
-            system: maskedSystem,
-            messages: maskedMessages,
-            tools,
-            maxTokens: nextCallMaxTokens,
-            temperature: this.runtime.temperature,
-          }),
+          invokeModel(),
           CALL_TIMEOUT_MS,
           `Agent call (iteration ${iterationIndex})`
         );
+        if (response.type === 'tool_calls') {
+          publishAssistantClear(input.runId);
+        }
       } catch (err) {
         await this.emitEvent(input.runId, 'run.context', 'warn', {
           phase: 'call_failed',
@@ -407,12 +471,17 @@ export class AgentRunEngine {
           ? detokenizeText(response.text, maskingTokenMap)
           : response.text;
         const sanitizedText = stripHorizontalRules(detokenizedText);
-        await this.repository.createMessage({
+        const message = await this.repository.createMessage({
           chatId: input.chatId,
           userId: input.userId,
           role: 'assistant',
           content: sanitizedText,
           mentions: [],
+        });
+        publishAssistantDone(input.runId, {
+          messageId: message.id,
+          content: sanitizedText,
+          stopReason: response.stopReason,
         });
         return;
       }
@@ -527,9 +596,11 @@ export class AgentRunEngine {
           requiresConfirmation: tool.requiresConfirmation,
         });
 
-        // ── Emit description note on first tool call: use LLM's own words ────
-        if (stepOrdinal === 1 && detokenizedReasoning?.trim()) {
-          await this.emitNote(input.runId, buildDescriptionNote(detokenizedReasoning.trim()));
+        if (callIndex === 0) {
+          await this.emitNote(
+            input.runId,
+            buildChoosingToolsNote(response.calls.length, input.preferredLanguage)
+          );
         }
         // ── Confirmation gate ────────────────────────────────────────────────
         if (requiresManualConfirmation) {
@@ -548,6 +619,12 @@ export class AgentRunEngine {
             summary: stepSummary,
             output: { args: call.args },
           });
+          await this.emitNote(
+            input.runId,
+            buildWaitingConfirmationNote(stepSummary, input.preferredLanguage)
+          );
+          publishAssistantClear(input.runId);
+          await this.broadcastRunStatus(input.userId, input.runId);
           await this.repository.createOperationAudit({
             runId: input.runId,
             stepId: step.id,
@@ -562,6 +639,15 @@ export class AgentRunEngine {
         }
 
         // ── Execute tool ─────────────────────────────────────────────────────
+        await this.emitEvent(input.runId, 'step.started', 'info', {
+          stepId: step.id,
+          operation: canonicalOperation,
+          summary: stepSummary,
+        });
+        await this.emitNote(
+          input.runId,
+          buildRunningToolNote(canonicalOperation, stepSummary, input.preferredLanguage)
+        );
         await this.emitEvent(input.runId, 'run.executing', 'info', { stepId: step.id });
 
         const executionStartedAt = Date.now();
@@ -626,12 +712,17 @@ export class AgentRunEngine {
       }
 
       if (directNodeContentReply) {
-        await this.repository.createMessage({
+        const message = await this.repository.createMessage({
           chatId: input.chatId,
           userId: input.userId,
           role: 'assistant',
           content: directNodeContentReply,
           mentions: [],
+        });
+        publishAssistantDone(input.runId, {
+          messageId: message.id,
+          content: directNodeContentReply,
+          stopReason: 'direct_content',
         });
         return;
       }
@@ -645,13 +736,18 @@ export class AgentRunEngine {
 
     // Safety: if we hit MAX_LOOP_STEPS, emit a fallback message
     log.warn({ runId: input.runId }, 'Agent hit MAX_LOOP_STEPS without a final answer');
-    await this.repository.createMessage({
+    const fallbackMessage = await this.repository.createMessage({
       chatId: input.chatId,
       userId: input.userId,
       role: 'assistant',
       content:
         'I was unable to complete the request within the step limit. Please try a more specific question.',
       mentions: [],
+    });
+    publishAssistantDone(input.runId, {
+      messageId: fallbackMessage.id,
+      content: fallbackMessage.content,
+      stopReason: 'max_steps',
     });
   }
 
@@ -819,5 +915,12 @@ export class AgentRunEngine {
       'info',
       note.payload as Record<string, unknown>
     );
+  }
+
+  private async broadcastRunStatus(userId: number, runId: number): Promise<void> {
+    const summary = await this.repository.getRunSummary(userId, runId);
+    if (summary) {
+      publishRunStatus(runId, summary);
+    }
   }
 }
