@@ -26,7 +26,7 @@ import {
 } from './neutralino';
 
 const DEFAULT_PORT = 5111;
-const DEFAULT_RPC_TIMEOUT_MS = 7000;
+const DEFAULT_RPC_TIMEOUT_MS = 30000;
 
 // Detect if we're running in Docker/SERVE_STATIC mode (frontend served by backend)
 // In this case, use the current window location port instead of DEFAULT_PORT
