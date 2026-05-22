@@ -34,8 +34,8 @@
     "resourcesPath": "./resources",
     "resourcesDir": "./resources",
     "clientLibrary": "./resources/neutralino.js",
-    "binaryVersion": "6.4.0",
-    "clientVersion": "6.4.0"
+    "binaryVersion": "6.7.0",
+    "clientVersion": "6.7.0"
   },
   "modes": {
     "window": {

@@ -170,8 +170,8 @@ importers:
         specifier: 9.2.1
         version: 9.2.1(@mantine/core@9.2.1(@mantine/hooks@9.2.1(react@19.2.6))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(@mantine/hooks@9.2.1(react@19.2.6))(@tiptap/extension-link@3.20.0(@tiptap/core@3.20.0(@tiptap/pm@3.20.0))(@tiptap/pm@3.20.0))(@tiptap/react@3.20.0(@floating-ui/dom@1.7.6)(@tiptap/core@3.20.0(@tiptap/pm@3.20.0))(@tiptap/pm@3.20.0)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@neutralinojs/lib':
-        specifier: 6.5.0
-        version: 6.5.0
+        specifier: 6.7.0
+        version: 6.7.0
       '@tabler/icons-react':
         specifier: 3.36.0
         version: 3.36.0(react@19.2.6)
@@ -894,8 +894,8 @@ packages:
       react: ^19.2.0
       react-dom: ^19.2.0
 
-  '@neutralinojs/lib@6.5.0':
-    resolution: {integrity: sha512-ECgYh+CXAfMR1JVTvDw/kHhjL6LzNNcjk8Va1DZUSBkUwROqFTQ7zseFeuFtwGvutqvlWiwpGmU3s11rg/bdvA==}
+  '@neutralinojs/lib@6.7.0':
+    resolution: {integrity: sha512-o0OSJJqzusYJRyFm4aSvNMtpaduRf9qWNA1fE3Ei0MwzZsHm8Nzhfs/VTvWXMib7DefpXTcq035Q73TemHvtFw==}
 
   '@neutralinojs/neu@11.5.0':
     resolution: {integrity: sha512-WnbmB+pBfUdQKE9v5RNQT6zX46j5/7qk9pWXmO3segSEdlvCydN8O0Xso53QHpsHyw72cpgLac4870zKakp2+w==}
@@ -4626,7 +4626,7 @@ snapshots:
       react: 19.2.6
       react-dom: 19.2.6(react@19.2.6)
 
-  '@neutralinojs/lib@6.5.0':
+  '@neutralinojs/lib@6.7.0':
     optionalDependencies:
       '@rollup/rollup-darwin-x64': 4.52.5
       '@rollup/rollup-linux-x64-gnu': 4.52.5

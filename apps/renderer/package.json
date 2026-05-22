@@ -21,7 +21,7 @@
     "@mantine/notifications": "9.2.1",
     "@mantine/spotlight": "9.2.1",
     "@mantine/tiptap": "9.2.1",
-    "@neutralinojs/lib": "6.5.0",
+    "@neutralinojs/lib": "6.7.0",
     "@tabler/icons-react": "3.36.0",
     "@tiptap/core": "^3.20.0",
     "@tiptap/extension-mention": "^3.20.0",
