@@ -225,7 +225,7 @@ const StepDetailBlock = ({
       </UnstyledButton>
       <Collapse expanded={open}>
         <Box
-          className="agent-markdown"
+          className="agent-markdown agent-markdown--compact"
           mt={6}
           dangerouslySetInnerHTML={{
             __html: renderMarkdown(detail, { copyLabel, copiedLabel }),
@@ -233,8 +233,6 @@ const StepDetailBlock = ({
           style={{
             margin: 0,
             padding: '8px 10px',
-            fontSize: 12,
-            lineHeight: 1.5,
             borderRadius: 'var(--mantine-radius-md)',
             backgroundColor: isDark ? theme.colors.dark[6] : theme.colors.gray[0],
             border: `1px solid ${isDark ? theme.colors.dark[4] : theme.colors.gray[3]}`,
@@ -264,7 +262,6 @@ const ActivityStepRow = ({
       return (
         <Box
           className="agent-markdown"
-          style={{ fontSize: 14, lineHeight: 1.6 }}
           dangerouslySetInnerHTML={{
             __html: renderMarkdown(label, { copyLabel, copiedLabel }),
           }}

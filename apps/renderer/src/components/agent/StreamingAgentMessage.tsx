@@ -73,9 +73,9 @@ export function StreamingAgentMessage({
 
   return (
     <Box
+      py={2}
       className="agent-markdown agent-message-group"
       dangerouslySetInnerHTML={{ __html: renderedHtml }}
-      style={{ fontSize: 14, lineHeight: 1.6, opacity: 0.95 }}
     />
   );
 }

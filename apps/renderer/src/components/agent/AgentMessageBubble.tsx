@@ -104,7 +104,6 @@ export function AgentMessageBubble({ message, copyLabel, copiedLabel }: AgentMes
               copiedLabel,
             }),
           }}
-          style={{ fontSize: 14, lineHeight: 1.6 }}
         />
         <Box
           className="agent-message-copy-btn"
