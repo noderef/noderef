@@ -19,12 +19,121 @@ export interface ProgressNote {
   payload: { text: string };
 }
 
+const SUPPORTED_LANGS = ['en', 'nl', 'de', 'es', 'fr'] as const;
+type SupportedLang = (typeof SUPPORTED_LANGS)[number];
+
+const resolveLang = (preferredLanguage?: string): SupportedLang => {
+  const base = (preferredLanguage ?? 'en').split('-')[0]?.toLowerCase() ?? 'en';
+  return SUPPORTED_LANGS.includes(base as SupportedLang) ? (base as SupportedLang) : 'en';
+};
+
+type ProgressCopy = {
+  queued: string;
+  analyzing: string;
+  choosingTool: string;
+  choosingTools: (count: number) => string;
+  composingAnswer: string;
+  running: (label: string) => string;
+  awaitingConfirmation: (action: string) => string;
+  done: string;
+  completedWithErrors: string;
+};
+
+const COPY: Record<SupportedLang, ProgressCopy> = {
+  en: {
+    queued: 'Queued',
+    analyzing: 'Analyzing request',
+    choosingTool: 'Choosing a tool',
+    choosingTools: count => `Choosing ${count} tools`,
+    composingAnswer: 'Composing answer',
+    running: label => `Running ${label}`,
+    awaitingConfirmation: action => `Awaiting confirmation: ${action}`,
+    done: 'Done.',
+    completedWithErrors: 'Completed with errors.',
+  },
+  nl: {
+    queued: 'In wachtrij',
+    analyzing: 'Verzoek analyseren…',
+    choosingTool: 'Tool kiezen',
+    choosingTools: count => `${count} tools kiezen`,
+    composingAnswer: 'Antwoord opstellen',
+    running: label => `Bezig met ${label}`,
+    awaitingConfirmation: action => `Wacht op bevestiging: ${action}`,
+    done: 'Klaar.',
+    completedWithErrors: 'Voltooid met fouten.',
+  },
+  de: {
+    queued: 'In Warteschlange',
+    analyzing: 'Anfrage wird analysiert…',
+    choosingTool: 'Tool wird ausgewählt',
+    choosingTools: count => `${count} Tools werden ausgewählt`,
+    composingAnswer: 'Antwort wird erstellt',
+    running: label => `${label} wird ausgeführt`,
+    awaitingConfirmation: action => `Warte auf Bestätigung: ${action}`,
+    done: 'Fertig.',
+    completedWithErrors: 'Mit Fehlern abgeschlossen.',
+  },
+  es: {
+    queued: 'En cola',
+    analyzing: 'Analizando solicitud…',
+    choosingTool: 'Eligiendo una herramienta',
+    choosingTools: count => `Eligiendo ${count} herramientas`,
+    composingAnswer: 'Redactando respuesta',
+    running: label => `Ejecutando ${label}`,
+    awaitingConfirmation: action => `Esperando confirmación: ${action}`,
+    done: 'Listo.',
+    completedWithErrors: 'Completado con errores.',
+  },
+  fr: {
+    queued: 'En file d’attente',
+    analyzing: 'Analyse de la demande…',
+    choosingTool: 'Choix d’un outil',
+    choosingTools: count => `Choix de ${count} outils`,
+    composingAnswer: 'Rédaction de la réponse',
+    running: label => `Exécution de ${label}`,
+    awaitingConfirmation: action => `En attente de confirmation : ${action}`,
+    done: 'Terminé.',
+    completedWithErrors: 'Terminé avec des erreurs.',
+  },
+};
+
 const note = (text: string): ProgressNote => ({ type: 'run.note', payload: { text } });
 
-export const buildDescriptionNote = (description: string): ProgressNote => note(description);
+const copyFor = (preferredLanguage?: string): ProgressCopy => COPY[resolveLang(preferredLanguage)];
 
-const buildConfirmNote = (actionSummary: string): ProgressNote =>
-  note(`Awaiting confirmation: ${actionSummary}`);
+export const buildQueuedNote = (preferredLanguage?: string): ProgressNote =>
+  note(copyFor(preferredLanguage).queued);
 
-const buildCompletionNote = (success: boolean): ProgressNote =>
-  note(success ? 'Done.' : 'Completed with errors.');
+export const buildAnalyzingNote = (preferredLanguage?: string): ProgressNote =>
+  note(copyFor(preferredLanguage).analyzing);
+
+export const buildChoosingToolsNote = (
+  toolCount: number,
+  preferredLanguage?: string
+): ProgressNote => {
+  const copy = copyFor(preferredLanguage);
+  return note(toolCount === 1 ? copy.choosingTool : copy.choosingTools(toolCount));
+};
+
+export const buildComposingAnswerNote = (preferredLanguage?: string): ProgressNote =>
+  note(copyFor(preferredLanguage).composingAnswer);
+
+export const buildRunningToolNote = (
+  operation: string,
+  summary?: string | null,
+  preferredLanguage?: string
+): ProgressNote => {
+  const label = summary?.trim() || humanizeOperation(operation);
+  return note(copyFor(preferredLanguage).running(label));
+};
+
+export const buildWaitingConfirmationNote = (
+  actionSummary: string,
+  preferredLanguage?: string
+): ProgressNote => note(copyFor(preferredLanguage).awaitingConfirmation(actionSummary));
+
+export const buildCompletionNote = (success: boolean, preferredLanguage?: string): ProgressNote =>
+  note(success ? copyFor(preferredLanguage).done : copyFor(preferredLanguage).completedWithErrors);
+
+const humanizeOperation = (operation: string): string =>
+  operation.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();

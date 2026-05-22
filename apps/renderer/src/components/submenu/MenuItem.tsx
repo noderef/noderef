@@ -24,10 +24,27 @@ interface MenuItemProps {
   item: MenuItemType;
   active?: boolean;
   onSelect?: (item: MenuItemType) => void;
+  /** Nested under a collapsible section; aligns icons with repository tree rows. */
   isNested?: boolean;
   icon?: React.ReactNode;
   onDelete?: (item: MenuItemType) => void;
   onRename?: (item: MenuItemType) => void;
+}
+
+/** Extend hover/active background left without shifting icon column (matches repo tree). */
+function getNestedItemLayoutStyle(isNested?: boolean): React.CSSProperties {
+  if (!isNested) {
+    return {
+      width: '100%',
+      padding: 'var(--mantine-spacing-xs) var(--mantine-spacing-sm)',
+    };
+  }
+
+  return {
+    width: 'calc(100% + var(--mantine-spacing-xs))',
+    marginLeft: 'calc(-1 * var(--mantine-spacing-xs))',
+    padding: 'var(--mantine-spacing-xs) var(--mantine-spacing-sm)',
+  };
 }
 
 export function MenuItem({
@@ -95,14 +112,7 @@ export function MenuItem({
   // If in rename mode, show input instead
   if (isRenaming) {
     return (
-      <div
-        style={{
-          width: '100%',
-          padding: isNested
-            ? 'var(--mantine-spacing-xs) var(--mantine-spacing-sm) var(--mantine-spacing-xs) 0'
-            : 'var(--mantine-spacing-xs) var(--mantine-spacing-sm)',
-        }}
-      >
+      <div style={getNestedItemLayoutStyle(isNested)}>
         <Group gap="xs" wrap="nowrap">
           {icon && (
             <div
@@ -147,11 +157,8 @@ export function MenuItem({
       onMouseLeave={() => setIsHovered(false)}
       onContextMenu={handleContextMenu}
       style={{
-        width: '100%',
+        ...getNestedItemLayoutStyle(isNested),
         display: 'block',
-        padding: isNested
-          ? 'var(--mantine-spacing-xs) var(--mantine-spacing-sm) var(--mantine-spacing-xs) 0'
-          : 'var(--mantine-spacing-xs) var(--mantine-spacing-sm)',
         borderRadius: 'var(--mantine-radius-sm)',
         textDecoration: 'none',
         textAlign: 'left',

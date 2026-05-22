@@ -79,6 +79,8 @@ function getLanguageDisplayName(code: string): string {
       return 'French';
     case 'en':
       return 'English';
+    case 'es':
+      return 'Spanish';
     default:
       return code;
   }

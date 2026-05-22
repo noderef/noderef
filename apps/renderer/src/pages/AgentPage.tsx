@@ -67,7 +67,10 @@ import {
   type ContextWindowDisplayState,
   type ContextWindowSnapshot,
 } from '../components/agent/agentRunActivity';
+import { useAgentRunStreams } from '../hooks/useAgentRunStreams';
 import { useAgentModelSelection, writeStoredModelSelection } from '../hooks/useAgentModelSelection';
+
+const SCROLL_NEAR_BOTTOM_THRESHOLD_PX = 80;
 
 const ACTIVE_RUN_STATUSES = new Set(['queued', 'running', 'waiting_confirmation']);
 const THREAD_AUTO_CONFIRM_ACCEPT_PATTERN = /^\s*(i accept|ik accepteer)\s*[.!]*\s*$/i;
@@ -121,6 +124,8 @@ export function AgentPage() {
   const messagesByChat = useAgentStore(state => state.messagesByChat);
   const runsByChat = useAgentStore(state => state.runsByChat);
   const eventsByRun = useAgentStore(state => state.eventsByRun);
+  const streamingAssistantByRun = useAgentStore(state => state.streamingAssistantByRun);
+  const streamHealthyByRun = useAgentStore(state => state.streamHealthyByRun);
   const setChats = useAgentStore(state => state.setChats);
   const setMessages = useAgentStore(state => state.setMessages);
   const addMessage = useAgentStore(state => state.addMessage);
@@ -504,11 +509,13 @@ export function AgentPage() {
     [appendRunEvents, setMessages, setRuns, t]
   );
 
-  const pollActiveChat = useCallback(async () => {
+  const pollActiveChat = useCallback(async (options?: { includeEvents?: boolean }) => {
     const chatId = useAgentStore.getState().activeChatId;
     if (!chatId) {
       return;
     }
+
+    const includeEvents = options?.includeEvents ?? true;
 
     try {
       const existingMessages = useAgentStore.getState().messagesByChat[chatId] || [];
@@ -525,24 +532,27 @@ export function AgentPage() {
       useAgentStore.getState().setRuns(chatId, runsPage.items);
 
       const activeRuns = runsPage.items.filter(run => ACTIVE_RUN_STATUSES.has(run.status));
-      for (const run of activeRuns) {
-        const existingEvents = useAgentStore.getState().eventsByRun[run.id] || [];
-        const afterId = existingEvents.length
-          ? existingEvents[existingEvents.length - 1].id
-          : undefined;
-        const events = await backendRpc.agent.listRunEvents({
-          runId: run.id,
-          afterId,
-          maxItems: 200,
-        });
-        useAgentStore.getState().appendRunEvents(run.id, events);
+
+      if (includeEvents) {
+        for (const run of activeRuns) {
+          const existingEvents = useAgentStore.getState().eventsByRun[run.id] || [];
+          const afterId = existingEvents.length
+            ? existingEvents[existingEvents.length - 1].id
+            : undefined;
+          const events = await backendRpc.agent.listRunEvents({
+            runId: run.id,
+            afterId,
+            maxItems: 200,
+          });
+          useAgentStore.getState().appendRunEvents(run.id, events);
+        }
       }
 
       const newMessages = messages.filter(m => lastMessageId && m.id > lastMessageId);
       const hasNewAssistantMessage = newMessages.some(m => m.role === 'assistant');
       const stillHasActiveRuns = activeRuns.length > 0;
 
-      if (hasNewAssistantMessage && !stillHasActiveRuns) {
+      if (includeEvents && hasNewAssistantMessage && !stillHasActiveRuns) {
         for (const run of runsPage.items) {
           const existingEvents = useAgentStore.getState().eventsByRun[run.id] || [];
           const afterId = existingEvents.length
@@ -696,6 +706,30 @@ export function AgentPage() {
   const [recentlySentMessage, setRecentlySentMessage] = useState(false);
   const tokenFormatter = useMemo(() => new Intl.NumberFormat(), []);
 
+  const anyStreamUnhealthy = useMemo(
+    () =>
+      activeRuns.some(
+        run => ACTIVE_RUN_STATUSES.has(run.status) && streamHealthyByRun[run.id] === false
+      ),
+    [activeRuns, streamHealthyByRun]
+  );
+
+  const pollActiveChatRef = useRef(pollActiveChat);
+  pollActiveChatRef.current = pollActiveChat;
+
+  const handleStreamErrorRef = useRef(() => {
+    void pollActiveChatRef.current({ includeEvents: true });
+  });
+  handleStreamErrorRef.current = () => {
+    void pollActiveChatRef.current({ includeEvents: true });
+  };
+
+  const streamErrorHandler = useCallback(() => {
+    handleStreamErrorRef.current();
+  }, []);
+
+  useAgentRunStreams(activeChatId, { onStreamError: streamErrorHandler });
+
   useEffect(() => {
     if (!activeChatId) {
       return;
@@ -706,12 +740,13 @@ export function AgentPage() {
       return;
     }
 
+    const intervalMs = anyStreamUnhealthy ? 1500 : 5000;
     const interval = setInterval(() => {
-      void pollActiveChat();
-    }, 1500);
+      void pollActiveChat({ includeEvents: anyStreamUnhealthy });
+    }, intervalMs);
 
     return () => clearInterval(interval);
-  }, [activeChatId, hasActiveRuns, recentlySentMessage, pollActiveChat]);
+  }, [activeChatId, hasActiveRuns, recentlySentMessage, anyStreamUnhealthy, pollActiveChat]);
 
   useEffect(() => {
     if (!recentlySentMessage) {
@@ -754,14 +789,31 @@ export function AgentPage() {
     void loadMentions(normalizedQuery, true);
   }, [debouncedMentionInput.query, debouncedMentionInput.session, loadMentions]);
 
+  const streamingTextLength = useMemo(
+    () => Object.values(streamingAssistantByRun).reduce((sum, text) => sum + text.length, 0),
+    [streamingAssistantByRun]
+  );
+
   useEffect(() => {
     const viewport = conversationViewportRef.current;
     if (!viewport) {
       return;
     }
 
+    const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+    const isNearBottom = distanceFromBottom <= SCROLL_NEAR_BOTTOM_THRESHOLD_PX;
+    if (!isNearBottom) {
+      return;
+    }
+
     viewport.scrollTop = viewport.scrollHeight;
-  }, [activeChatId, conversationTimeline.length, totalRunEventCount, thinkingRunIds.length]);
+  }, [
+    activeChatId,
+    conversationTimeline.length,
+    totalRunEventCount,
+    thinkingRunIds.length,
+    streamingTextLength,
+  ]);
 
   useEffect(() => {
     if (activeServerId !== null || activeChatId !== null) {
@@ -1082,6 +1134,7 @@ export function AgentPage() {
                         run={run}
                         runEvents={runEvents}
                         isActive={isActive}
+                        streamingText={streamingAssistantByRun[run.id] ?? null}
                         copyLabel={t('copy')}
                         copiedLabel={t('copied')}
                       />

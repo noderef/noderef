@@ -49,7 +49,10 @@ export function corsMiddleware(): RequestHandler {
 
     res.setHeader('Vary', 'Origin');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      'Content-Type, Authorization, X-Requested-With, Last-Event-ID'
+    );
     res.setHeader('X-NodeRef', 'backend@dev');
 
     if (req.method === 'OPTIONS') {

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import type { AgentMention } from '@app/contracts';
+import type { AgentMention, AgentRunSummary } from '@app/contracts';
 import type { PrismaClient } from '@prisma/client';
 import { AppErrors } from '../../lib/errors.js';
 import { createLogger } from '../../lib/logger.js';
@@ -45,8 +45,12 @@ import {
   isRecord,
   nowIso,
   parseMentions,
+  publishAssistantClear,
+  publishRunStatus,
+  publishStreamError,
   resolveAiRuntime,
 } from './agentUtils.js';
+import { buildCompletionNote, buildQueuedNote } from './progressMessages.js';
 import { searchMentions } from './searchMentions.js';
 import { getToolByName, resolveToolName } from './tools/registry.js';
 import type { AgentExecutionContext } from './types.js';
@@ -164,6 +168,17 @@ export class AgentService {
     return this.repository.listRunEvents(userId, runId, params);
   }
 
+  async getRunSummary(userId: number, runId: number): Promise<AgentRunSummary | null> {
+    return this.repository.getRunSummary(userId, runId);
+  }
+
+  private async broadcastRunStatus(userId: number, runId: number): Promise<void> {
+    const summary = await this.getRunSummary(userId, runId);
+    if (summary) {
+      publishRunStatus(runId, summary);
+    }
+  }
+
   async sendMessage(userId: number, payload: SendMessageInput) {
     const content = payload.content?.trim();
     if (!content) {
@@ -193,7 +208,18 @@ export class AgentService {
       manifestVersion: AGENT_MANIFEST_VERSION,
     });
 
+    const preferredLanguage = normalizeAppLanguage(payload.appLanguage);
+
     await this.emitEvent(run.id, 'run.queued', 'info', { messageId: message.id });
+    const queuedNote = buildQueuedNote(preferredLanguage);
+    await emitRunEvent(
+      this.repository,
+      run.id,
+      queuedNote.type,
+      'info',
+      queuedNote.payload as Record<string, unknown>
+    );
+    await this.broadcastRunStatus(userId, run.id);
 
     const aiSelection = {
       provider:
@@ -202,7 +228,6 @@ export class AgentService {
           : undefined,
       model: typeof payload.aiModel === 'string' ? payload.aiModel.trim() : undefined,
     };
-    const preferredLanguage = normalizeAppLanguage(payload.appLanguage);
     const autoApproveConfirmations = Boolean(payload.autoApproveConfirmations);
 
     setImmediate(() => {
@@ -239,12 +264,9 @@ export class AgentService {
       error: null,
     });
 
-    await this.repository.createRunEvent({
-      runId: run.id,
-      type: 'run.cancelled',
-      level: 'warn',
-      payload: { cancelledAt: nowIso() },
-    });
+    await this.emitEvent(run.id, 'run.cancelled', 'warn', { cancelledAt: nowIso() });
+    publishAssistantClear(run.id);
+    await this.broadcastRunStatus(userId, run.id);
 
     await this.repository.createMessage({
       chatId: run.chatId,
@@ -379,17 +401,12 @@ export class AgentService {
       error: null,
     });
 
-    await this.repository.createRunEvent({
-      runId: run.id,
+    await emitRunEvent(this.repository, run.id, 'step.rejected', 'warn', {
       stepId: step.id,
-      type: 'step.rejected',
-      level: 'warn',
-      payload: {
-        stepId: step.id,
-        confirmedAt: nowIso(),
-        confirmationMessageId: confirmationMessage.id,
-      },
+      confirmedAt: nowIso(),
+      confirmationMessageId: confirmationMessage.id,
     });
+    await this.broadcastRunStatus(userId, run.id);
 
     await this.repository.createOperationAudit({
       runId: run.id,
@@ -439,6 +456,7 @@ export class AgentService {
     );
 
     await this.repository.updateRun(userId, run.id, { status: 'running', error: null });
+    await this.broadcastRunStatus(userId, run.id);
 
     await this.repository.updateRunStep(userId, run.id, step.id, {
       status: 'running',
@@ -446,12 +464,9 @@ export class AgentService {
       startedAt: new Date(),
     });
 
-    await this.repository.createRunEvent({
-      runId: run.id,
+    await emitRunEvent(this.repository, run.id, 'step.confirmed', 'info', {
       stepId: step.id,
-      type: 'step.confirmed',
-      level: 'info',
-      payload: { stepId: step.id, confirmationMessageId: confirmationMessage.id },
+      confirmationMessageId: confirmationMessage.id,
     });
 
     const executionStartedAt = Date.now();
@@ -767,6 +782,7 @@ export class AgentService {
           ...(preferredLanguage ? { appLanguage: preferredLanguage } : {}),
         },
       });
+      await this.broadcastRunStatus(userId, runId);
 
       const execCtx = await createExecutionContext(
         this.prisma,
@@ -805,6 +821,15 @@ export class AgentService {
         });
 
         await this.emitEvent(runId, 'run.completed', 'info');
+        const completionNote = buildCompletionNote(true, preferredLanguage);
+        await emitRunEvent(
+          this.repository,
+          runId,
+          completionNote.type,
+          'info',
+          completionNote.payload as Record<string, unknown>
+        );
+        await this.broadcastRunStatus(userId, runId);
       }
     } catch (error) {
       const message = extractErrorMessage(error);
@@ -824,6 +849,20 @@ export class AgentService {
           error: message,
         }
       );
+      if (cancelled) {
+        publishAssistantClear(runId);
+      } else {
+        const completionNote = buildCompletionNote(false, preferredLanguage);
+        await emitRunEvent(
+          this.repository,
+          runId,
+          completionNote.type,
+          'info',
+          completionNote.payload as Record<string, unknown>
+        );
+        publishStreamError(runId, message, 'run_failed');
+      }
+      await this.broadcastRunStatus(userId, runId);
 
       if (cancelled) {
         await this.repository.createMessage({

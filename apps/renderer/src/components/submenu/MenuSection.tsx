@@ -271,7 +271,7 @@ export function MenuSection({
                       item={item}
                       active={activeItemId === item.id}
                       onSelect={onItemSelect}
-                      isNested={true}
+                      isNested
                       icon={itemIcon}
                       onDelete={supportsContextActions ? onItemDelete : undefined}
                       onRename={item.id.startsWith('saved-search-') ? onItemRename : undefined}

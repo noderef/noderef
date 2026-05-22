@@ -49,8 +49,8 @@ function helmetMiddleware(): RequestHandler {
             'frame-ancestors': ["'none'"],
           },
         },
-    crossOriginOpenerPolicy: { policy: 'same-origin' },
-    crossOriginResourcePolicy: { policy: 'same-origin' },
+    crossOriginOpenerPolicy: isDev ? false : { policy: 'same-origin' },
+    crossOriginResourcePolicy: isDev ? { policy: 'cross-origin' } : { policy: 'same-origin' },
   });
 }
 
@@ -118,4 +118,14 @@ export function applySecurityMiddleware(app: Express): void {
   app.use('/rpc', rpcRateLimiter());
   app.use('/rpc-binary', binaryRateLimiter());
   app.use('/rpc-stream', streamRateLimiter());
+  // Agent SSE: one long-lived GET per run; allow more connection attempts than binary downloads.
+  app.use(
+    '/rpc/agent/runs',
+    rateLimit({
+      windowMs: 10_000,
+      max: isDev ? 200 : 80,
+      standardHeaders: true,
+      legacyHeaders: false,
+    })
+  );
 }

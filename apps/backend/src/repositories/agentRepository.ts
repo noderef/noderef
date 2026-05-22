@@ -551,6 +551,31 @@ export class AgentRepository {
     return run ? this.toRunDTO(run) : null;
   }
 
+  async getRunSummary(
+    userId: number,
+    runId: number
+  ): Promise<(AgentRun & { pendingStep: AgentRunStep | null }) | null> {
+    const row = await this.prisma.agentRun.findFirst({
+      where: { id: runId, userId },
+      include: {
+        steps: {
+          where: { status: 'waiting_confirmation' },
+          orderBy: { ordinal: 'asc' },
+          take: 1,
+        },
+      },
+    });
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      ...this.toRunDTO(row),
+      pendingStep: row.steps[0] ? this.toRunStepDTO(row.steps[0]) : null,
+    };
+  }
+
   async listRuns(
     userId: number,
     chatId: number,
