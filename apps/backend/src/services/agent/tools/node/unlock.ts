@@ -14,34 +14,47 @@
  * limitations under the License.
  */
 
+import { NodesApi } from '@alfresco/js-api';
+import { getAlfrescoNodeUnlockPath } from '../../../../lib/alfresco-endpoints.js';
 import type { AgentExecutionContext } from '../../types.js';
-import { executeNodeRelocate } from '../helpers/nodeRelocate.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
 
-export const nodeCopyTool: ToolDefinition = {
-  name: 'node_copy',
-  description: 'Copy a node to a different parent folder.',
-  skill: { kind: 'local_md', path: '../skills/node_copy.md', version: 1 },
+export const nodeUnlockTool: ToolDefinition = {
+  name: 'node_unlock',
+  description: 'Unlock a node (POST /nodes/{nodeId}/unlock).',
+  skill: { kind: 'local_md', path: '../skills/node_unlock.md', version: 1 },
   inputSchema: {
     type: 'object',
     properties: {
-      sourceNodeId: { type: 'string', description: 'ID of the node to copy' },
-      targetParentId: { type: 'string', description: 'ID of the target parent folder' },
+      nodeId: { type: 'string', description: 'Node UUID' },
     },
-    required: ['sourceNodeId', 'targetParentId'],
+    required: ['nodeId'],
   },
   requiresConfirmation: true,
   confirmation: { phrase: 'CONFIRM' },
 
   async execute(ctx: AgentExecutionContext, args: Record<string, unknown>): Promise<ToolResult> {
     try {
-      const sourceNodeId = typeof args.sourceNodeId === 'string' ? args.sourceNodeId.trim() : '';
-      const targetParentId =
-        typeof args.targetParentId === 'string' ? args.targetParentId.trim() : '';
-      if (!sourceNodeId || !targetParentId) {
-        return { ok: false, error: 'sourceNodeId and targetParentId are required' };
+      const nodeId = typeof args.nodeId === 'string' ? args.nodeId.trim() : '';
+      if (!nodeId) {
+        return { ok: false, error: 'nodeId is required' };
       }
-      return executeNodeRelocate(ctx, sourceNodeId, targetParentId, 'copy');
+
+      if (ctx.signal.aborted) {
+        throw new Error('Run was cancelled');
+      }
+
+      const nodesApi = new NodesApi(ctx.api);
+      const path = getAlfrescoNodeUnlockPath(nodeId);
+      const result = await nodesApi.unlockNode(nodeId, {});
+
+      return {
+        ok: true,
+        data: {
+          apiTrace: { method: 'POST', path, request: {}, responseBody: result },
+          node: (result as any)?.entry ?? result,
+        },
+      };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }

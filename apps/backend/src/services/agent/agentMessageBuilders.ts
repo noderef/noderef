@@ -157,6 +157,15 @@ export function extractPrimaryNodeIdFromOutput(
     const createdId = (output.created as { id?: unknown } | undefined)?.id;
     return typeof createdId === 'string' && createdId.trim() ? createdId.trim() : null;
   }
+  if (operation === 'trashcan_restore') {
+    const node = output.node as { id?: unknown } | undefined;
+    const id = node?.id;
+    return typeof id === 'string' && id.trim() ? id.trim() : null;
+  }
+  if (operation === 'version_revert') {
+    const id = output.nodeId;
+    return typeof id === 'string' && id.trim() ? id.trim() : null;
+  }
   return null;
 }
 
@@ -187,6 +196,33 @@ const OPERATION_FAILURE_LABELS: Record<string, { title: string; action: string }
   text_write_commit: { title: 'Text write commit failed', action: 'commit text to Alfresco' },
   script_create: { title: 'Script generation failed', action: 'generate the script' },
   script_execute: { title: 'Script execution failed', action: 'execute the script' },
+  site_list: { title: 'List sites failed', action: 'list sites' },
+  site_get: { title: 'Get site failed', action: 'read the site' },
+  site_create: { title: 'Create site failed', action: 'create the site' },
+  site_update: { title: 'Update site failed', action: 'update the site' },
+  site_delete: { title: 'Delete site failed', action: 'delete the site' },
+  site_members: { title: 'Site membership failed', action: 'change site membership' },
+  trashcan_list: { title: 'List trash failed', action: 'list deleted nodes' },
+  trashcan_restore: { title: 'Restore from trash failed', action: 'restore the deleted node' },
+  trashcan_purge: { title: 'Purge from trash failed', action: 'permanently delete the node' },
+  tag_list: { title: 'List tags failed', action: 'list tags' },
+  tag_manage: { title: 'Tag change failed', action: 'update tags' },
+  category_list: { title: 'List categories failed', action: 'list categories' },
+  category_manage: { title: 'Category change failed', action: 'update categories' },
+  people_create: { title: 'Create person failed', action: 'create the user' },
+  people_update: { title: 'Update person failed', action: 'update the user' },
+  audit_apps: { title: 'List audit apps failed', action: 'list audit applications' },
+  audit_list: { title: 'List audit entries failed', action: 'list audit entries' },
+  action_list: { title: 'List actions failed', action: 'list action definitions' },
+  action_execute: { title: 'Action execution failed', action: 'execute the action' },
+  node_lock: { title: 'Lock node failed', action: 'lock the node' },
+  node_unlock: { title: 'Unlock node failed', action: 'unlock the node' },
+  version_revert: { title: 'Revert version failed', action: 'revert the version' },
+  version_delete: { title: 'Delete version failed', action: 'delete the version' },
+  association_list: { title: 'List associations failed', action: 'list associations' },
+  association_manage: { title: 'Association change failed', action: 'change associations' },
+  comment_list: { title: 'List comments failed', action: 'list comments' },
+  comment_manage: { title: 'Comment change failed', action: 'change comments' },
 };
 
 const OPERATION_SUCCESS_LABELS: Record<string, string> = {
@@ -207,6 +243,33 @@ const OPERATION_SUCCESS_LABELS: Record<string, string> = {
   text_write_commit: 'Text write committed',
   script_create: 'Script generated',
   script_execute: 'Script executed',
+  site_list: 'Sites listed',
+  site_get: 'Site retrieved',
+  site_create: 'Site created',
+  site_update: 'Site updated',
+  site_delete: 'Site deleted',
+  site_members: 'Site membership updated',
+  trashcan_list: 'Trash listed',
+  trashcan_restore: 'Node restored from trash',
+  trashcan_purge: 'Node purged from trash',
+  tag_list: 'Tags listed',
+  tag_manage: 'Tags updated',
+  category_list: 'Categories listed',
+  category_manage: 'Categories updated',
+  people_create: 'Person created',
+  people_update: 'Person updated',
+  audit_apps: 'Audit applications listed',
+  audit_list: 'Audit entries listed',
+  action_list: 'Actions listed',
+  action_execute: 'Action executed',
+  node_lock: 'Node locked',
+  node_unlock: 'Node unlocked',
+  version_revert: 'Version reverted',
+  version_delete: 'Version deleted',
+  association_list: 'Associations listed',
+  association_manage: 'Associations updated',
+  comment_list: 'Comments listed',
+  comment_manage: 'Comments updated',
 };
 
 export function buildOperationFailureMessage(operation: string, rawMessage: string): string {
