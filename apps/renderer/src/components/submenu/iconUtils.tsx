@@ -42,6 +42,7 @@ import {
   IconPlus,
   IconCpu,
   IconChartAreaLine,
+  IconSitemap,
 } from '@tabler/icons-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Loader } from '@mantine/core';
@@ -75,7 +76,7 @@ const iconMap: Record<string, React.ComponentType<any>> = {
   'file-pdf': IconFileTypePdf,
   filepdf: IconFileTypePdf,
   pdf: IconFileTypePdf,
-  workflow: IconBriefcase,
+  workflow: IconSitemap,
   'list-check': IconListCheck,
   listcheck: IconListCheck,
   'file-search': IconFileSearch,

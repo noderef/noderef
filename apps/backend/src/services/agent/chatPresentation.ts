@@ -40,8 +40,16 @@ const CHAT_ICON_OPTIONS = [
   'edit',
   'list-check',
   'workflow',
+  'briefcase',
   'code',
   'database',
+  'agent',
+  'user',
+  'world',
+  'lock',
+  'settings',
+  'chart-area',
+  'server',
 ] as const;
 
 const CHAT_ICON_SET = new Set<string>(CHAT_ICON_OPTIONS);
@@ -99,7 +107,6 @@ const buildLegacyTitleSnippet = (content: string, maxChars: number): string =>
     .replace(/[.!?]+$/g, '')
     .trim();
 
-// fallow-ignore-next-line unused-export
 export const normalizeChatIcon = (value: unknown): string => {
   if (typeof value !== 'string') {
     return DEFAULT_CHAT_ICON;
@@ -119,6 +126,20 @@ export const normalizeChatIcon = (value: unknown): string => {
     filesearchicon: 'file-search',
     listcheck: 'list-check',
     checklist: 'list-check',
+    site: 'world',
+    sites: 'world',
+    people: 'user',
+    person: 'user',
+    users: 'user',
+    group: 'user',
+    groups: 'user',
+    permission: 'lock',
+    permissions: 'lock',
+    insight: 'chart-area',
+    insights: 'chart-area',
+    chart: 'chart-area',
+    admin: 'settings',
+    cpu: 'agent',
   };
   const resolved = aliasMap[normalized] ?? normalized;
   return CHAT_ICON_SET.has(resolved) ? resolved : DEFAULT_CHAT_ICON;
@@ -181,6 +202,7 @@ export const buildChatPresentationPrompt = (
     '- No trailing punctuation.',
     `- Maximum ${CHAT_TITLE_MAX_CHARS} characters.`,
     `- Icon must be one of: ${CHAT_ICON_OPTIONS.join(', ')}.`,
+    '- Prefer: agent=assistant topic; user=people/groups; world=sites; lock=permissions; settings=admin; chart-area=insights; server=connectivity; workflow=processes; briefcase=business context.',
     '- Use "hash" if no icon clearly matches.',
     '- Return strict JSON only with keys: title, icon.',
     '- Example: {"title":"Find PDF metadata","icon":"file-pdf"}',
