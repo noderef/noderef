@@ -245,6 +245,7 @@ code {
   width: 100%;
   margin: 0.75rem 0;
   font-size: 0.95em;
+  table-layout: fixed;
 }
 
 .agent-markdown th,
@@ -253,16 +254,13 @@ code {
   padding: 0.4rem 0.55rem;
   text-align: left;
   vertical-align: top;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .agent-markdown th {
   background: var(--mantine-color-gray-1);
   font-weight: 600;
-}
-
-.agent-markdown table thead th:first-child,
-.agent-markdown table tbody td:first-child {
-  width: 70%;
 }
 
 .agent-markdown pre {
