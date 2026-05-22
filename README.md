@@ -272,11 +272,11 @@ The backend compiles to `resources/node-src/dist/server.js` and this command pro
 ./dist/noderef-win_x64.exe       # Windows preview
 ```
 
-## 📝 Changelog
+### 📝 **Changelog**
 
 See [GitHub releases](https://github.com/noderef/noderef/releases) for version history.
 
-## 📄 License
+### 📄 **License**
 
 NodeRef is licensed under the **Apache License 2.0**.
 
