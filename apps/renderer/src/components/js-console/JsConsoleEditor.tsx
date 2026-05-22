@@ -14,17 +14,14 @@
  * limitations under the License.
  */
 
-import { isNeutralinoMode } from '@/core/ipc/neutralino';
 import { IMPORT_TAG_REGEX_SOURCE } from '@/core/monaco/import-parser';
 import { importResolver } from '@/core/monaco/import-resolver';
 import { initMonaco } from '@/core/monaco/setup';
 import { useJsConsoleStore } from '@/core/store/jsConsole';
-import { readClipboardText, writeClipboardText } from '@/core/utils/clipboard';
+import { useMonacoClipboardHandlers } from '@/hooks/useMonacoClipboardHandlers';
 import { useActiveServerId } from '@/hooks/useNavigation';
 import { useComputedColorScheme } from '@mantine/core';
 import * as monaco from 'monaco-editor';
-import { ICodeEditorService } from 'monaco-editor/esm/vs/editor/browser/services/codeEditorService';
-import { CommandsRegistry } from 'monaco-editor/esm/vs/platform/commands/common/commands';
 import parserBabel from 'prettier/plugins/babel';
 import parserEstree from 'prettier/plugins/estree';
 import prettier from 'prettier/standalone';
@@ -401,242 +398,11 @@ export function JsConsoleEditor({ onAiRequest }: JsConsoleEditorProps) {
     };
   }, [editorReady]);
 
-  // Custom clipboard handling for desktop compatibility
-  // Prevents duplicate paste operations on Windows by using a processing flag
-  useEffect(() => {
-    if (!editorReady || !containerRef.current || !editorRef.current) return;
-
-    const editor = editorRef.current;
-    const container = containerRef.current;
-
-    // Use a processing flag to prevent concurrent paste operations
-    let isProcessingPaste = false;
-
-    const handleContainerClick = (event: MouseEvent) => {
-      if (event.target === container) {
-        editor.focus();
-      }
-    };
-
-    const getEditorSelectionText = (): string => {
-      const model = editor.getModel();
-      if (!model) return '';
-      const selection = editor.getSelection();
-      if (!selection || selection.isEmpty()) return '';
-      return model.getValueInRange(selection);
-    };
-
-    const performCopy = async (event?: ClipboardEvent): Promise<boolean> => {
-      const text = getEditorSelectionText();
-      if (!text) return false;
-      return writeClipboardText(text, event);
-    };
-
-    const performCut = async (event?: ClipboardEvent): Promise<boolean> => {
-      const model = editor.getModel();
-      const selection = editor.getSelection();
-      if (!model || !selection || selection.isEmpty()) return false;
-
-      const text = model.getValueInRange(selection);
-      const copied = await writeClipboardText(text, event);
-      if (!copied) return false;
-
-      editor.executeEdits('cut', [
-        {
-          range: selection,
-          text: '',
-        },
-      ]);
-      editor.pushUndoStop();
-      return true;
-    };
-
-    const pasteText = async (
-      event?: ClipboardEvent,
-      _source: 'event' | 'action' = 'event'
-    ): Promise<boolean> => {
-      // If already processing a paste, immediately block this one
-      if (isProcessingPaste) {
-        if (event) {
-          event.preventDefault();
-          event.stopPropagation();
-        }
-        return false;
-      }
-
-      // Prevent default BEFORE async operations
-      if (event) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
-
-      // Set flag immediately to block concurrent operations
-      isProcessingPaste = true;
-
-      try {
-        const text = await readClipboardText(event);
-        if (!text) return false;
-
-        if (!editor.hasTextFocus()) {
-          editor.focus();
-        }
-
-        const selection = editor.getSelection();
-        if (!selection || selection.isEmpty()) {
-          const position = editor.getPosition();
-          if (!position) return false;
-
-          editor.executeEdits('paste', [
-            {
-              range: new monaco.Range(
-                position.lineNumber,
-                position.column,
-                position.lineNumber,
-                position.column
-              ),
-              text,
-            },
-          ]);
-          return true;
-        }
-
-        editor.executeEdits('paste', [
-          {
-            range: selection,
-            text,
-          },
-        ]);
-        return true;
-      } finally {
-        // Clear flag after a short delay to prevent rapid duplicate events
-        setTimeout(() => {
-          isProcessingPaste = false;
-        }, 50);
-      }
-    };
-
-    const handlePaste = async (event: ClipboardEvent) => {
-      const target = event.target as Node;
-      const monacoContainer = editor.getContainerDomNode();
-      const isMonacoTarget = monacoContainer && monacoContainer.contains(target);
-      const isContainerTarget = target === container;
-
-      if (!isMonacoTarget && !isContainerTarget) {
-        return;
-      }
-
-      await pasteText(event, 'event');
-    };
-
-    const handleCopy = async (event: ClipboardEvent) => {
-      const target = event.target as Node;
-      const monacoContainer = editor.getContainerDomNode();
-      const isMonacoTarget = monacoContainer && monacoContainer.contains(target);
-      const isContainerTarget = target === container;
-
-      if (!isMonacoTarget && !isContainerTarget) {
-        return;
-      }
-
-      await performCopy(event);
-    };
-
-    const handleCut = async (event: ClipboardEvent) => {
-      const target = event.target as Node;
-      const monacoContainer = editor.getContainerDomNode();
-      const isMonacoTarget = monacoContainer && monacoContainer.contains(target);
-      const isContainerTarget = target === container;
-
-      if (!isMonacoTarget && !isContainerTarget) {
-        return;
-      }
-
-      await performCut(event);
-    };
-
-    const handleBeforeInput = async (event: InputEvent) => {
-      if (event.inputType !== 'insertFromPaste') return;
-
-      const target = event.target as Node;
-      const monacoContainer = editor.getContainerDomNode();
-      const isMonacoTarget = monacoContainer && monacoContainer.contains(target);
-      const isContainerTarget = target === container;
-
-      if (!isMonacoTarget && !isContainerTarget) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-      await pasteText(undefined, 'action');
-    };
-
-    const commandOverrideDisposables: Array<{ dispose: () => void }> = [];
-
-    const overrideCommand = (commandId: string, handler: () => Promise<boolean> | boolean) => {
-      const previous = CommandsRegistry.getCommand(commandId);
-      const disposable = CommandsRegistry.registerCommand(
-        commandId,
-        async (accessor: any, ...args: any[]) => {
-          const codeEditorService = accessor.get(ICodeEditorService);
-          const focusedEditor = codeEditorService.getFocusedCodeEditor();
-          if (focusedEditor !== editor) {
-            return previous?.handler ? previous.handler(accessor, ...args) : undefined;
-          }
-          const handled = await handler();
-          if (!handled && previous?.handler) {
-            return previous.handler(accessor, ...args);
-          }
-          return undefined;
-        }
-      );
-      commandOverrideDisposables.push(disposable);
-    };
-
-    // Only apply custom clipboard handling in Neutralino mode
-    if (isNeutralinoMode()) {
-      overrideCommand('editor.action.clipboardPasteAction', () => pasteText(undefined, 'action'));
-      overrideCommand('editor.action.clipboardCopyAction', () => performCopy());
-      overrideCommand('editor.action.clipboardCutAction', () => performCut());
-
-      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {
-        void pasteText(undefined, 'action');
-      });
-      editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.Insert, () => {
-        void pasteText(undefined, 'action');
-      });
-      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {
-        void performCopy();
-      });
-      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Insert, () => {
-        void performCopy();
-      });
-      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {
-        void performCut();
-      });
-
-      window.addEventListener('beforeinput', handleBeforeInput, true);
-      window.addEventListener('paste', handlePaste, true);
-      window.addEventListener('copy', handleCopy, true);
-      window.addEventListener('cut', handleCut, true);
-      container.addEventListener('click', handleContainerClick);
-    }
-
-    // Always listen for container clicks to focus editor, even in browser mode,
-    // unless managed above
-    if (!isNeutralinoMode()) {
-      container.addEventListener('click', handleContainerClick);
-    }
-
-    return () => {
-      container.removeEventListener('click', handleContainerClick);
-      if (isNeutralinoMode()) {
-        window.removeEventListener('paste', handlePaste, true);
-        window.removeEventListener('copy', handleCopy, true);
-        window.removeEventListener('cut', handleCut, true);
-        window.removeEventListener('beforeinput', handleBeforeInput, true);
-        commandOverrideDisposables.forEach(disposable => disposable.dispose());
-      }
-    };
-  }, [editorReady]);
+  useMonacoClipboardHandlers({
+    isEnabled: editorReady,
+    editorRef,
+    containerRef,
+  });
 
   return <div ref={containerRef} style={{ height: '100%', overflow: 'hidden' }} />;
 }
