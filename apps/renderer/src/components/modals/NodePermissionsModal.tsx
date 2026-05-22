@@ -1132,6 +1132,8 @@ function MembersModal({
     onDropdownClose: () => combobox.resetSelectedOption(),
   });
 
+  const filteredMembers = members.filter(member => member.type === memberSearchType);
+
   return (
     <Modal
       opened={opened}
@@ -1220,13 +1222,13 @@ function MembersModal({
                 {t('common:loading')}
               </Text>
             </Group>
-          ) : members.length === 0 ? (
+          ) : filteredMembers.length === 0 ? (
             <Text size="sm" c="dimmed" py="xs">
               {t('nodeBrowser:permissionsNoMembers')}
             </Text>
           ) : (
             <Stack gap="xs">
-              {members.map(member => (
+              {filteredMembers.map(member => (
                 <Paper key={member.id} withBorder p="xs">
                   <Group justify="space-between" align="center">
                     <Stack gap={2}>
