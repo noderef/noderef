@@ -16,6 +16,7 @@
 
 import { isNeutralinoMode } from '@/core/ipc/neutralino';
 import { IMPORT_TAG_REGEX_SOURCE } from '@/core/monaco/import-parser';
+import { warmAiLibs } from '@/core/ai/consoleClient';
 import { importResolver } from '@/core/monaco/import-resolver';
 import { initMonaco } from '@/core/monaco/setup';
 import { useJsConsoleStore } from '@/core/store/jsConsole';
@@ -64,6 +65,10 @@ export function JsConsoleEditor({ onAiRequest }: JsConsoleEditorProps) {
 
     // Set server ID (this automatically clears imports if server changed)
     importResolver.setServerId(serverId);
+
+    if (serverId !== null) {
+      void warmAiLibs(serverId);
+    }
 
     // If server changed and we have code with imports, re-resolve them
     if (previousServerId !== serverId && serverId !== null) {

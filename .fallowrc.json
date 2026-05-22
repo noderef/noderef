@@ -7,7 +7,11 @@
     "scripts/gh-post-release.mjs",
     "scripts/gh-release-generate-changelog.mjs"
   ],
-  "ignorePatterns": ["apps/renderer/public/neutralino.js", "**/neutralino.js"],
+  "ignorePatterns": [
+    "apps/renderer/public/neutralino.js",
+    "**/neutralino.js",
+    "apps/backend/tests/mocks/**"
+  ],
   "ignoreDependencies": ["recharts", "@app/contracts"],
   "overrides": [
     {
@@ -29,7 +33,8 @@
         "apps/backend/src/services/nodeHistoryService.ts",
         "apps/backend/src/services/savedSearchService.ts",
         "apps/backend/src/services/searchHistoryService.ts",
-        "apps/backend/src/services/serverService.ts"
+        "apps/backend/src/services/serverService.ts",
+        "apps/backend/src/services/repositoryJsLibService.ts"
       ],
       "rules": {
         "unused-class-members": "off"

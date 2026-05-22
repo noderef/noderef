@@ -14,19 +14,30 @@
  * limitations under the License.
  */
 
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { defineConfig } from 'vitest/config';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@alfresco/js-api': path.resolve(__dirname, 'tests/mocks/alfresco-js-api.ts'),
+    },
+  },
   test: {
     globals: true,
     environment: 'node',
     include: ['tests/**/*.test.ts'],
-    setupFiles: ['./tests/setup/database.ts'],
+    setupFiles: ['./tests/setup/env.ts', './tests/setup/database.ts'],
     // Run test files sequentially to avoid DB conflicts
     fileParallelism: false,
     // Use isolated test database
     env: {
       DATABASE_URL: 'file:./test.db',
+      NODE_ENV: 'test',
+      LOG_LEVEL: 'silent',
     },
   },
 });

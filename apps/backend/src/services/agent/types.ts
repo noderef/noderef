@@ -74,6 +74,7 @@ interface AgentManifest {
 // ── Runtime types ─────────────────────────────────────────────────────────────
 export interface AgentExecutionContext {
   api: AlfrescoApi;
+  serverId: number;
   serverBaseUrl: string;
   jsconsoleEndpoint: string | null;
   authType: string | null;
