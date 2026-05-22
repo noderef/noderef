@@ -17,6 +17,7 @@
 /* eslint-disable no-console */
 // Frontend RPC client for local HTTP backend
 import { os } from '@neutralinojs/lib';
+import { getBackendUrl, isBackendReady, setBackendReady, setBackendUrl } from './backendConnection';
 import {
   ensureNeutralinoReady,
   getBundledNodePath,
@@ -41,9 +42,8 @@ function getInitialBackendURL(): string {
   return `http://127.0.0.1:${DEFAULT_PORT}`;
 }
 
-let baseURL = getInitialBackendURL();
+setBackendUrl(getInitialBackendURL());
 let started = false;
-let backendReady = false;
 let startingPromise: Promise<void> | null = null; // Singleton to prevent double-spawn
 
 const WINDOWS_DRIVE_REGEX = /^[A-Za-z]:/;
@@ -505,7 +505,7 @@ async function discoverPort(): Promise<number> {
   return DEFAULT_PORT;
 }
 
-async function isAlive(url = baseURL): Promise<boolean> {
+async function isAlive(url = getBackendUrl()): Promise<boolean> {
   try {
     // Add timeout to prevent hanging
     const controller = new AbortController();
@@ -540,7 +540,7 @@ async function isAlive(url = baseURL): Promise<boolean> {
  */
 export async function waitForBackend(maxAttempts = 50, intervalMs = 200): Promise<void> {
   // If already ready, return immediately
-  if (backendReady && (await isAlive())) {
+  if (isBackendReady() && (await isAlive())) {
     return;
   }
 
@@ -550,8 +550,8 @@ export async function waitForBackend(maxAttempts = 50, intervalMs = 200): Promis
     const candidate = browserBaseUrl ?? `http://127.0.0.1:${await discoverPort()}`;
 
     if (await isAlive(candidate)) {
-      baseURL = candidate;
-      backendReady = true;
+      setBackendUrl(candidate);
+      setBackendReady(true);
       return;
     }
 
@@ -559,11 +559,11 @@ export async function waitForBackend(maxAttempts = 50, intervalMs = 200): Promis
   }
 
   debugWarn('[RPC] Backend did not become available within timeout');
-  backendReady = false;
+  setBackendReady(false);
 }
 
 export function getRpcBaseUrl(): string {
-  return baseURL;
+  return getBackendUrl();
 }
 
 /**
@@ -604,9 +604,9 @@ export async function startBackend(): Promise<void> {
             setTimeout(() => reject(new Error('Port discovery timed out')), 3000);
           });
           const discoveredPort = await Promise.race([discoverPort(), discoverTimeout]);
-          baseURL = getBrowserBackendUrlFromLocation() ?? `http://127.0.0.1:${discoveredPort}`;
+          setBackendUrl(getBrowserBackendUrlFromLocation() ?? `http://127.0.0.1:${discoveredPort}`);
           started = true;
-          backendReady = true;
+          setBackendReady(true);
           debugLog('[RPC] Using existing backend on port:', discoveredPort);
           return;
         } catch {
@@ -901,9 +901,9 @@ async function doStartBackend(): Promise<void> {
 
       if (await isAlive(candidate)) {
         debugLog('[RPC] Backend is alive at:', candidate);
-        baseURL = candidate;
+        setBackendUrl(candidate);
         started = true;
-        backendReady = true;
+        setBackendReady(true);
         return;
       }
 
@@ -916,9 +916,9 @@ async function doStartBackend(): Promise<void> {
             const portfileCandidate = `http://127.0.0.1:${portFromFile}`;
             if (await isAlive(portfileCandidate)) {
               debugLog('[RPC] Backend is alive at portfile port:', portfileCandidate);
-              baseURL = portfileCandidate;
+              setBackendUrl(portfileCandidate);
               started = true;
-              backendReady = true;
+              setBackendReady(true);
               return;
             }
           }
@@ -933,11 +933,11 @@ async function doStartBackend(): Promise<void> {
       await wait(intervalMs);
     }
 
-    backendReady = false;
+    setBackendReady(false);
     console.error('[RPC] Backend did not become healthy after', maxAttempts, 'attempts');
     throw new Error('Backend did not become healthy in time');
   } catch (error) {
-    backendReady = false;
+    setBackendReady(false);
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error('[RPC] Failed to start backend:', errorMsg);
     console.error('[RPC] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
@@ -953,7 +953,7 @@ export async function rpc<T = unknown>(
   try {
     const timeoutMs = options?.timeoutMs ?? DEFAULT_RPC_TIMEOUT_MS;
     const res = await withTimeout(
-      backendFetch(`${baseURL}/rpc`, {
+      backendFetch(`${getBackendUrl()}/rpc`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ method, params }),
@@ -1003,13 +1003,4 @@ export async function rpc<T = unknown>(
   }
 }
 
-/**
- * Get the current backend URL
- */
-export function getBackendUrl(): string {
-  return baseURL;
-}
-
-export function isBackendReady(): boolean {
-  return backendReady;
-}
+export { getBackendUrl, isBackendReady } from './backendConnection';

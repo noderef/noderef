@@ -46,6 +46,7 @@ export function useAgentRunStreams(
     }
 
     let cancelled = false;
+    const sources = sourcesRef.current;
 
     const scheduleFallbackPoll = () => {
       const now = Date.now();
@@ -190,10 +191,10 @@ export function useAgentRunStreams(
     return () => {
       cancelled = true;
       unsubscribe();
-      for (const source of sourcesRef.current.values()) {
+      for (const source of sources.values()) {
         source.close();
       }
-      sourcesRef.current.clear();
+      sources.clear();
     };
   }, [activeChatId]);
 }

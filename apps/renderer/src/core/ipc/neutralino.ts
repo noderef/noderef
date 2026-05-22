@@ -17,6 +17,7 @@
 /* eslint-disable no-console */
 // Shared Neutralino initialization and utilities
 import { app, events, init as neutralinoInit, os } from '@neutralinojs/lib';
+import { getBackendUrl, isBackendReady } from './backendConnection';
 
 let ready = false;
 let initPromise: Promise<void> | null = null;
@@ -89,9 +90,6 @@ export const isNeutralinoMode = (): boolean => {
  * 2. Fallback: read PID file and kill the process via OS command
  */
 async function shutdownBackend(): Promise<void> {
-  // Dynamic import to avoid circular dependency (neutralino ↔ rpc)
-  const { getBackendUrl, isBackendReady } = await import('./rpc');
-
   // Strategy 1: HTTP shutdown endpoint
   if (isBackendReady()) {
     try {

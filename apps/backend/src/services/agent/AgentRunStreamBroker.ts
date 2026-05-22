@@ -77,7 +77,11 @@ function removeSubscriber(runId: number, subscriber: Subscriber): void {
   }
 }
 
-function deliverToSubscribers(runId: number, event: AgentStreamEvent, eventId?: number | string): void {
+function deliverToSubscribers(
+  runId: number,
+  event: AgentStreamEvent,
+  eventId?: number | string
+): void {
   const state = streamStateByRun.get(runId);
   if (!state?.subscribers.size) {
     return;
