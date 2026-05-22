@@ -16,26 +16,19 @@
 
 /* eslint-disable no-console */
 // Shared Neutralino initialization and utilities
-import {
-  app,
-  events,
-  init as neutralinoInit,
-  window as neutralinoWindow,
-  os,
-} from '@neutralinojs/lib';
+import { app, events, init as neutralinoInit, os } from '@neutralinojs/lib';
 
 let ready = false;
 let initPromise: Promise<void> | null = null;
-let minimizeOnCloseSetup = false;
-let cachedIsWindows: boolean | null = null;
+let quitOnCloseSetup = false;
 
 /**
  * Ensure Neutralino is initialized and ready
  */
 export async function ensureNeutralinoReady(): Promise<void> {
   if (ready) {
-    // Already ready, ensure minimize on close is set up
-    setupMinimizeOnClose();
+    // Already ready, ensure quit-on-close handler is set up
+    setupQuitOnClose();
     return;
   }
 
@@ -52,8 +45,8 @@ export async function ensureNeutralinoReady(): Promise<void> {
       clearTimeout(timeout);
       ready = true;
 
-      // Set up minimize on close behavior
-      setupMinimizeOnClose();
+      // Set up quit-on-close behavior (backend shutdown + full exit)
+      setupQuitOnClose();
 
       resolve();
     });
@@ -64,14 +57,14 @@ export async function ensureNeutralinoReady(): Promise<void> {
       // Already initialized, check if ready
       if (ready) {
         clearTimeout(timeout);
-        setupMinimizeOnClose();
+        setupQuitOnClose();
         resolve();
       } else {
         // Wait a bit for ready event
         setTimeout(() => {
           if (ready) {
             clearTimeout(timeout);
-            setupMinimizeOnClose();
+            setupQuitOnClose();
             resolve();
           }
         }, 100);
@@ -91,22 +84,60 @@ export const isNeutralinoMode = (): boolean => {
 };
 
 /**
- * Detect if running on Windows using synchronous path-based detection
- * This is more reliable than async API calls which can hang after idle time
+ * Attempt to shut down the backend process gracefully.
+ * 1. POST /shutdown to the backend HTTP endpoint
+ * 2. Fallback: read PID file and kill the process via OS command
  */
-function detectIsWindows(): boolean {
-  if (cachedIsWindows !== null) {
-    return cachedIsWindows;
+async function shutdownBackend(): Promise<void> {
+  // Dynamic import to avoid circular dependency (neutralino ↔ rpc)
+  const { getBackendUrl, isBackendReady } = await import('./rpc');
+
+  // Strategy 1: HTTP shutdown endpoint
+  if (isBackendReady()) {
+    try {
+      const url = getBackendUrl();
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2000);
+      await fetch(`${url}/shutdown`, {
+        method: 'POST',
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      console.log('[Neutralino] Backend shutdown requested via HTTP');
+      // Give backend a moment to exit gracefully
+      await new Promise(r => setTimeout(r, 500));
+      return;
+    } catch (err) {
+      console.warn('[Neutralino] HTTP shutdown failed, trying PID fallback:', err);
+    }
   }
 
-  const nlPath = (window as any).NL_PATH || '';
-  // Windows detection: drive letter (C:, D:, etc.) or backslashes
-  const isWindows =
-    /^[A-Za-z]:/.test(nlPath) || // Drive letter
-    nlPath.includes('\\'); // Backslashes
+  // Strategy 2: Read PID file and kill the process
+  try {
+    const NL = (window as any).Neutralino;
+    if (!NL?.os) return;
 
-  cachedIsWindows = isWindows;
-  return isWindows;
+    const dataDir = await NL.os.getPath('data');
+    const APP_ID = 'nl.noderef.desktop';
+    const sep = dataDir.includes('\\') ? '\\' : '/';
+    const pidDir = dataDir.endsWith(APP_ID) ? dataDir : `${dataDir}${sep}${APP_ID}`;
+    const pidPath = `${pidDir}${sep}.runtime${sep}backend-pid`;
+
+    const nlPath = (window as any).NL_PATH || '';
+    const isWin = /^[A-Za-z]:/.test(nlPath) || nlPath.includes('\\');
+    const readCmd = isWin ? `cmd /c type "${pidPath}"` : `cat "${pidPath}"`;
+
+    const result = await NL.os.execCommand(readCmd, { background: false });
+    const pid = String(result?.stdOut || result || '').trim();
+
+    if (pid && /^\d+$/.test(pid)) {
+      const killCmd = isWin ? `taskkill /F /PID ${pid}` : `kill ${pid}`;
+      await NL.os.execCommand(killCmd, { background: true });
+      console.log('[Neutralino] Backend killed via PID:', pid);
+    }
+  } catch (err) {
+    console.warn('[Neutralino] PID kill fallback failed:', err);
+  }
 }
 
 /**
@@ -129,56 +160,39 @@ function forceExit(): void {
 }
 
 /**
- * Set up window close behavior
- * On Windows: properly exit the app when close button is clicked
- * On macOS/Linux: minimize to keep app running in background
+ * Set up window close behavior: shut down the backend, then fully quit the app on all platforms.
  *
- * Note: Uses synchronous path-based OS detection to avoid async hangs
- * after long idle periods. Includes timeout fallback to force close.
+ * Includes a safety timeout so the process still exits if Neutralino close hangs.
  */
-function setupMinimizeOnClose(): void {
-  if (minimizeOnCloseSetup || !isNeutralinoMode()) {
+function setupQuitOnClose(): void {
+  if (quitOnCloseSetup || !isNeutralinoMode()) {
     return;
   }
 
-  minimizeOnCloseSetup = true;
-
-  // Pre-cache OS detection at setup time (not during close)
-  const isWindows = detectIsWindows();
+  quitOnCloseSetup = true;
 
   events.on('windowClose', async () => {
-    // For Windows: Set a safety timeout to force exit if normal close hangs
-    // This prevents the app from becoming unkillable after idle time
-    let forceExitTimeout: ReturnType<typeof setTimeout> | null = null;
-
-    if (isWindows) {
-      forceExitTimeout = setTimeout(() => {
-        console.warn('[Neutralino] Close timeout - forcing exit');
-        forceExit();
-      }, 2000); // 2 second timeout
+    // Shut down the backend process before exiting
+    try {
+      await shutdownBackend();
+    } catch (err) {
+      console.warn('[Neutralino] Backend shutdown error (continuing exit):', err);
     }
 
+    // Safety timeout to force exit if Neutralino close hangs
+    const forceExitTimeout = setTimeout(() => {
+      console.warn('[Neutralino] Close timeout — forcing exit');
+      forceExit();
+    }, 3000);
+
     try {
-      if (isWindows) {
-        // On Windows, exit the app completely
-        await app.killProcess();
-        // Clear timeout if killProcess succeeded
-        if (forceExitTimeout) {
-          clearTimeout(forceExitTimeout);
-        }
-      } else {
-        // On macOS/Linux, minimize to keep app running in background
-        await neutralinoWindow.minimize();
-      }
+      // All platforms: fully exit the app
+      await app.killProcess();
+      clearTimeout(forceExitTimeout);
     } catch (error) {
       console.error('[Neutralino] Failed to handle window close:', error);
-      // On error for Windows, force exit
-      if (isWindows) {
-        if (forceExitTimeout) {
-          clearTimeout(forceExitTimeout);
-        }
-        forceExit();
-      }
+      clearTimeout(forceExitTimeout);
+      forceExit();
     }
   });
 }

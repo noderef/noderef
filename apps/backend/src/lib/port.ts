@@ -20,7 +20,7 @@
  */
 
 import express from 'express';
-import { chmodSync, mkdirSync, writeFileSync } from 'fs';
+import { chmodSync, mkdirSync, unlinkSync, writeFileSync } from 'fs';
 import * as net from 'net';
 import path from 'path';
 import { log } from './logger.js';
@@ -145,16 +145,39 @@ export function publishPort(port: number): void {
     mkdirSync(runtimeDir, { recursive: true });
     const portFile = path.join(runtimeDir, 'backend-port');
     writeFileSync(portFile, String(port), 'utf-8');
+    const pidFile = path.join(runtimeDir, 'backend-pid');
+    writeFileSync(pidFile, String(process.pid), 'utf-8');
     // Best-effort chmod on POSIX
     if (process.platform !== 'win32') {
       try {
         chmodSync(runtimeDir, 0o700);
         chmodSync(portFile, 0o600);
+        chmodSync(pidFile, 0o600);
       } catch {
         // Ignore chmod errors
       }
     }
   } catch (err) {
     log.error({ err }, 'Failed to publish backend port');
+  }
+}
+
+/**
+ * Remove runtime files (backend-port, backend-pid) during graceful shutdown.
+ * Prevents stale files from confusing the next app launch.
+ */
+export function cleanupRuntimeFiles(): void {
+  try {
+    const dataDir = getDataDirFromArgsOrEnv();
+    const runtimeDir = path.join(dataDir, '.runtime');
+    for (const file of ['backend-port', 'backend-pid']) {
+      try {
+        unlinkSync(path.join(runtimeDir, file));
+      } catch {
+        // File may not exist — ignore
+      }
+    }
+  } catch {
+    // Best effort — don't crash during shutdown
   }
 }
