@@ -20,6 +20,7 @@
     "window.*",
     "events.*",
     "filesystem.*",
+    "updater.*",
     "clipboard.*",
     "debug.log"
   ],
@@ -27,7 +28,8 @@
     "filesystem": true,
     "os": true,
     "computer": true,
-    "process": true
+    "process": true,
+    "updater": true
   },
   "cli": {
     "binaryName": "noderef",

@@ -53,6 +53,11 @@ jobs:
         # Neutralino cross-builds mac_*, win_*, linux_* into dist/
         run: pnpm build:installers
 
+      - name: Generate Neutralino updater assets
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: node ./scripts/generate-updater-assets.mjs
+
       - name: Upload raw dist outputs
         uses: actions/upload-artifact@v4
         with:
@@ -304,6 +309,17 @@ jobs:
         with:
           name: linux-installers
           path: artifacts/linux
+
+      - name: Download updater assets
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-binaries
+          path: artifacts/updater-src
+
+      - name: Stage updater release files
+        run: |
+          mkdir -p artifacts/updater
+          cp artifacts/updater-src/dist/updater/* artifacts/updater/
 
       - name: Generate and Combine Release Notes
         env:

@@ -28,7 +28,8 @@ import {
 import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
 import { MODAL_KEYS } from '@/core/store/keys';
 import { useUIStore } from '@/core/store/ui';
-import { getCurrentVersion, getDownloadUrl, useUpdateStore } from '@/core/store/updates';
+import { UpdateActionButton } from '@/components/updates/UpdateActionButton';
+import { getCurrentVersion, useUpdateStore } from '@/core/store/updates';
 import { useDesktopClipboardHandlers } from '@/hooks/useDesktopClipboardHandlers';
 import { useModal } from '@/hooks/useModal';
 import {
@@ -297,21 +298,6 @@ export function SettingsModal() {
 
   const latestVersion = latestRelease?.version;
   const hasUpdateAvailable = hasUpdate && Boolean(latestVersion);
-  const updateDownloadUrl = getDownloadUrl(latestRelease);
-  const handleDownloadUpdate = useCallback(async () => {
-    if (!hasUpdateAvailable || !latestVersion) return;
-    const target = updateDownloadUrl;
-    if (isNeutralinoMode()) {
-      try {
-        await ensureNeutralinoReady();
-        await os.open(target);
-        return;
-      } catch (error) {
-        console.warn('Neutralino open failed, falling back to window.open', error);
-      }
-    }
-    window.open(target, '_blank', 'noreferrer');
-  }, [hasUpdateAvailable, latestVersion, updateDownloadUrl]);
 
   const handleOpenUrl = useCallback(async (url: string) => {
     if (isNeutralinoMode()) {
@@ -772,9 +758,7 @@ export function SettingsModal() {
                             <Text fw={700}>
                               {t('settings:updateAvailableShort', { version: latestVersion })}
                             </Text>
-                            <Button variant="filled" color="blue" onClick={handleDownloadUpdate}>
-                              {t('settings:updateDownloadCta')}
-                            </Button>
+                            <UpdateActionButton size="sm" />
                           </Group>
                         </Paper>
                       )}

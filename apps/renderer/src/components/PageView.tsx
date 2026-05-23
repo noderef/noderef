@@ -16,6 +16,7 @@
 
 import { ContentArea } from '@/components/content/ContentArea';
 import { ContentHeader } from '@/components/content/ContentHeader';
+import { UpdateActionButton } from '@/components/updates/UpdateActionButton';
 import { MultiServerSelectorControl } from '@/components/content/MultiServerSelectorControl';
 import { getPageActions } from '@/components/content/pageActions';
 import { SearchQueryBuilder } from '@/components/search/SearchQueryBuilder';
@@ -27,6 +28,7 @@ import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
 import { useSavedSearchesStore } from '@/core/store/savedSearches';
 import { useSearchStore } from '@/core/store/search';
 import { useServersStore } from '@/core/store/servers';
+import { useUpdateStore } from '@/core/store/updates';
 import { useTextEditorStore } from '@/core/store/textEditor';
 import { usePageActions } from '@/hooks/usePageActions';
 import { useActiveServerId, useNavigation } from '@/hooks/useNavigation';
@@ -56,6 +58,7 @@ export function PageView() {
   const PageComponent = route.component;
 
   const serverCount = useServersStore(state => state.servers.length);
+  const hasUpdate = useUpdateStore(state => state.hasUpdate);
   const noServersAvailable = serverCount === 0;
   const searchQuery = useSearchStore(state => state.query);
   const selectedServerIds = useSearchStore(state => state.selectedServerIds);
@@ -206,11 +209,12 @@ export function PageView() {
 
   const headerActionIcons = useMemo(() => {
     const icons = pageActions.actionIcons ?? [];
+    const updateAction = hasUpdate ? [{ customNode: <UpdateActionButton /> }] : [];
     if (showMultiServerSelector) {
-      return [...icons, { customNode: <MultiServerSelectorControl /> }];
+      return [...icons, ...updateAction, { customNode: <MultiServerSelectorControl /> }];
     }
-    return icons;
-  }, [pageActions.actionIcons, showMultiServerSelector]);
+    return [...icons, ...updateAction];
+  }, [hasUpdate, pageActions.actionIcons, showMultiServerSelector]);
 
   // Determine if this is a lazy-loaded page (Monaco-dependent)
   const isLazyPage =

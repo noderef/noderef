@@ -14,11 +14,26 @@
  * limitations under the License.
  */
 
-/**
- * Shared constants for the update system.
- */
+export interface UpdateManifestData {
+  releaseUrl?: string;
+  requiresInstaller?: boolean;
+  neutralinoBinaryVersion?: string | null;
+  neutralinoClientVersion?: string | null;
+  minimumNeutralinoVersion?: string | null;
+}
 
-export const GITHUB_RELEASE_URL = 'https://github.com/noderef/noderef/releases/latest';
-export const UPDATE_MANIFEST_URL =
-  'https://github.com/noderef/noderef/releases/latest/download/update_manifest.json';
-export const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours (1 day)
+export interface UpdateManifest {
+  applicationId: string;
+  version: string;
+  resourcesURL: string;
+  data?: UpdateManifestData;
+}
+
+export type UpdateFlowStatus =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'downloading'
+  | 'downloaded'
+  | 'installing'
+  | 'error';

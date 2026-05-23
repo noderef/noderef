@@ -23,6 +23,19 @@ interface Window {
       getStats?: () => Promise<{ connected?: string[] }>;
       dispatch?: (extension: string, event: string, data?: unknown) => Promise<void>;
     };
+    updater?: {
+      checkForUpdates: (url: string) => Promise<unknown>;
+      install?: () => Promise<void>;
+    };
+    filesystem?: {
+      writeBinaryFile: (path: string, data: ArrayBuffer) => Promise<void>;
+    };
+    app?: {
+      restartProcess: () => Promise<void>;
+    };
+    os?: {
+      open: (url: string) => Promise<void>;
+    };
   };
   NodeExtension?: unknown;
   NL_ARGS?: string[];
@@ -30,6 +43,7 @@ interface Window {
   NL_VERSION?: string;
   NL_PORT?: string;
   NL_TOKEN?: string;
+  NL_APPVERSION?: string;
 }
 
 // Vite env types
