@@ -86,7 +86,6 @@ export function ContentHeader({
         height: 60,
       }}
     >
-      {/* Left: Title with icon */}
       <Group gap="xs" wrap="nowrap" style={{ flexShrink: 0 }}>
         {icon && <Box style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{icon}</Box>}
         {title && (
@@ -96,8 +95,11 @@ export function ContentHeader({
         )}
       </Group>
 
-      {/* Right: Action Icons, More Menu, Search */}
-      <Group gap="xs" wrap="nowrap" style={{ flexShrink: 1, minWidth: 0 }}>
+      <Group
+        gap="xs"
+        wrap="nowrap"
+        style={{ flexShrink: 1, minWidth: 0, justifyContent: 'flex-end' }}
+      >
         {/* Action Icons */}
         {displayIcons.map((action, index) => {
           if (action.customNode) {

@@ -196,6 +196,25 @@ function setupQuitOnClose(): void {
 }
 
 /**
+ * Open an http(s) URL in the system browser (Neutralino) or a new tab (browser dev).
+ */
+export async function openExternalUrl(url: string): Promise<void> {
+  if (isNeutralinoMode()) {
+    try {
+      await ensureNeutralinoReady();
+      await os.open(url);
+      return;
+    } catch (error) {
+      console.warn('[Neutralino] os.open failed, falling back to window.open', error);
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.open(url, '_blank', 'noreferrer');
+  }
+}
+
+/**
  * Get the Neutralino data directory
  */
 export async function getDataDir(): Promise<string> {

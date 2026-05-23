@@ -14,30 +14,103 @@
  * limitations under the License.
  */
 
-import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
+import { isNeutralinoMode, openExternalUrl } from '@/core/ipc/neutralino';
 import {
   getAvailableUpdateVersion,
   getUpdateReleaseUrl,
   useUpdateStore,
 } from '@/core/store/updates';
 import { GITHUB_RELEASE_URL } from '@/core/updates/constants';
-import { Button, Loader } from '@mantine/core';
+import { Button, useMantineTheme } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
+import { IconDownload, IconRefresh } from '@tabler/icons-react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 
 type UpdateActionButtonProps = {
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   variant?: 'filled' | 'light' | 'outline' | 'subtle' | 'default';
   fullWidth?: boolean;
+  /** Header toolbar: short labels and width from Update / Restart / 100% only. */
+  compact?: boolean;
 };
+
+const UPDATE_ICON_SIZE: Record<NonNullable<UpdateActionButtonProps['size']>, number> = {
+  xs: 14,
+  sm: 16,
+  md: 18,
+  lg: 20,
+  xl: 22,
+};
+
+const UPDATE_BUTTON_FONT_SIZE: Record<NonNullable<UpdateActionButtonProps['size']>, number> = {
+  xs: 12,
+  sm: 14,
+  md: 16,
+  lg: 18,
+  xl: 20,
+};
+
+/** Horizontal space for icon, section gap, and button padding (px). */
+const UPDATE_BUTTON_CHROME_PX: Record<NonNullable<UpdateActionButtonProps['size']>, number> = {
+  xs: 38,
+  sm: 48,
+  md: 52,
+  lg: 56,
+  xl: 60,
+};
+
+/** Extra width for compact header buttons so labels are not tight against the edges. */
+const UPDATE_BUTTON_COMPACT_EXTRA_PX = 12;
+
+function getUpdateButtonWidthLabels(t: TFunction, compact: boolean): string[] {
+  if (compact) {
+    return [t('settings:updateCta'), t('settings:updateInstallRestart'), '100%'];
+  }
+  return [
+    t('settings:updateCta'),
+    t('settings:updateDownloading', { percent: 100 }),
+    t('settings:updateDownloadingIndeterminate'),
+    t('settings:updateInstallRestart'),
+    t('settings:updateInstalling'),
+  ];
+}
+
+function measureLabelWidth(text: string, font: string): number {
+  if (typeof document === 'undefined') {
+    return text.length * 7;
+  }
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+  if (!context) {
+    return text.length * 7;
+  }
+  context.font = font;
+  return context.measureText(text).width;
+}
+
+function measureUpdateButtonWidth(
+  size: NonNullable<UpdateActionButtonProps['size']>,
+  fontFamily: string,
+  labels: string[],
+  compact: boolean
+): number {
+  const fontSize = UPDATE_BUTTON_FONT_SIZE[size];
+  const font = `500 ${fontSize}px ${fontFamily}, sans-serif`;
+  const labelWidth = Math.max(0, ...labels.map(label => measureLabelWidth(label, font)));
+  const chrome = UPDATE_BUTTON_CHROME_PX[size] + (compact ? UPDATE_BUTTON_COMPACT_EXTRA_PX : 0);
+  return Math.ceil(labelWidth + chrome);
+}
 
 export function UpdateActionButton({
   size = 'xs',
   variant = 'filled',
   fullWidth = false,
+  compact = size === 'xs' && !fullWidth,
 }: UpdateActionButtonProps) {
-  const { t } = useTranslation(['settings', 'common']);
+  const { t, i18n } = useTranslation(['settings', 'common']);
+  const theme = useMantineTheme();
   const hasUpdate = useUpdateStore(state => state.hasUpdate);
   const status = useUpdateStore(state => state.status);
   const requiresInstaller = useUpdateStore(state => state.requiresInstaller);
@@ -53,25 +126,22 @@ export function UpdateActionButton({
   const canUseResourcesUpdater = isDesktop && !requiresInstaller && Boolean(manifest);
 
   const openReleasePage = useCallback(async () => {
-    if (isNeutralinoMode()) {
-      try {
-        await ensureNeutralinoReady();
-        const NL = (window as Window).Neutralino;
-        if (NL?.os?.open) {
-          await NL.os.open(releaseUrl);
-          return;
-        }
-      } catch (error) {
-        console.warn('[updates] Neutralino open failed, falling back to window.open', error);
-      }
-    }
-    window.open(releaseUrl, '_blank', 'noreferrer');
+    await openExternalUrl(releaseUrl);
   }, [releaseUrl]);
 
   const showUpdateButton = hasUpdate && Boolean(version) && status !== 'checking';
 
   const label = useMemo(() => {
     if (!version) return '';
+    if (compact) {
+      if (status === 'installing' || status === 'downloaded') {
+        return t('settings:updateInstallRestart');
+      }
+      if (status === 'downloading') {
+        return downloadProgress === null ? '' : `${downloadProgress}%`;
+      }
+      return t('settings:updateCta');
+    }
     if (status === 'installing') {
       return t('settings:updateInstalling');
     }
@@ -84,11 +154,13 @@ export function UpdateActionButton({
       }
       return t('settings:updateDownloading', { percent: downloadProgress });
     }
-    if (requiresInstaller || !canUseResourcesUpdater) {
-      return t('settings:updateDownloadCta');
-    }
-    return t('settings:updateDownloadVersion', { version });
-  }, [canUseResourcesUpdater, downloadProgress, requiresInstaller, status, t, version]);
+    return t('settings:updateCta');
+  }, [compact, downloadProgress, status, t, version]);
+
+  const fixedButtonWidth = useMemo(() => {
+    const labels = getUpdateButtonWidthLabels(t, compact);
+    return measureUpdateButtonWidth(size, theme.fontFamily ?? 'system-ui', labels, compact);
+  }, [compact, i18n.language, size, t, theme.fontFamily]);
 
   const handleClick = useCallback(async () => {
     if (!version) return;
@@ -131,16 +203,40 @@ export function UpdateActionButton({
   }
 
   const isBusy = status === 'downloading' || status === 'installing';
-  const showLoader = status === 'downloading' && downloadProgress === null;
+  const showIndeterminateLoader = status === 'downloading' && downloadProgress === null;
+  const showRestartIcon = status === 'downloaded' || status === 'installing';
+  const iconSize = UPDATE_ICON_SIZE[size];
+  const iconProps = { size: iconSize, stroke: 1.75 } as const;
 
   return (
     <Button
       size={size}
       variant={variant}
+      color="blue"
       fullWidth={fullWidth}
       onClick={() => void handleClick()}
       disabled={isBusy}
-      leftSection={showLoader ? <Loader size={14} color="white" /> : undefined}
+      loading={showIndeterminateLoader}
+      loaderProps={{ type: 'oval' }}
+      leftSection={
+        showIndeterminateLoader ? undefined : showRestartIcon ? (
+          <IconRefresh {...iconProps} />
+        ) : (
+          <IconDownload {...iconProps} />
+        )
+      }
+      styles={{
+        root: fullWidth
+          ? undefined
+          : {
+              width: fixedButtonWidth,
+              minWidth: fixedButtonWidth,
+              maxWidth: fixedButtonWidth,
+            },
+        label: {
+          whiteSpace: 'nowrap',
+        },
+      }}
     >
       {label}
     </Button>

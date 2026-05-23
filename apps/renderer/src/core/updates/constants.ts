@@ -19,6 +19,11 @@
  */
 
 export const GITHUB_RELEASE_URL = 'https://github.com/noderef/noderef/releases/latest';
-export const UPDATE_MANIFEST_URL =
+
+const PRODUCTION_UPDATE_MANIFEST_URL =
   'https://github.com/noderef/noderef/releases/latest/download/update_manifest.json';
+
+/** Override in dev with `VITE_UPDATE_MANIFEST_URL` (e.g. local `python3 -m http.server`). */
+export const UPDATE_MANIFEST_URL =
+  import.meta.env.VITE_UPDATE_MANIFEST_URL?.trim() || PRODUCTION_UPDATE_MANIFEST_URL;
 export const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours (1 day)

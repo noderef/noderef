@@ -211,9 +211,9 @@ export function PageView() {
     const icons = pageActions.actionIcons ?? [];
     const updateAction = hasUpdate ? [{ customNode: <UpdateActionButton /> }] : [];
     if (showMultiServerSelector) {
-      return [...icons, ...updateAction, { customNode: <MultiServerSelectorControl /> }];
+      return [...updateAction, ...icons, { customNode: <MultiServerSelectorControl /> }];
     }
-    return [...icons, ...updateAction];
+    return [...updateAction, ...icons];
   }, [hasUpdate, pageActions.actionIcons, showMultiServerSelector]);
 
   // Determine if this is a lazy-loaded page (Monaco-dependent)
