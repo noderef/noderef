@@ -84,6 +84,7 @@ import {
   buildAnalyzingNote,
   buildChoosingToolsNote,
   buildComposingAnswerNote,
+  buildMaxStepsFallbackMessage,
   buildRunningToolNote,
   buildWaitingConfirmationNote,
   type ProgressNote,
@@ -99,7 +100,13 @@ import type { AgentExecutionContext, ResolvedAiRuntime, RunInput } from './types
 
 const log = createLogger('agent.engine');
 
-const MAX_LOOP_STEPS = 8;
+const MAX_LOOP_STEPS = (() => {
+  const configured = Number(process.env.AGENT_MAX_LOOP_STEPS);
+  if (Number.isFinite(configured) && configured >= 1 && configured <= 50) {
+    return Math.floor(configured);
+  }
+  return 20;
+})();
 const CALL_TIMEOUT_MS = (() => {
   const configured = Number(process.env.AGENT_CALL_TIMEOUT_MS);
   if (Number.isFinite(configured) && configured >= 5_000 && configured <= 300_000) {
@@ -736,12 +743,12 @@ export class AgentRunEngine {
 
     // Safety: if we hit MAX_LOOP_STEPS, emit a fallback message
     log.warn({ runId: input.runId }, 'Agent hit MAX_LOOP_STEPS without a final answer');
+    const fallbackContent = buildMaxStepsFallbackMessage(input.preferredLanguage);
     const fallbackMessage = await this.repository.createMessage({
       chatId: input.chatId,
       userId: input.userId,
       role: 'assistant',
-      content:
-        'I was unable to complete the request within the step limit. Please try a more specific question.',
+      content: fallbackContent,
       mentions: [],
     });
     publishAssistantDone(input.runId, {
