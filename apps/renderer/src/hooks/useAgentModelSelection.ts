@@ -32,7 +32,10 @@ interface AiProviderOption {
 
 interface AiModelChoice {
   value: string;
+  /** Shown in the closed selector (model name only). */
   label: string;
+  /** Shown in the dropdown list (provider · model). */
+  dropdownLabel: string;
   provider: string;
   model: string;
 }
@@ -229,12 +232,16 @@ export function useAgentModelSelection({
             const models = remote?.models?.length
               ? remote.models
               : [{ id: provider.defaultModel, displayName: provider.defaultModel }];
-            return models.map(model => ({
-              value: `${provider.value}::${model.id}`,
-              label: `${provider.label} · ${model.displayName || model.id}`,
-              provider: provider.value,
-              model: model.id,
-            }));
+            return models.map(model => {
+              const modelLabel = model.displayName || model.id;
+              return {
+                value: `${provider.value}::${model.id}`,
+                label: modelLabel,
+                dropdownLabel: `${provider.label} · ${modelLabel}`,
+                provider: provider.value,
+                model: model.id,
+              };
+            });
           })
         );
 

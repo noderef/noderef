@@ -57,6 +57,7 @@ import {
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { SearchableModelSelect } from '../components/common/SearchableModelSelect';
 import { AgentChatInput, AgentChatInputRef } from '../components/agent/AgentChatInput';
 import { AgentEmptyState } from '../components/agent/AgentEmptyState';
 import { AgentMessageBubble, parseNodeBrowserLink } from '../components/agent/AgentMessageBubble';
@@ -1229,7 +1230,7 @@ export function AgentPage() {
 
                   <Group justify="space-between" align="center" mt="xs" wrap="nowrap">
                     <Group gap={4} align="center" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
-                      <Select
+                      <SearchableModelSelect
                         size="xs"
                         placeholder={t('modelPlaceholder')}
                         data={aiModelOptions}

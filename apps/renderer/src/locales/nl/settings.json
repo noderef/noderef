@@ -19,6 +19,7 @@
   "aiValidateError": "Het token kon niet worden gevalideerd.",
   "aiValidateNeedToken": "Voer eerst een API token in voordat u valideert.",
   "aiModelPlaceholder": "Selecteer een model",
+  "aiModelSearchHint": "Typ om modellen te filteren op naam of ID.",
   "aiModelRequiresValidation": "Valideer het token om modellen te laden",
   "aiSave": "Opslaan",
   "aiSaveSuccess": "AI instellingen opgeslagen.",

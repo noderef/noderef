@@ -73,6 +73,7 @@ import {
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { SearchableModelSelect } from '../common/SearchableModelSelect';
 import classes from './SettingsModal.module.css';
 
 type SettingsSection = 'view' | 'language' | 'ai' | 'masking' | 'about';
@@ -102,6 +103,12 @@ const FALLBACK_AI_PROVIDER_OPTIONS: AiProviderOption[] = [
     value: 'minimax',
     label: 'MiniMax',
     defaultModel: 'M2.1',
+    hasToken: false,
+  },
+  {
+    value: 'openrouter',
+    label: 'OpenRouter',
+    defaultModel: 'anthropic/claude-sonnet-4',
     hasToken: false,
   },
 ];
@@ -1011,7 +1018,7 @@ export function SettingsModal() {
                             }}
                             disabled={aiSaving}
                           />
-                          <Select
+                          <SearchableModelSelect
                             label={t('settings:aiModelLabel')}
                             data={aiModelOptions}
                             value={aiModel}
@@ -1023,6 +1030,11 @@ export function SettingsModal() {
                               aiTokenValid
                                 ? t('settings:aiModelPlaceholder')
                                 : t('settings:aiModelRequiresValidation')
+                            }
+                            description={
+                              aiTokenValid && aiModelOptions.length > 0
+                                ? t('settings:aiModelSearchHint')
+                                : undefined
                             }
                           />
                           <Group align="flex-end" gap="md">

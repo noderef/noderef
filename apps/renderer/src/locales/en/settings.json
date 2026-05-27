@@ -19,6 +19,7 @@
   "aiValidateError": "Failed to validate token.",
   "aiValidateNeedToken": "Enter an API token before validating.",
   "aiModelPlaceholder": "Select a model",
+  "aiModelSearchHint": "Type to filter models by name or ID.",
   "aiModelRequiresValidation": "Validate your token to load models",
   "aiSave": "Save",
   "aiSaveSuccess": "AI settings saved.",

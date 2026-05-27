@@ -60,7 +60,7 @@ export async function callAnthropic({
     })),
   ];
 
-  const supportsPrefill = model.startsWith('claude');
+  const supportsPrefill = modelSupportsAnthropicPrefill(model);
 
   const messages: Anthropic.MessageParam[] = [{ role: 'user', content }];
 
@@ -392,4 +392,16 @@ export async function listAnthropicModels({
     createdAt: model.created_at ?? null,
     capabilities: ['text'],
   }));
+}
+
+/** Native Anthropic IDs and OpenRouter slugs such as `anthropic/claude-3.5-sonnet`. */
+function modelSupportsAnthropicPrefill(model: string): boolean {
+  const normalized = model.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  const modelName = normalized.includes('/')
+    ? (normalized.split('/').pop() ?? normalized)
+    : normalized;
+  return modelName.startsWith('claude');
 }

@@ -21,6 +21,7 @@
 
 import { z } from 'zod';
 import { listAnthropicModels } from '../../ai/anthropic.js';
+import { listOpenRouterModels } from '../../ai/openrouter.js';
 import {
   getAiProvider,
   getDefaultAiProvider,
@@ -231,18 +232,31 @@ async function listModelsForProvider(
   }
 
   try {
-    const remoteModels = await listAnthropicModels({ apiKey, baseURL: provider.baseURL });
+    const remoteModels = await fetchRemoteModelsForProvider(provider, apiKey);
     const normalizedRemote = remoteModels.map(model => ({
       ...model,
       capabilities: inferModelCapabilities(provider.id, model.id),
     }));
     return mergeUniqueModels(normalizedRemote, provider.fallbackModels);
   } catch (error) {
-    if (provider.modelCatalogMode === 'api_with_fallback' && isUnsupportedModelsEndpoint(error)) {
-      return provider.fallbackModels;
+    if (provider.modelCatalogMode === 'api_with_fallback') {
+      if (isUnsupportedModelsEndpoint(error) || provider.id === 'openrouter') {
+        return provider.fallbackModels;
+      }
     }
     throw error;
   }
+}
+
+async function fetchRemoteModelsForProvider(
+  provider: AiProviderConfig,
+  apiKey: string
+): Promise<AiListedModel[]> {
+  if (provider.id === 'openrouter') {
+    return listOpenRouterModels({ apiKey });
+  }
+
+  return listAnthropicModels({ apiKey, baseURL: provider.baseURL });
 }
 
 function mergeUniqueModels(primary: AiListedModel[], fallback: AiListedModel[]): AiListedModel[] {
