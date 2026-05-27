@@ -53,6 +53,9 @@ import { peopleListTool } from './people/list.js';
 import { peopleUpdateTool } from './people/update.js';
 import { permissionsGetTool } from './permissions/get.js';
 import { permissionsSetTool } from './permissions/set.js';
+import { hylandDocsGetTopicTool } from './docs/get_topic.js';
+import { hylandDocsListPublicationsTool } from './docs/list_publications.js';
+import { hylandDocsSearchTool } from './docs/search.js';
 import { searchExportTextTool } from './search/export_text.js';
 import { searchTool } from './search/query.js';
 import { scriptCreateTool } from './script/create.js';
@@ -83,6 +86,9 @@ export type { ToolDefinition };
 export const ALL_TOOLS: ToolDefinition[] = [
   searchTool,
   searchExportTextTool,
+  hylandDocsListPublicationsTool,
+  hylandDocsSearchTool,
+  hylandDocsGetTopicTool,
   textWriteBeginTool,
   textWriteAppendTool,
   textWriteStatusTool,
@@ -205,6 +211,14 @@ const TOOL_NAME_ALIASES: Record<string, string> = {
   manage_associations: 'association_manage',
   list_comments: 'comment_list',
   manage_comments: 'comment_manage',
+  list_hyland_docs: 'hyland_docs_list_publications',
+  hyland_docs_list: 'hyland_docs_list_publications',
+  docs_list_publications: 'hyland_docs_list_publications',
+  docs_search: 'hyland_docs_search',
+  hyland_docs: 'hyland_docs_search',
+  search_hyland_docs: 'hyland_docs_search',
+  get_hyland_doc: 'hyland_docs_get_topic',
+  hyland_docs_fetch: 'hyland_docs_get_topic',
 };
 
 export function resolveToolName(name: string): string {

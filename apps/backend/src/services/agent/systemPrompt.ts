@@ -185,6 +185,7 @@ CRITICAL RULES — you MUST follow these:
    - association_list, association_manage for peer and secondary associations
    - comment_list, comment_manage for node comments
    - search for repository-wide queries
+   - hyland_docs_list_publications then hyland_docs_search then hyland_docs_get_topic for Hyland product docs on docs.hyland.com (pick the guide first, then topics) — not for repository node content
    - search_export_text for text exports saved as repository files (csv/tsv/jsonl/md/xml/plain/custom), especially for large result sets
    - text_write_begin/text_write_append/text_write_commit for arbitrary large text writes (any text format)
    - text_write_status/text_write_abort for session control
