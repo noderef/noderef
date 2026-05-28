@@ -31,7 +31,8 @@ export type PageKey =
   | 'text-editor'
   | 'saved-search'
   | 'saved-search-new'
-  | 'insights';
+  | 'insights'
+  | 'model-explorer';
 
 export type ModalKey =
   | 'settings'
@@ -62,6 +63,7 @@ export const PAGE_KEYS: Record<string, PageKey> = {
   SAVED_SEARCH: 'saved-search',
   SAVED_SEARCH_NEW: 'saved-search-new',
   INSIGHTS: 'insights',
+  MODEL_EXPLORER: 'model-explorer',
 } as const;
 
 export const MODAL_KEYS: Record<string, ModalKey> = {

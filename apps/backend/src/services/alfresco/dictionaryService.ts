@@ -382,6 +382,29 @@ export async function getPropertyDataTypesByPrefix(
   return cacheEntry.propertyDataTypesByPrefix[normalizedPrefix] ?? {};
 }
 
+/**
+ * Fetch raw class definitions from the Alfresco dictionary webscript.
+ * When namespace is omitted, returns all classes.
+ */
+export async function getDictionaryClasses(
+  api: AlfrescoApi,
+  namespace?: string
+): Promise<unknown[]> {
+  const webscriptApi = new WebscriptApi(api);
+  const normalizedNamespace = namespace?.trim().replace(/:$/, '') ?? '';
+  const scriptArgs = normalizedNamespace ? { nsp: normalizedNamespace } : {};
+
+  const response: unknown = await webscriptApi.executeWebScript(
+    'GET',
+    'api/classes',
+    scriptArgs,
+    'alfresco',
+    'service'
+  );
+
+  return Array.isArray(response) ? response : [];
+}
+
 export async function getClassNamesByPrefix(
   api: AlfrescoApi,
   serverId: number,
@@ -412,4 +435,182 @@ export async function getClassNamesByPrefix(
   }
 
   return entry;
+}
+
+export interface DictionaryPropertyDetail {
+  name: string;
+  dataType?: string;
+  mandatory?: boolean;
+  multiValued?: boolean;
+  indexed?: boolean;
+  constraints: string[];
+}
+
+function toDictionaryPathSegment(qname: string): string {
+  return qname.replace(':', '_');
+}
+
+/**
+ * Turn Alfresco dictionary constraint objects into human-readable lines.
+ */
+function formatDictionaryConstraints(constraints: unknown): string[] {
+  if (!Array.isArray(constraints)) {
+    return [];
+  }
+
+  const formatted: string[] = [];
+
+  for (const constraint of constraints) {
+    if (!constraint || typeof constraint !== 'object') {
+      continue;
+    }
+
+    const { type, parameters } = constraint as {
+      type?: string;
+      parameters?: unknown[];
+    };
+
+    if (!type) {
+      continue;
+    }
+
+    const params = Array.isArray(parameters) ? parameters : [];
+
+    if (type === 'LIST') {
+      const allowedParam = params.find(
+        param => param && typeof param === 'object' && 'allowedValues' in param
+      ) as { allowedValues?: string[] } | undefined;
+      const values = allowedParam?.allowedValues ?? [];
+      if (values.length === 0) {
+        formatted.push('LIST');
+      } else if (values.length <= 6) {
+        formatted.push(`LIST: ${values.join(', ')}`);
+      } else {
+        formatted.push(
+          `LIST: ${values.slice(0, 5).join(', ')}, … (+${values.length - 5})`
+        );
+      }
+      continue;
+    }
+
+    if (type === 'LENGTH') {
+      let minLength = '0';
+      let maxLength = '?';
+      for (const param of params) {
+        if (!param || typeof param !== 'object') {
+          continue;
+        }
+        if ('minLength' in param) {
+          minLength = String((param as { minLength: unknown }).minLength);
+        }
+        if ('maxLength' in param) {
+          maxLength = String((param as { maxLength: unknown }).maxLength);
+        }
+      }
+      formatted.push(`length: ${minLength}–${maxLength}`);
+      continue;
+    }
+
+    if (type === 'REGEX') {
+      const regexParam = params.find(
+        param => param && typeof param === 'object' && 'expression' in param
+      ) as { expression?: string } | undefined;
+      formatted.push(`REGEX: ${regexParam?.expression ?? ''}`.trim());
+      continue;
+    }
+
+    if (type === 'MINMAX') {
+      let min = '?';
+      let max = '?';
+      for (const param of params) {
+        if (!param || typeof param !== 'object') {
+          continue;
+        }
+        if ('minValue' in param) {
+          min = String((param as { minValue: unknown }).minValue);
+        }
+        if ('maxValue' in param) {
+          max = String((param as { maxValue: unknown }).maxValue);
+        }
+      }
+      formatted.push(`range: ${min}–${max}`);
+      continue;
+    }
+
+    formatted.push(type);
+  }
+
+  return formatted;
+}
+
+function normalizePropertyDetail(
+  propertyName: string,
+  detail: Record<string, unknown>
+): DictionaryPropertyDetail {
+  const dataType =
+    typeof detail.dataType === 'string'
+      ? detail.dataType
+      : typeof (detail.dataType as { name?: string })?.name === 'string'
+        ? (detail.dataType as { name: string }).name
+        : undefined;
+
+  return {
+    name: typeof detail.name === 'string' ? detail.name : propertyName,
+    dataType,
+    mandatory: detail.mandatory !== undefined ? Boolean(detail.mandatory) : undefined,
+    multiValued: detail.multiValued !== undefined ? Boolean(detail.multiValued) : undefined,
+    indexed: detail.indexed !== undefined ? Boolean(detail.indexed) : undefined,
+    constraints: formatDictionaryConstraints(detail.constraints),
+  };
+}
+
+/**
+ * Fetch full property definitions (including constraints) for a class.
+ * The bulk /api/classes response omits constraint details; they are only
+ * available on per-property endpoints.
+ */
+export async function getDictionaryClassPropertyDetails(
+  api: AlfrescoApi,
+  className: string
+): Promise<DictionaryPropertyDetail[]> {
+  const webscriptApi = new WebscriptApi(api);
+  const classPath = toDictionaryPathSegment(className);
+
+  const classDef = (await webscriptApi.executeWebScript(
+    'GET',
+    `api/classes/${classPath}`,
+    {},
+    'alfresco',
+    'service'
+  )) as { properties?: Record<string, unknown> };
+
+  const propertyNames = Object.keys(classDef?.properties ?? {});
+  if (propertyNames.length === 0) {
+    return [];
+  }
+
+  const details = await Promise.all(
+    propertyNames.map(async propertyName => {
+      const propertyPath = toDictionaryPathSegment(propertyName);
+      try {
+        const propertyDef = (await webscriptApi.executeWebScript(
+          'GET',
+          `api/classes/${classPath}/property/${propertyPath}`,
+          {},
+          'alfresco',
+          'service'
+        )) as Record<string, unknown>;
+
+        return normalizePropertyDetail(propertyName, propertyDef);
+      } catch (error) {
+        log.warn(
+          { className, propertyName, error },
+          'Failed to fetch dictionary property details'
+        );
+        return null;
+      }
+    })
+  );
+
+  return details.filter((detail): detail is DictionaryPropertyDetail => detail !== null);
 }

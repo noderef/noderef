@@ -1,0 +1,120 @@
+.model-explorer-type-node,
+.model-explorer-aspect-node {
+  position: relative;
+  box-sizing: border-box;
+  width: 250px;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  transition:
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.model-explorer-type-node {
+  background: var(--mantine-color-blue-6);
+  color: var(--mantine-color-white);
+  border: 1px solid var(--mantine-color-blue-7);
+}
+
+.model-explorer-aspect-node {
+  background: linear-gradient(
+    135deg,
+    var(--mantine-color-blue-0) 0%,
+    var(--mantine-color-cyan-0) 100%
+  );
+  color: var(--mantine-color-blue-9);
+  border: 2px dashed var(--mantine-color-blue-4);
+}
+
+.model-explorer-type-node.selected,
+.model-explorer-aspect-node.selected {
+  box-shadow:
+    0 0 0 2px var(--mantine-color-blue-2),
+    0 8px 24px rgba(34, 139, 230, 0.28);
+  transform: translateY(-1px);
+}
+
+.model-explorer-node-title {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 6px;
+  word-break: break-word;
+}
+
+.model-explorer-node-kind {
+  font-size: 10px;
+  opacity: 0.75;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.model-explorer-prop-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  opacity: 0.92;
+  line-height: 1.35;
+}
+
+.model-explorer-prop-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-explorer-prop-type {
+  opacity: 0.8;
+  flex-shrink: 0;
+}
+
+.model-explorer-more-badge {
+  margin-top: 6px;
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+/* Invisible anchors for React Flow edges (custom nodes require handles) */
+.model-explorer-handle-hidden {
+  opacity: 0 !important;
+  pointer-events: none;
+  width: 8px !important;
+  height: 8px !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+.model-explorer-type-node .model-explorer-node-kind,
+.model-explorer-type-node .model-explorer-prop-type,
+.model-explorer-type-node .model-explorer-more-badge {
+  opacity: 0.9;
+}
+
+/* Dark mode */
+:root[data-mantine-color-scheme='dark'] .model-explorer-type-node,
+:root[data-mantine-color-scheme='dark'] .model-explorer-aspect-node {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+:root[data-mantine-color-scheme='dark'] .model-explorer-type-node {
+  background: var(--mantine-color-blue-8);
+  color: var(--mantine-color-white);
+  border-color: var(--mantine-color-blue-6);
+}
+
+:root[data-mantine-color-scheme='dark'] .model-explorer-aspect-node {
+  background: var(--mantine-color-dark-6);
+  color: var(--mantine-color-gray-1);
+  border: 2px dashed var(--mantine-color-cyan-5);
+}
+
+:root[data-mantine-color-scheme='dark'] .model-explorer-type-node.selected,
+:root[data-mantine-color-scheme='dark'] .model-explorer-aspect-node.selected {
+  box-shadow:
+    0 0 0 2px var(--mantine-color-blue-5),
+    0 8px 20px rgba(34, 139, 230, 0.22);
+}

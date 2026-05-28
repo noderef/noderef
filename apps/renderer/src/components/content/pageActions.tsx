@@ -281,6 +281,11 @@ export function getPageActions(
       moreMenuActions: [],
     },
 
+    'model-explorer': {
+      actionIcons: [],
+      moreMenuActions: [],
+    },
+
     'text-editor': {
       actionIcons: [
         {

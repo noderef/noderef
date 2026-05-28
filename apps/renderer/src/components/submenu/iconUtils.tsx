@@ -77,6 +77,7 @@ const iconMap: Record<string, React.ComponentType<any>> = {
   filepdf: IconFileTypePdf,
   pdf: IconFileTypePdf,
   workflow: IconSitemap,
+  sitemap: IconSitemap,
   'list-check': IconListCheck,
   listcheck: IconListCheck,
   'file-search': IconFileSearch,
