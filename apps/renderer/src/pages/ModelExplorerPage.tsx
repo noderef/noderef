@@ -75,7 +75,7 @@ function ModelExplorerCanvas() {
   const [namespaceFilter, setNamespaceFilter] = useState<string[]>([]);
   const [kindFilter, setKindFilter] = useState<KindFilter>('all');
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
-  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const [inspectorWidth, setInspectorWidth] = useState(350);
 
   const { nodes, edges, schemaMap, loading, error, availableNamespaces } = useModelData({
