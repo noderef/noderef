@@ -16,7 +16,7 @@
 
 import type { AiCapability, AiListedModel } from './types.js';
 
-export type AiProviderId = 'anthropic' | 'minimax';
+export type AiProviderId = 'anthropic' | 'minimax' | 'openrouter';
 
 export interface AiProviderConfig {
   id: AiProviderId;
@@ -63,6 +63,34 @@ const PROVIDERS: Record<AiProviderId, AiProviderConfig> = {
       { id: 'M2', displayName: 'MiniMax M2', createdAt: null, capabilities: ['text'] },
     ],
   },
+  openrouter: {
+    id: 'openrouter',
+    label: 'OpenRouter',
+    defaultModel: 'anthropic/claude-sonnet-4',
+    defaultTemperature: 0.7,
+    baseURL: 'https://openrouter.ai/api',
+    modelCatalogMode: 'api_with_fallback',
+    fallbackModels: [
+      {
+        id: 'anthropic/claude-sonnet-4',
+        displayName: 'Claude Sonnet 4 (OpenRouter)',
+        createdAt: null,
+        capabilities: ['text', 'vision'],
+      },
+      {
+        id: 'google/gemini-2.5-pro',
+        displayName: 'Gemini 2.5 Pro (OpenRouter)',
+        createdAt: null,
+        capabilities: ['text', 'vision'],
+      },
+      {
+        id: 'openai/gpt-4o',
+        displayName: 'GPT-4o (OpenRouter)',
+        createdAt: null,
+        capabilities: ['text', 'vision'],
+      },
+    ],
+  },
 };
 
 const DEFAULT_PROVIDER_ID: AiProviderId = 'anthropic';
@@ -82,7 +110,7 @@ export function getDefaultAiProvider(): AiProviderConfig {
 
 export function normalizeProviderId(provider: string | null | undefined): AiProviderId | null {
   const normalized = provider?.trim().toLowerCase();
-  if (normalized === 'anthropic' || normalized === 'minimax') {
+  if (normalized === 'anthropic' || normalized === 'minimax' || normalized === 'openrouter') {
     return normalized;
   }
   return null;
@@ -99,7 +127,22 @@ export function inferModelCapabilities(providerId: AiProviderId, modelId: string
   }
 
   // Claude 3+ families support image input in Anthropic's Messages API.
-  if (normalized.includes('claude-3') || normalized.includes('claude-sonnet')) {
+  if (
+    normalized.includes('claude-3') ||
+    normalized.includes('claude-sonnet') ||
+    normalized.includes('claude-opus') ||
+    normalized.includes('claude-haiku')
+  ) {
+    return ['text', 'vision'];
+  }
+
+  // Common OpenRouter vision-capable families (provider/model slugs).
+  if (
+    normalized.includes('gpt-4o') ||
+    normalized.includes('gemini') ||
+    normalized.includes('/vision') ||
+    normalized.endsWith('-vl')
+  ) {
     return ['text', 'vision'];
   }
 

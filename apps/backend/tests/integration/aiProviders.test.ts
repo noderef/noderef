@@ -24,12 +24,13 @@ import {
 } from '../../src/ai/providers.js';
 
 describe('ai providers catalog', () => {
-  it('contains anthropic and minimax providers', () => {
+  it('contains anthropic, minimax, and openrouter providers', () => {
     const providers = listAiProviders();
     const ids = providers.map(provider => provider.id);
 
     expect(ids).toContain('anthropic');
     expect(ids).toContain('minimax');
+    expect(ids).toContain('openrouter');
   });
 
   it('uses anthropic as default provider', () => {
@@ -41,6 +42,7 @@ describe('ai providers catalog', () => {
   it('resolves provider ids case-insensitively', () => {
     expect(getAiProvider('MINIMAX')?.id).toBe('minimax');
     expect(getAiProvider('Anthropic')?.id).toBe('anthropic');
+    expect(getAiProvider('OpenRouter')?.id).toBe('openrouter');
   });
 
   it('marks minimax as text-only for Anthropic-compatible mode', () => {
@@ -54,5 +56,29 @@ describe('ai providers catalog', () => {
       'vision',
     ]);
     expect(inferModelCapabilities('anthropic', 'claude-2.1')).toEqual(['text']);
+  });
+
+  it('configures openrouter with anthropic-compatible base URL and fallbacks', () => {
+    const provider = getAiProvider('openrouter');
+    expect(provider).toBeTruthy();
+    expect(provider?.baseURL).toBe('https://openrouter.ai/api');
+    expect(provider?.modelCatalogMode).toBe('api_with_fallback');
+    expect(provider?.fallbackModels.length).toBeGreaterThan(0);
+  });
+
+  it('infers vision support for OpenRouter Claude slugs', () => {
+    expect(inferModelCapabilities('openrouter', 'anthropic/claude-sonnet-4')).toEqual([
+      'text',
+      'vision',
+    ]);
+    expect(inferModelCapabilities('openrouter', 'google/gemini-2.5-pro')).toEqual([
+      'text',
+      'vision',
+    ]);
+  });
+
+  it('allows vision capability at provider level for openrouter', () => {
+    expect(providerSupportsCapability('openrouter', 'text')).toBe(true);
+    expect(providerSupportsCapability('openrouter', 'vision')).toBe(true);
   });
 });

@@ -19,6 +19,7 @@
   "aiValidateError": "Token konnte nicht validiert werden.",
   "aiValidateNeedToken": "Geben Sie ein API-Token ein, bevor Sie validieren.",
   "aiModelPlaceholder": "Modell auswählen",
+  "aiModelSearchHint": "Tippen, um Modelle nach Name oder ID zu filtern.",
   "aiModelRequiresValidation": "Token validieren, um Modelle zu laden",
   "aiSave": "Speichern",
   "aiSaveSuccess": "KI-Einstellungen gespeichert.",

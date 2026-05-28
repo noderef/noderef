@@ -19,6 +19,7 @@
   "aiValidateError": "Impossible de valider le jeton.",
   "aiValidateNeedToken": "Saisissez un jeton API avant de valider.",
   "aiModelPlaceholder": "Sélectionner un modèle",
+  "aiModelSearchHint": "Saisissez du texte pour filtrer par nom ou ID de modèle.",
   "aiModelRequiresValidation": "Validez votre jeton pour charger les modèles",
   "aiSave": "Enregistrer",
   "aiSaveSuccess": "Paramètres IA enregistrés.",
