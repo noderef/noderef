@@ -37,6 +37,7 @@ type ProgressCopy = {
   awaitingConfirmation: (action: string) => string;
   done: string;
   completedWithErrors: string;
+  maxStepsFallback: string;
 };
 
 const COPY: Record<SupportedLang, ProgressCopy> = {
@@ -50,6 +51,8 @@ const COPY: Record<SupportedLang, ProgressCopy> = {
     awaitingConfirmation: action => `Awaiting confirmation: ${action}`,
     done: 'Done.',
     completedWithErrors: 'Completed with errors.',
+    maxStepsFallback:
+      'I was unable to complete the request within the step limit. Please try a more specific question.',
   },
   nl: {
     queued: 'In wachtrij',
@@ -61,6 +64,8 @@ const COPY: Record<SupportedLang, ProgressCopy> = {
     awaitingConfirmation: action => `Wacht op bevestiging: ${action}`,
     done: 'Klaar.',
     completedWithErrors: 'Voltooid met fouten.',
+    maxStepsFallback:
+      'Ik kon het verzoek niet voltooien binnen de staplimiet. Probeer een specifiekere vraag.',
   },
   de: {
     queued: 'In Warteschlange',
@@ -72,6 +77,8 @@ const COPY: Record<SupportedLang, ProgressCopy> = {
     awaitingConfirmation: action => `Warte auf Bestätigung: ${action}`,
     done: 'Fertig.',
     completedWithErrors: 'Mit Fehlern abgeschlossen.',
+    maxStepsFallback:
+      'Die Anfrage konnte innerhalb des Schrittlimits nicht abgeschlossen werden. Bitte stellen Sie eine spezifischere Frage.',
   },
   es: {
     queued: 'En cola',
@@ -83,6 +90,8 @@ const COPY: Record<SupportedLang, ProgressCopy> = {
     awaitingConfirmation: action => `Esperando confirmación: ${action}`,
     done: 'Listo.',
     completedWithErrors: 'Completado con errores.',
+    maxStepsFallback:
+      'No pude completar la solicitud dentro del límite de pasos. Intente con una pregunta más específica.',
   },
   fr: {
     queued: 'En file d’attente',
@@ -94,6 +103,8 @@ const COPY: Record<SupportedLang, ProgressCopy> = {
     awaitingConfirmation: action => `En attente de confirmation : ${action}`,
     done: 'Terminé.',
     completedWithErrors: 'Terminé avec des erreurs.',
+    maxStepsFallback:
+      "Je n'ai pas pu terminer la demande dans la limite d'étapes. Essayez une question plus précise.",
   },
 };
 
@@ -134,6 +145,9 @@ export const buildWaitingConfirmationNote = (
 
 export const buildCompletionNote = (success: boolean, preferredLanguage?: string): ProgressNote =>
   note(success ? copyFor(preferredLanguage).done : copyFor(preferredLanguage).completedWithErrors);
+
+export const buildMaxStepsFallbackMessage = (preferredLanguage?: string): string =>
+  copyFor(preferredLanguage).maxStepsFallback;
 
 const humanizeOperation = (operation: string): string =>
   operation.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
