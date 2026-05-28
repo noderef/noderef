@@ -27,11 +27,11 @@ describe('filterModelSelectOptions', () => {
   it('filters by label and value', () => {
     const byLabel = filterModelSelectOptions({ options, search: 'gemini', limit: 10 });
     expect(byLabel).toHaveLength(1);
-    expect(byLabel[0]?.value).toBe('google/gemini-2.5-pro');
+    expect(byLabel[0]).toMatchObject({ value: 'google/gemini-2.5-pro' });
 
     const byValue = filterModelSelectOptions({ options, search: 'gpt-4o', limit: 10 });
     expect(byValue).toHaveLength(1);
-    expect(byValue[0]?.value).toBe('openai/gpt-4o');
+    expect(byValue[0]).toMatchObject({ value: 'openai/gpt-4o' });
   });
 
   it('filters by dropdownLabel when present', () => {

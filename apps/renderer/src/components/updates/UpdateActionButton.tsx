@@ -109,7 +109,7 @@ export function UpdateActionButton({
   fullWidth = false,
   compact = size === 'xs' && !fullWidth,
 }: UpdateActionButtonProps) {
-  const { t, i18n } = useTranslation(['settings', 'common']);
+  const { t } = useTranslation(['settings', 'common']);
   const theme = useMantineTheme();
   const hasUpdate = useUpdateStore(state => state.hasUpdate);
   const status = useUpdateStore(state => state.status);
@@ -160,7 +160,7 @@ export function UpdateActionButton({
   const fixedButtonWidth = useMemo(() => {
     const labels = getUpdateButtonWidthLabels(t, compact);
     return measureUpdateButtonWidth(size, theme.fontFamily ?? 'system-ui', labels, compact);
-  }, [compact, i18n.language, size, t, theme.fontFamily]);
+  }, [compact, size, t, theme.fontFamily]);
 
   const handleClick = useCallback(async () => {
     if (!version) return;
