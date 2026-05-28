@@ -816,6 +816,47 @@ export const backendRpc = {
         });
       },
     },
+
+    customModels: {
+      async getAll(serverId: number, baseUrl: string): Promise<unknown[]> {
+        return rpc<unknown[]>('alfresco.customModels.getAll', { serverId, baseUrl });
+      },
+    },
+
+    dictionary: {
+      async getClasses(
+        serverId: number,
+        baseUrl: string,
+        namespace: string
+      ): Promise<unknown[]> {
+        return rpc<unknown[]>('alfresco.dictionary.getClasses', {
+          serverId,
+          baseUrl,
+          namespace,
+        });
+      },
+
+      async getClassPropertyDetails(
+        serverId: number,
+        baseUrl: string,
+        className: string
+      ): Promise<
+        Array<{
+          name: string;
+          dataType?: string;
+          mandatory?: boolean;
+          multiValued?: boolean;
+          indexed?: boolean;
+          constraints: string[];
+        }>
+      > {
+        return rpc('alfresco.dictionary.getClassPropertyDetails', {
+          serverId,
+          baseUrl,
+          className,
+        });
+      },
+    },
   },
 
   /**

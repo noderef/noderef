@@ -30,6 +30,7 @@ import { ComponentType, lazy } from 'react';
 const JsConsolePage = lazy(() => import('@/pages/JsConsolePage'));
 const TextEditorPage = lazy(() => import('@/pages/TextEditorPage'));
 const InsightsPage = lazy(() => import('@/pages/InsightsPage'));
+const ModelExplorerPage = lazy(() => import('@/pages/ModelExplorerPage'));
 
 export interface RouteConfig {
   title: string; // Full i18n key
@@ -122,6 +123,15 @@ export const routes: Record<PageKey, RouteConfig> = {
     defaultTitle: 'Insights',
     icon: 'chart-area',
     component: InsightsPage,
+  },
+  'model-explorer': {
+    title: 'submenu:modelExplorerTitle',
+    defaultTitle: 'Model Explorer',
+    icon: 'sitemap',
+    component: ModelExplorerPage,
+    options: {
+      noScroll: true,
+    },
   },
 };
 

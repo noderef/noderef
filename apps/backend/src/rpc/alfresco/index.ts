@@ -652,6 +652,155 @@ export function registerAlfrescoRpc(
     },
   };
 
+  routes['alfresco.customModels.getAll'] = {
+    schema: z.object({
+      serverId: z.number(),
+      baseUrl: z.string().url(),
+    }),
+    handler: async params => {
+      const { serverId, baseUrl } = params as { serverId: number; baseUrl: string };
+      const api = await authenticateWithStoredCredentials(serverId, baseUrl);
+      if (!api) {
+        AppErrors.unauthorized('Failed to authenticate with stored credentials');
+      }
+
+      try {
+        const { CustomModelApi } = await import('@alfresco/js-api');
+        const customModelApi = new CustomModelApi(api);
+
+        const unwrapEntries = (payload: unknown): Record<string, unknown>[] => {
+          if (!payload || typeof payload !== 'object') {
+            return [];
+          }
+
+          const candidate = payload as {
+            entries?: unknown[];
+            list?: {
+              entries?: Array<{
+                entry?: unknown;
+              } | unknown>;
+            };
+          };
+
+          if (Array.isArray(candidate.entries)) {
+            return candidate.entries.filter(
+              (entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === 'object')
+            );
+          }
+
+          if (Array.isArray(candidate.list?.entries)) {
+            return candidate.list.entries
+              .map(entry => {
+                if (entry && typeof entry === 'object' && 'entry' in entry) {
+                  return (entry as { entry?: unknown }).entry;
+                }
+                return entry;
+              })
+              .filter(
+                (entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === 'object')
+              );
+          }
+
+          return [];
+        };
+
+        const modelsResult = await customModelApi.getAllCustomModel();
+        const entries = unwrapEntries(modelsResult);
+
+        const fullModels = await Promise.all(
+          entries.map(async model => {
+            const modelName = typeof model.name === 'string' ? model.name : '';
+            let types: unknown[] = [];
+            let aspects: unknown[] = [];
+
+            try {
+              const typesResult = await customModelApi.getAllCustomType(modelName);
+              types = unwrapEntries(typesResult);
+            } catch (err) {
+              log.warn({ modelName, err }, 'Failed to fetch types for custom model');
+            }
+
+            try {
+              const aspectsResult = await customModelApi.getAllCustomAspect(modelName);
+              aspects = unwrapEntries(aspectsResult);
+            } catch (err) {
+              log.warn({ modelName, err }, 'Failed to fetch aspects for custom model');
+            }
+
+            return {
+              ...model,
+              types,
+              aspects,
+            };
+          })
+        );
+
+        return fullModels;
+      } catch (error) {
+        log.error({ serverId, error }, 'Failed to fetch custom models');
+        throw error;
+      }
+    },
+  };
+
+  routes['alfresco.dictionary.getClasses'] = {
+    schema: z.object({
+      serverId: z.number(),
+      baseUrl: z.string().url(),
+      namespace: z.string().optional().default(''),
+    }),
+    handler: async params => {
+      const { serverId, baseUrl, namespace } = params as {
+        serverId: number;
+        baseUrl: string;
+        namespace?: string;
+      };
+      const api = await authenticateWithStoredCredentials(serverId, baseUrl);
+      if (!api) {
+        AppErrors.unauthorized('Failed to authenticate');
+      }
+
+      try {
+        const { getDictionaryClasses } = await import(
+          '../../services/alfresco/dictionaryService.js'
+        );
+        return getDictionaryClasses(api!, namespace);
+      } catch (error) {
+        log.error({ serverId, namespace, error }, 'Failed to fetch dictionary classes');
+        throw error;
+      }
+    },
+  };
+
+  routes['alfresco.dictionary.getClassPropertyDetails'] = {
+    schema: z.object({
+      serverId: z.number(),
+      baseUrl: z.string().url(),
+      className: z.string().min(1),
+    }),
+    handler: async params => {
+      const { serverId, baseUrl, className } = params as {
+        serverId: number;
+        baseUrl: string;
+        className: string;
+      };
+      const api = await authenticateWithStoredCredentials(serverId, baseUrl);
+      if (!api) {
+        AppErrors.unauthorized('Failed to authenticate');
+      }
+
+      try {
+        const { getDictionaryClassPropertyDetails } = await import(
+          '../../services/alfresco/dictionaryService.js'
+        );
+        return getDictionaryClassPropertyDetails(api!, className);
+      } catch (error) {
+        log.error({ serverId, className, error }, 'Failed to fetch class property details');
+        throw error;
+      }
+    },
+  };
+
   routes['alfresco.getTernDefinitions'] = {
     schema: GetTernDefinitionsReqSchema as unknown as ZSchema,
     handler: async params =>

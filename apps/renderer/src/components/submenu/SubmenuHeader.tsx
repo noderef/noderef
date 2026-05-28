@@ -30,6 +30,7 @@ import {
   IconEdit,
   IconExternalLink,
   IconFileText,
+  IconSitemap,
   IconSettings,
   IconTrash,
   IconUserCircle,
@@ -690,6 +691,15 @@ export function SubmenuHeader() {
             onClick={() => openUsersGroupsModal({ serverId: server.id })}
           >
             {t('submenu:usersAndGroups')}
+          </Menu.Item>
+        )}
+
+        {server.serverType === 'alfresco' && server.isAdmin && (
+          <Menu.Item
+            leftSection={<IconSitemap size={14} />}
+            onClick={() => navigate('model-explorer')}
+          >
+            {t('submenu:modelExplorer')}
           </Menu.Item>
         )}
 
