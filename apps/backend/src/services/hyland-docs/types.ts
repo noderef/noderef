@@ -37,6 +37,15 @@ export interface HylandPublicationSummary {
   prettyUrl: string | null;
 }
 
+export interface HylandMapTopicPreview {
+  id: string;
+  title: string;
+  contentApiEndpoint?: string;
+  readerUrl?: string;
+  breadcrumb?: string[];
+  metadata?: Array<{ key: string; label?: string; values?: string[] }>;
+}
+
 export interface HylandTopicSearchHit {
   mapId: string;
   mapTitle: string;

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import type { HylandMapPreview, TopicsSearchApiResponse } from './types.js';
+import type { HylandMapPreview, HylandMapTopicPreview, TopicsSearchApiResponse } from './types.js';
 
 export interface HylandDocsClientOptions {
   baseUrl?: string;
@@ -97,6 +97,14 @@ export class HylandDocsClient {
         per_page: perPage,
       }),
     });
+  }
+
+  async listMapTopics(mapId: string): Promise<HylandMapTopicPreview[]> {
+    const encodedMapId = encodeURIComponent(mapId);
+    const topics = await this.requestJson<HylandMapTopicPreview[]>(
+      `/api/khub/maps/${encodedMapId}/topics`
+    );
+    return Array.isArray(topics) ? topics : [];
   }
 
   async getTopicMarkdown(mapId: string, contentId: string): Promise<string> {

@@ -67,6 +67,16 @@ describe('HylandDocsService', () => {
         ],
       }),
       getTopicMarkdown: vi.fn(),
+      listMapTopics: vi.fn().mockResolvedValue([
+        {
+          id: 'topic-acs',
+          title: 'Introduction',
+          readerUrl:
+            'https://docs.hyland.com/r/Alfresco/Alfresco-Content-Services/26.1/Alfresco-Content-Services/Intro',
+          breadcrumb: ['Alfresco Content Services', 'Introduction'],
+          metadata: [{ key: 'component', values: ['Alfresco Content Services'] }],
+        },
+      ]),
       listMaps: vi.fn(),
     } as unknown as HylandDocsClient;
 
@@ -82,6 +92,7 @@ describe('HylandDocsService', () => {
     expect(hits.results).toHaveLength(1);
     expect(hits.results[0]?.mapId).toBe('acs-map');
     expect(hits.mapId).toBe('acs-map');
+    expect(client.searchTopics).not.toHaveBeenCalled();
   });
 
   it('auto-resolves publication with high confidence', async () => {
@@ -97,6 +108,15 @@ describe('HylandDocsService', () => {
         ],
       }),
       getTopicMarkdown: vi.fn(),
+      listMapTopics: vi.fn().mockResolvedValue([
+        {
+          id: 'topic-acs',
+          title: 'Content model',
+          readerUrl: 'https://docs.hyland.com/r/Alfresco/ACS/26.1/x',
+          breadcrumb: ['Alfresco Content Services', 'Content model'],
+          metadata: [{ key: 'component', values: ['Alfresco Content Services'] }],
+        },
+      ]),
       listMaps: vi.fn().mockResolvedValue([
         {
           id: 'acs-map',
@@ -122,6 +142,47 @@ describe('HylandDocsService', () => {
     expect(hits.mapId).toBe('acs-map');
     expect(hits.publicationResolveConfidence).toBe('high');
     expect(hits.resolvedPublicationTitle).toContain('Content Services');
+    expect(client.searchTopics).not.toHaveBeenCalled();
+  });
+
+  it('auto-resolves repeated guide titles to the newest version', async () => {
+    const client = {
+      searchTopics: vi.fn(),
+      getTopicMarkdown: vi.fn(),
+      listMapTopics: vi.fn().mockResolvedValue([
+        {
+          id: 'solr-topic',
+          title: 'Solr configuration',
+          readerUrl:
+            'https://docs.hyland.com/r/Alfresco/Alfresco-Search-Services/2.0/Configure/Solr-configuration',
+          breadcrumb: ['Alfresco Search Services', 'Configure', 'Solr configuration'],
+          metadata: [{ key: 'component', values: ['Alfresco Search Services'] }],
+        },
+      ]),
+      listMaps: vi.fn().mockResolvedValue([
+        {
+          id: 'search-map-1',
+          title: 'Alfresco Search Services',
+          metadata: [{ key: 'ft:prettyUrl', values: ['Alfresco/Alfresco-Search-Services/1.0'] }],
+        },
+        {
+          id: 'search-map-2',
+          title: 'Alfresco Search Services',
+          metadata: [{ key: 'ft:prettyUrl', values: ['Alfresco/Alfresco-Search-Services/2.0'] }],
+        },
+      ]),
+    } as unknown as HylandDocsClient;
+
+    const service = new HylandDocsService(client);
+    const hits = await service.search({
+      query: 'Solr configuration',
+      publication: 'Alfresco Search Services',
+      maxResults: 2,
+    });
+
+    expect(hits.mapId).toBe('search-map-2');
+    expect(hits.publicationResolveConfidence).toBe('high');
+    expect(client.listMapTopics).toHaveBeenCalledWith('search-map-2');
   });
 
   it('fetches additional search pages until enough hits', async () => {
@@ -139,7 +200,7 @@ describe('HylandDocsService', () => {
         .mockResolvedValueOnce({
           results: [
             {
-              mapId: 'acs-map',
+              mapId: 'fallback-map',
               mapTitle: 'Alfresco Content Services',
               contentId: 'topic-2',
               occurrences: [{ breadcrumb: ['Page 2'] }],
@@ -147,13 +208,14 @@ describe('HylandDocsService', () => {
           ],
         }),
       getTopicMarkdown: vi.fn(),
+      listMapTopics: vi.fn().mockResolvedValue([]),
       listMaps: vi.fn(),
     } as unknown as HylandDocsClient;
 
     const service = new HylandDocsService(client);
     const hits = await service.search({
       query: 'model',
-      mapId: 'acs-map',
+      mapId: 'fallback-map',
       maxResults: 1,
     });
 

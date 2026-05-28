@@ -105,7 +105,7 @@ const MAX_LOOP_STEPS = (() => {
   if (Number.isFinite(configured) && configured >= 1 && configured <= 50) {
     return Math.floor(configured);
   }
-  return 20;
+  return 30;
 })();
 const CALL_TIMEOUT_MS = (() => {
   const configured = Number(process.env.AGENT_CALL_TIMEOUT_MS);

@@ -37,6 +37,7 @@ import type {
   HylandDocsSearchOptions,
   HylandDocsSearchResult,
   HylandMapPreview,
+  HylandMapTopicPreview,
   HylandPublicationSummary,
   HylandTopicContent,
   HylandTopicSearchHit,
@@ -51,9 +52,7 @@ const MAX_LIST_PUBLICATIONS = 25;
 const DEFAULT_TOPIC_MAX_CHARS = 12_000;
 const MAX_TOPIC_MAX_CHARS = 24_000;
 const SEARCH_MAX_PAGES_WITH_MAP = 4;
-
-const mapsCache = new TtlMemoryCache<HylandMapPreview[]>(MAPS_CACHE_TTL_MS);
-let alfrescoPortalIndex: HylandPublicationSummary[] | null = null;
+const DOCS_BASE_URL = 'https://docs.hyland.com';
 
 export class HylandDocsPublicationResolutionError extends Error {
   constructor(
@@ -122,6 +121,84 @@ function flattenOccurrences(result: TopicsSearchApiResult): Array<{
   }));
 }
 
+function absoluteReaderUrl(readerUrl: string | null | undefined): string | null {
+  const trimmed = readerUrl?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return trimmed.startsWith('/') ? `${DOCS_BASE_URL}${trimmed}` : `${DOCS_BASE_URL}/${trimmed}`;
+}
+
+function topicMetadataValue(topic: HylandMapTopicPreview, key: string): string | null {
+  const entry = topic.metadata?.find(item => item.key === key);
+  const value = entry?.values?.[0];
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function tokenizeTopicQuery(query: string): string[] {
+  return query
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .map(token => token.trim())
+    .filter(token => token.length >= 2);
+}
+
+function compareVersionsDesc(a: string | null | undefined, b: string | null | undefined): number {
+  const parse = (value: string | null | undefined): number[] =>
+    value
+      ?.split('.')
+      .map(part => Number.parseInt(part, 10))
+      .filter(part => Number.isFinite(part)) ?? [];
+  const left = parse(a);
+  const right = parse(b);
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    const delta = (right[index] ?? 0) - (left[index] ?? 0);
+    if (delta !== 0) {
+      return delta;
+    }
+  }
+  return 0;
+}
+
+function scoreTopicPreview(query: string, topic: HylandMapTopicPreview): number {
+  const tokens = tokenizeTopicQuery(query);
+  if (tokens.length === 0) {
+    return 0;
+  }
+
+  const title = topic.title?.toLowerCase() ?? '';
+  const breadcrumb = Array.isArray(topic.breadcrumb)
+    ? topic.breadcrumb.filter((item): item is string => typeof item === 'string')
+    : [];
+  const breadcrumbText = breadcrumb.join(' ').toLowerCase();
+  const readerUrl = topic.readerUrl?.toLowerCase() ?? '';
+  const haystack = `${title} ${breadcrumbText} ${readerUrl}`;
+  const matchedTokens = tokens.filter(token => haystack.includes(token));
+  if (matchedTokens.length === 0) {
+    return 0;
+  }
+
+  let score = matchedTokens.length * 3;
+  if (matchedTokens.length === tokens.length) {
+    score += 12;
+  }
+  if (title.includes(query.toLowerCase())) {
+    score += 10;
+  }
+  if (tokens.every(token => title.includes(token))) {
+    score += 8;
+  }
+  if (tokens.every(token => breadcrumbText.includes(token))) {
+    score += 4;
+  }
+  return score;
+}
+
 function buildAlfrescoPortalIndex(maps: HylandMapPreview[]): HylandPublicationSummary[] {
   return maps
     .filter(map =>
@@ -135,24 +212,28 @@ function buildAlfrescoPortalIndex(maps: HylandMapPreview[]): HylandPublicationSu
 }
 
 export class HylandDocsService {
+  private readonly mapsCache = new TtlMemoryCache<HylandMapPreview[]>(MAPS_CACHE_TTL_MS);
+  private readonly mapTopicsCache = new TtlMemoryCache<HylandMapTopicPreview[]>(MAPS_CACHE_TTL_MS);
+  private alfrescoPortalIndex: HylandPublicationSummary[] | null = null;
+
   constructor(private readonly client: HylandDocsClient = getDefaultClient()) {}
 
   /** Cached raw maps catalog (metadata only). */
   async loadMapsCatalog(): Promise<HylandMapPreview[]> {
-    const cached = mapsCache.get('maps');
+    const cached = this.mapsCache.get('maps');
     if (cached) {
       return cached;
     }
-    alfrescoPortalIndex = null;
+    this.alfrescoPortalIndex = null;
     const maps = await this.client.listMaps();
-    mapsCache.set('maps', maps);
-    alfrescoPortalIndex = buildAlfrescoPortalIndex(maps);
+    this.mapsCache.set('maps', maps);
+    this.alfrescoPortalIndex = buildAlfrescoPortalIndex(maps);
     return maps;
   }
 
   private async getAlfrescoPortalIndex(): Promise<HylandPublicationSummary[]> {
     await this.loadMapsCatalog();
-    return alfrescoPortalIndex ?? [];
+    return this.alfrescoPortalIndex ?? [];
   }
 
   private async getPublicationPool(scope: import('./types.js').HylandDocsScope): Promise<HylandPublicationSummary[]> {
@@ -161,6 +242,16 @@ export class HylandDocsService {
     }
     const maps = await this.loadMapsCatalog();
     return maps.map(map => summarizeMap(map));
+  }
+
+  private async loadMapTopics(mapId: string): Promise<HylandMapTopicPreview[]> {
+    const cached = this.mapTopicsCache.get(mapId);
+    if (cached) {
+      return cached;
+    }
+    const topics = await this.client.listMapTopics(mapId);
+    this.mapTopicsCache.set(mapId, topics);
+    return topics;
   }
 
   private async resolvePublicationMapId(params: {
@@ -188,6 +279,15 @@ export class HylandDocsService {
     }
 
     const top = ranked[0];
+    const sameGuideVersions =
+      top && ranked.filter(entry => entry.score === top.score && entry.title === top.title);
+    if (top && sameGuideVersions && sameGuideVersions.length > 1 && top.score >= 12) {
+      const newest = [...sameGuideVersions].sort((a, b) => compareVersionsDesc(a.version, b.version))[0];
+      if (newest?.version) {
+        return { mapId: newest.mapId, title: newest.title, confidence: 'high' };
+      }
+    }
+
     if (!top || confidence !== 'high') {
       const names = ranked
         .slice(0, 5)
@@ -308,6 +408,96 @@ export class HylandDocsService {
       mapIdFilter = resolved.mapId;
       resolvedPublicationTitle = resolved.title;
       resolveConfidence = resolved.confidence;
+    }
+
+    const indexedTopics = await this.loadMapTopics(mapIdFilter);
+    const topicIndexHits = indexedTopics
+      .map(topic => ({ topic, score: scoreTopicPreview(query, topic) }))
+      .filter(entry => entry.score > 0 && entry.topic.id)
+      .sort(
+        (a, b) =>
+          b.score - a.score ||
+          (a.topic.breadcrumb?.length ?? 0) - (b.topic.breadcrumb?.length ?? 0) ||
+          a.topic.title.localeCompare(b.topic.title)
+      );
+
+    if (topicIndexHits.length > 0) {
+      const hits: HylandTopicSearchHit[] = [];
+      const seen = new Set<string>();
+
+      for (const { topic } of topicIndexHits) {
+        const contentId = topic.id.trim();
+        if (!contentId || seen.has(contentId)) {
+          continue;
+        }
+        seen.add(contentId);
+
+        const breadcrumb = Array.isArray(topic.breadcrumb)
+          ? topic.breadcrumb.filter((item): item is string => typeof item === 'string')
+          : [];
+        const readerUrl = absoluteReaderUrl(topic.readerUrl);
+        const mapTitle =
+          resolvedPublicationTitle ||
+          topicMetadataValue(topic, 'component') ||
+          breadcrumb[0] ||
+          publication ||
+          'Hyland documentation';
+        const title = topic.title?.trim() || breadcrumb[breadcrumb.length - 1] || mapTitle;
+
+        if (!matchesVersion(version, readerUrl, mapTitle)) {
+          continue;
+        }
+        if (
+          product !== 'any' &&
+          !matchesProductFamily(product, {
+            mapTitle,
+            breadcrumb,
+            readerUrl,
+            snippet: null,
+          })
+        ) {
+          continue;
+        }
+
+        hits.push({
+          mapId: mapIdFilter,
+          mapTitle,
+          contentId,
+          title,
+          breadcrumb,
+          readerUrl,
+          snippet: breadcrumb.length > 0 ? breadcrumb.join(' > ') : null,
+          version: extractVersionFromUrl(readerUrl),
+          productFamily: classifyProductFamily({
+            mapTitle,
+            breadcrumb,
+            readerUrl,
+            snippet: null,
+          }),
+        });
+
+        if (hits.length >= maxResults) {
+          break;
+        }
+      }
+
+      if (hits.length > 0) {
+        return {
+          query,
+          publication,
+          scope,
+          product,
+          version,
+          mapId: mapIdFilter,
+          resolvedPublicationTitle,
+          publicationResolveConfidence: resolveConfidence,
+          results: hits,
+          totalBeforeFilter: indexedTopics.length,
+          pagesFetched: 0,
+          publicationsConsidered: 1,
+          hint: null,
+        };
+      }
     }
 
     const perPage = 50;
