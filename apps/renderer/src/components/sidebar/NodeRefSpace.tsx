@@ -46,7 +46,7 @@ export function NodeRefSpace({ active, onSelect }: NodeRefSpaceProps) {
           aria-label={t('nodeRefSpace')}
           className={classes.icon}
         >
-          <BrandLogo size={20} color={active ? 'white' : 'var(--mantine-color-blue-6)'} />
+          <BrandLogo size={24} color={active ? 'white' : 'var(--mantine-color-blue-6)'} />
         </ActionIcon>
       </div>
     </Tooltip>
