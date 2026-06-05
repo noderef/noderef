@@ -68,6 +68,13 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
 
+      - name: Upload updater assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: updater-assets
+          path: dist/updater/*
+          if-no-files-found: error
+
   # 2) Package macOS DMG on macOS
   package-mac:
     runs-on: macos-14
@@ -313,13 +320,8 @@ jobs:
       - name: Download updater assets
         uses: actions/download-artifact@v4
         with:
-          name: dist-binaries
-          path: artifacts/updater-src
-
-      - name: Stage updater release files
-        run: |
-          mkdir -p artifacts/updater
-          cp artifacts/updater-src/dist/updater/* artifacts/updater/
+          name: updater-assets
+          path: artifacts/updater
 
       - name: Generate and Combine Release Notes
         env:
@@ -339,7 +341,13 @@ jobs:
         with:
           body_path: FINAL_RELEASE_NOTES.md
           files: |
-            artifacts/**/*
+            artifacts/mac/*.dmg
+            artifacts/win/NodeRef-win-*.zip
+            artifacts/win/NodeRef-win-*.msi
+            artifacts/linux/NodeRef-linux-*.tar.gz
+            artifacts/linux/NodeRef-linux-*.AppImage
+            artifacts/linux/noderef_*.deb
+            artifacts/updater/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
