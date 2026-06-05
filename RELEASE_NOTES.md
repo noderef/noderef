@@ -1,7 +1,5 @@
 This release brings **a new way to update** the NodeRef app, a visual **Model Explorer**, and smarter **Agent** using Hyland documentation. 🚀
 
-NodeRef can now check for new versions and install them from the app.
-
 The new **Model Explorer** gives you an interactive map of your Alfresco content model.
 
 ![NodeRef Model Explorer](assets/features/model_explorer.png)
