@@ -157,6 +157,7 @@ export function AgentPage() {
 
   const chatInputRef = useRef<AgentChatInputRef>(null);
   const conversationViewportRef = useRef<HTMLDivElement | null>(null);
+  const isAtBottomRef = useRef(true);
   const loadChatsRequestIdRef = useRef(0);
   const mentionRequestIdRef = useRef(0);
   const mentionSkipCountRef = useRef(0);
@@ -795,25 +796,64 @@ export function AgentPage() {
     [streamingAssistantByRun]
   );
 
+  const scrollConversationToBottom = useCallback((force = false) => {
+    const viewport = conversationViewportRef.current;
+    if (!viewport) {
+      return;
+    }
+
+    if (!force && !isAtBottomRef.current) {
+      return;
+    }
+
+    isAtBottomRef.current = true;
+
+    const applyScroll = () => {
+      viewport.scrollTop = viewport.scrollHeight;
+    };
+
+    applyScroll();
+    requestAnimationFrame(applyScroll);
+  }, []);
+
   useEffect(() => {
     const viewport = conversationViewportRef.current;
     if (!viewport) {
       return;
     }
 
-    const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
-    const isNearBottom = distanceFromBottom <= SCROLL_NEAR_BOTTOM_THRESHOLD_PX;
-    if (!isNearBottom) {
+    const syncIsAtBottom = () => {
+      const distanceFromBottom =
+        viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+      isAtBottomRef.current = distanceFromBottom <= SCROLL_NEAR_BOTTOM_THRESHOLD_PX;
+    };
+
+    syncIsAtBottom();
+    viewport.addEventListener('scroll', syncIsAtBottom, { passive: true });
+
+    return () => {
+      viewport.removeEventListener('scroll', syncIsAtBottom);
+    };
+  }, [activeChatId]);
+
+  useEffect(() => {
+    isAtBottomRef.current = true;
+    scrollConversationToBottom(true);
+  }, [activeChatId, scrollConversationToBottom]);
+
+  useEffect(() => {
+    if (!isAtBottomRef.current && !recentlySentMessage) {
       return;
     }
 
-    viewport.scrollTop = viewport.scrollHeight;
+    scrollConversationToBottom(true);
   }, [
-    activeChatId,
     conversationTimeline.length,
     totalRunEventCount,
     thinkingRunIds.length,
     streamingTextLength,
+    recentlySentMessage,
+    scrollConversationToBottom,
   ]);
 
   useEffect(() => {
@@ -846,6 +886,9 @@ export function AgentPage() {
       });
       return;
     }
+
+    isAtBottomRef.current = true;
+    scrollConversationToBottom(true);
 
     setSending(true);
     try {
