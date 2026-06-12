@@ -17,7 +17,11 @@
 import { LogFilesList, type LogFile } from '@/components/logs/LogFilesList';
 import { TextEditorPane } from '@/components/text-editor/TextEditorPane';
 import { downloadLogFile, fetchLogFiles } from '@/core/api/logs';
-import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
+import {
+  ensureNeutralinoReady,
+  getSaveDialogPaths,
+  isNeutralinoMode,
+} from '@/core/ipc/neutralino';
 import { MODAL_KEYS } from '@/core/store/keys';
 import { useServersStore } from '@/core/store/servers';
 import { detectLanguageFromMetadata } from '@/features/text-editor/language';
@@ -122,15 +126,7 @@ export function LogsModal() {
 
         if (neutralinoAvailable) {
           await ensureNeutralinoReady();
-          let defaultPath = safeFileName;
-          try {
-            const downloadsDir = await os.getPath('downloads');
-            if (downloadsDir) {
-              defaultPath = `${downloadsDir}/${safeFileName}`;
-            }
-          } catch {
-            // ignore path lookup failures
-          }
+          const { defaultPath } = await getSaveDialogPaths(safeFileName);
 
           const savePath = await os.showSaveDialog(t('downloadLogFile'), { defaultPath });
 

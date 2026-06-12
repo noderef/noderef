@@ -84,6 +84,38 @@ export const isNeutralinoMode = (): boolean => {
   return !!((window as any).NL_VERSION || (window as any).NL_PORT || (window as any).NL_TOKEN);
 };
 
+function isMacOS(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /Mac|Darwin/i.test(navigator.platform || navigator.userAgent || '');
+}
+
+/**
+ * Build defaultPath/fallbackPath for os.showSaveDialog.
+ * On macOS, a full path in defaultPath is shown in the "Save As" field; use only the filename there.
+ */
+export async function getSaveDialogPaths(fileName: string): Promise<{
+  defaultPath: string;
+  fallbackPath: string;
+}> {
+  let fallbackPath = fileName;
+  let defaultPath = fileName;
+
+  try {
+    const downloadsDir = await os.getPath('downloads');
+    if (downloadsDir) {
+      const dir = downloadsDir.replace(/[\\/]+$/, '');
+      fallbackPath = `${dir}/${fileName}`;
+      if (!isMacOS()) {
+        defaultPath = fallbackPath;
+      }
+    }
+  } catch {
+    // ignore path resolution errors
+  }
+
+  return { defaultPath, fallbackPath };
+}
+
 /**
  * Attempt to shut down the backend process gracefully.
  * 1. POST /shutdown to the backend HTTP endpoint
