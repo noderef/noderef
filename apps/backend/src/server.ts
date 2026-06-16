@@ -341,6 +341,7 @@ async function main() {
         req.path.startsWith('/rpc') ||
         req.path.startsWith('/web-auth') ||
         req.path.startsWith('/health') ||
+        req.path.startsWith('/updates') ||
         req.path.startsWith('/debug') ||
         req.path.startsWith('/shutdown')
       ) {

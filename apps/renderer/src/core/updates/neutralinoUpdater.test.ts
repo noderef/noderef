@@ -16,6 +16,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  checkDesktopUpdate,
   downloadAndWriteResources,
   getResourcesNeuPath,
   restartAfterUpdate,
@@ -23,6 +24,11 @@ import {
 
 vi.mock('@/core/ipc/neutralino', () => ({
   ensureNeutralinoReady: vi.fn(async () => undefined),
+}));
+
+vi.mock('@/core/ipc/backendConnection', () => ({
+  getBackendUrl: vi.fn(() => 'http://127.0.0.1:5111'),
+  isBackendReady: vi.fn(() => true),
 }));
 
 const writeBinaryFile = vi.fn(async () => undefined);
@@ -56,6 +62,46 @@ describe('neutralinoUpdater', () => {
       '/apps/NodeRef/resources.neu',
       expect.any(ArrayBuffer)
     );
+  });
+
+  it('proxies GitHub resource downloads through the local backend', async () => {
+    const githubUrl =
+      'https://github.com/noderef/noderef/releases/download/v0.10.1/noderef-resources.neu';
+
+    await downloadAndWriteResources({
+      applicationId: 'nl.noderef.desktop',
+      version: '1.0.0',
+      resourcesURL: githubUrl,
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/updates/resources?url='),
+      expect.any(Object)
+    );
+  });
+
+  it('fetches the manifest from the local backend during desktop update checks', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          applicationId: 'nl.noderef.desktop',
+          version: '0.10.1',
+          resourcesURL:
+            'https://github.com/noderef/noderef/releases/download/v0.10.1/noderef-resources.neu',
+          data: {
+            releaseUrl: 'https://github.com/noderef/noderef/releases/tag/v0.10.1',
+            requiresInstaller: false,
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+
+    const result = await checkDesktopUpdate('0.10.0');
+
+    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:5111/updates/manifest');
+    expect(result.hasUpdate).toBe(true);
+    expect(result.manifest.version).toBe('0.10.1');
   });
 
   it('restarts the app after install', async () => {

@@ -26,6 +26,7 @@ import { log } from '../lib/logger.js';
 import { ServerService } from '../services/serverService.js';
 import { healthHandler, type HealthRouteOptions } from './health.js';
 import { oauthCallbackHandler } from './oauth.js';
+import { updatesManifestHandler, updatesResourcesHandler } from './updates.js';
 import { registerPingRoute, rpcDebugHandler, rpcHandler, type Routes } from './rpc.js';
 import { createUploadMiddleware, rpcBinaryHandler } from './rpcBinary.js';
 import { agentRunStreamHandler } from './agentRunStream.js';
@@ -65,6 +66,10 @@ export async function registerRoutes({
 }: RegisterRoutesOptions): Promise<void> {
   // Health check endpoint
   app.get('/health', healthHandler({ version, buildId }));
+
+  // Desktop updater proxy (before web auth gate; GitHub redirects break webview CORS)
+  app.get('/updates/manifest', updatesManifestHandler());
+  app.get('/updates/resources', updatesResourcesHandler());
 
   // Optional Docker web password gate endpoints
   app.get('/web-auth/status', webAuthStatusHandler());

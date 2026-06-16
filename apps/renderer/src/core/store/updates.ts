@@ -118,8 +118,8 @@ export const useUpdateStore = create<UpdateState & UpdateActions>()(
         set({ status: 'checking', errorMessage: null });
 
         try {
-          // Vite dev sets NL_PORT/NL_TOKEN for Neutralino IPC, but manifest fetches
-          // from the webview hit GitHub CORS. Use the GitHub API path in dev instead.
+          // GitHub release redirects break in the Neutralino webview (CORS). Proxy via
+          // the local backend when it is ready; fall back to Neutralino updater otherwise.
           if (isNeutralinoMode() && !import.meta.env.DEV) {
             const desktop = await checkDesktopUpdate(CURRENT_VERSION);
             const hasUpdate = desktop.hasUpdate;

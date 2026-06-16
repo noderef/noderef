@@ -15,6 +15,11 @@
  */
 
 import { ensureNeutralinoReady } from '@/core/ipc/neutralino';
+import {
+  getBackendManifestUrl,
+  resolveResourcesDownloadUrl,
+  shouldUseBackendUpdaterProxy,
+} from './backendUpdaterProxy';
 import { UPDATE_MANIFEST_URL } from './constants';
 import { downloadResourcesWithProgress, type DownloadProgress } from './downloadResources';
 import {
@@ -57,6 +62,29 @@ async function fetchUpdateManifestFromNeutralino(
   return parsed.manifest;
 }
 
+async function fetchUpdateManifestFromBackend(): Promise<UpdateManifest> {
+  const response = await fetch(getBackendManifestUrl());
+  if (!response.ok) {
+    throw new Error(`Manifest fetch failed (${response.status})`);
+  }
+
+  const raw = await response.json();
+  const parsed = parseUpdateManifest(raw);
+  if (!parsed.ok) {
+    throw new Error(`Invalid update manifest: ${parsed.error}`);
+  }
+  return parsed.manifest;
+}
+
+async function fetchUpdateManifest(
+  manifestUrl: string = UPDATE_MANIFEST_URL
+): Promise<UpdateManifest> {
+  if (shouldUseBackendUpdaterProxy()) {
+    return fetchUpdateManifestFromBackend();
+  }
+  return fetchUpdateManifestFromNeutralino(manifestUrl);
+}
+
 export interface UpdateCheckResult {
   manifest: UpdateManifest;
   hasUpdate: boolean;
@@ -68,7 +96,7 @@ export async function checkDesktopUpdate(
   currentVersion: string,
   manifestUrl: string = UPDATE_MANIFEST_URL
 ): Promise<UpdateCheckResult> {
-  const manifest = await fetchUpdateManifestFromNeutralino(manifestUrl);
+  const manifest = await fetchUpdateManifest(manifestUrl);
   const runtimeVersion = getRuntimeVersion();
   const requiresInstaller = manifestRequiresInstaller(manifest, runtimeVersion);
   const hasUpdate = manifestHasNewerVersion(manifest.version, currentVersion);
@@ -92,7 +120,11 @@ export async function downloadAndWriteResources(
     throw new Error('Neutralino filesystem API is not available');
   }
 
-  const buffer = await downloadResourcesWithProgress(manifest.resourcesURL, onProgress, signal);
+  const buffer = await downloadResourcesWithProgress(
+    resolveResourcesDownloadUrl(manifest.resourcesURL),
+    onProgress,
+    signal
+  );
   const targetPath = getResourcesNeuPath();
   await NL.filesystem.writeBinaryFile(targetPath, buffer);
 }
