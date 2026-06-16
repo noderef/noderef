@@ -33,7 +33,7 @@ import {
   Timeline,
 } from '@mantine/core';
 import { useIntersection } from '@mantine/hooks';
-import { IconDots, IconFolder, IconSearch, IconWorld } from '@tabler/icons-react';
+import { IconDots, IconFolder, IconSearch, IconUser, IconWorld } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -98,6 +98,9 @@ const renderResultIcon = (item: SearchResult) => {
   if (item.type === 'st:site') {
     return <IconWorld size={16} style={{ color: 'var(--mantine-color-blue-6)' }} />;
   }
+  if (item.type === 'cm:person') {
+    return <IconUser size={16} style={{ color: 'var(--mantine-color-blue-6)' }} />;
+  }
   if (item.type === 'cm:folder') {
     return <IconFolder size={16} style={{ color: 'var(--mantine-color-blue-6)' }} />;
   }
@@ -116,15 +119,14 @@ export function SearchPage() {
   const activeServerId = useNavigationStore(state => state.activeServerId);
   const isNodeRefSpaceContext = activeServerId === null;
 
-  // Extract node ID from nodeRef (workspace://SpacesStore/{nodeId})
-  const extractNodeId = (nodeRef: string): string => {
-    const match = nodeRef.match(/SpacesStore\/(.+)$/);
-    return match ? match[1] : nodeRef;
+  const extractNodeId = (nodeRef: string, fallback: string): string => {
+    const match = nodeRef?.match(/([0-9a-f-]{36})$/i);
+    return match ? match[1] : fallback;
   };
 
-  const handleNameClick = (item: SearchResult) => {
+  const openInNodeBrowser = (item: SearchResult) => {
     if (!item.serverId) return;
-    const nodeId = extractNodeId(item.nodeRef);
+    const nodeId = extractNodeId(item.nodeRef, item.id);
     openNodeTab({
       nodeId,
       nodeName: item.name,
@@ -134,23 +136,51 @@ export function SearchPage() {
     navigate('node-browser');
   };
 
+  const openInFileFolderBrowser = (item: SearchResult, nodeId: string, nodeName?: string) => {
+    if (!item.serverId) return;
+    openFolderTab({
+      nodeId,
+      nodeName: nodeName ?? item.name,
+      serverId: item.serverId,
+    });
+    setActiveServer(item.serverId);
+    navigate('file-folder-browser');
+  };
+
+  const handleNameClick = (item: SearchResult) => {
+    if (item.type === 'cm:person') {
+      openInNodeBrowser(item);
+      return;
+    }
+
+    const isFolderLike =
+      item.isFolder || item.type === 'cm:folder' || item.type === 'st:site';
+    if (isFolderLike) {
+      openInFileFolderBrowser(item, extractNodeId(item.nodeRef, item.id));
+      return;
+    }
+
+    openInNodeBrowser(item);
+  };
+
   const handlePathClick = (item: SearchResult) => {
     if (!item.serverId) return;
+
+    if (item.type === 'cm:person') {
+      openInNodeBrowser(item);
+      return;
+    }
 
     // Navigate to the parent folder in file/folder browser
     // If parentId is not available, fall back to the item itself if it's a folder
     const targetNodeId =
       item.parentId ||
-      (item.type === 'cm:folder' || item.type === 'st:site' ? extractNodeId(item.nodeRef) : null);
+      (item.type === 'cm:folder' || item.type === 'st:site'
+        ? extractNodeId(item.nodeRef, item.id)
+        : null);
 
     if (targetNodeId) {
-      openFolderTab({
-        nodeId: targetNodeId,
-        nodeName: item.name,
-        serverId: item.serverId,
-      });
-      setActiveServer(item.serverId);
-      navigate('file-folder-browser');
+      openInFileFolderBrowser(item, targetNodeId);
     }
   };
 
@@ -238,7 +268,9 @@ export function SearchPage() {
                         </Text>
                         <Stack gap={2} align="flex-end">
                           <Text size="xs" c="dimmed">
-                            {formatRelativeTime(item.modifiedAt)}
+                            {item.modifiedAt
+                              ? formatRelativeTime(item.modifiedAt) || t('unknown')
+                              : t('unknown')}
                           </Text>
                           {isNodeRefSpaceContext && item.serverName && (
                             <Badge size="sm" radius="sm" variant="light" color="gray">

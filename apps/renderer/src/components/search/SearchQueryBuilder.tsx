@@ -1524,6 +1524,7 @@ export function SearchQueryBuilder({
                 backgroundColor: isDark
                   ? 'var(--mantine-color-dark-6)'
                   : 'var(--mantine-color-gray-0)',
+                alignItems: 'center',
               },
             }}
             aria-disabled={isDisabled}
@@ -1543,7 +1544,7 @@ export function SearchQueryBuilder({
                 WebkitOverflowScrolling: 'touch',
               }}
             >
-              <Pill.Group style={{ display: 'flex', flexWrap: 'nowrap', gap: 8 }}>
+              <Pill.Group style={{ display: 'flex', flexWrap: 'nowrap', gap: 8, alignItems: 'center' }}>
                 {tokens.map(token => {
                   if (token.kind === 'path') {
                     return (
@@ -1633,12 +1634,23 @@ export function SearchQueryBuilder({
                         color: isDark
                           ? 'var(--mantine-color-gray-0)'
                           : 'var(--mantine-color-gray-9)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                      },
+                      label: {
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        lineHeight: 1,
                       },
                     }}
                   >
-                    <Group gap={6} align="center">
-                      <Text fw={600}>{pendingPropField}</Text>
-                      <Text>=</Text>
+                    <Group gap={6} align="center" wrap="nowrap">
+                      <Text fw={600} size="sm" lh={1}>
+                        {pendingPropField}
+                      </Text>
+                      <Text size="sm" lh={1}>
+                        =
+                      </Text>
                       <input
                         ref={pendingInputRef}
                         value={pendingPropValue}
@@ -1655,6 +1667,14 @@ export function SearchQueryBuilder({
                           background: 'transparent',
                           color: 'inherit',
                           minWidth: 80,
+                          fontFamily: 'inherit',
+                          fontSize: 'var(--mantine-font-size-sm)',
+                          lineHeight: 1,
+                          height: 'var(--mantine-font-size-sm)',
+                          padding: 0,
+                          margin: 0,
+                          appearance: 'none',
+                          WebkitAppearance: 'none',
                         }}
                         disabled={isDisabled}
                         onBlur={() => {

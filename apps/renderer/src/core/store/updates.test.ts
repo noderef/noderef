@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/core/ipc/neutralino', () => ({
   isNeutralinoMode: vi.fn(() => true),
@@ -65,9 +65,14 @@ async function resetStore() {
 
 describe('useUpdateStore', () => {
   beforeEach(async () => {
+    vi.stubEnv('DEV', false);
     await resetStore();
     vi.clearAllMocks();
     vi.mocked(isNeutralinoMode).mockReturnValue(true);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('moves from available to downloaded after a successful download', async () => {
@@ -140,6 +145,22 @@ describe('useUpdateStore', () => {
     expect(fetchLatestRelease).toHaveBeenCalled();
     expect(useUpdateStore.getState().manifest).toBeNull();
     expect(useUpdateStore.getState().hasUpdate).toBe(true);
+  });
+
+  it('uses GitHub release fallback in Vite dev even when Neutralino globals are set', async () => {
+    vi.stubEnv('DEV', true);
+    vi.mocked(isNeutralinoMode).mockReturnValue(true);
+    vi.mocked(fetchLatestRelease).mockResolvedValue({
+      version: '9.9.9',
+      downloadUrl: 'https://github.com/noderef/noderef/releases/latest',
+      releaseUrl: 'https://github.com/noderef/noderef/releases/latest',
+    });
+
+    await useUpdateStore.getState().checkForUpdates({ force: true });
+
+    expect(fetchLatestRelease).toHaveBeenCalled();
+    expect(checkDesktopUpdate).not.toHaveBeenCalled();
+    expect(useUpdateStore.getState().manifest).toBeNull();
   });
 
   it('restarts after install when resources are downloaded', async () => {

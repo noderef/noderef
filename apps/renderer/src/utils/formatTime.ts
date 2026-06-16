@@ -35,11 +35,22 @@ const RELATIVE_TIME_DIVISIONS: Array<{ amount: number; unit: Intl.RelativeTimeFo
  * @param locale Optional locale string (defaults to user's locale)
  * @returns Formatted relative time string
  */
-export function formatRelativeTime(date: Date | string, locale?: string): string {
+export function formatRelativeTime(
+  date: Date | string | null | undefined,
+  locale?: string
+): string {
+  if (date == null || date === '') {
+    return '';
+  }
+
   const targetDate = date instanceof Date ? date : new Date(date);
+  const targetTime = targetDate.getTime();
+  if (!Number.isFinite(targetTime)) {
+    return '';
+  }
 
   // Duration in seconds (negative if in the past)
-  let duration = (targetDate.getTime() - Date.now()) / 1000;
+  let duration = (targetTime - Date.now()) / 1000;
 
   const formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
 
