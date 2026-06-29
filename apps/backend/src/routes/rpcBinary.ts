@@ -38,7 +38,11 @@ export interface RpcBinaryOptions {
 export function createUploadMiddleware() {
   return multer({
     storage: multer.memoryStorage(),
-  });
+    limits: {
+      // Flat form fields only (baseUrl, method, serverId, _args); blocks nested-name DoS (CVE-2026-5079)
+      fieldNestingDepth: 0,
+    },
+  } as multer.Options);
 }
 
 /**
