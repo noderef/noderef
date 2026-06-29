@@ -153,8 +153,7 @@ export function SearchPage() {
       return;
     }
 
-    const isFolderLike =
-      item.isFolder || item.type === 'cm:folder' || item.type === 'st:site';
+    const isFolderLike = item.isFolder || item.type === 'cm:folder' || item.type === 'st:site';
     if (isFolderLike) {
       openInFileFolderBrowser(item, extractNodeId(item.nodeRef, item.id));
       return;

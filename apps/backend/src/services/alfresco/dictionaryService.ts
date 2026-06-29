@@ -486,9 +486,7 @@ function formatDictionaryConstraints(constraints: unknown): string[] {
       } else if (values.length <= 6) {
         formatted.push(`LIST: ${values.join(', ')}`);
       } else {
-        formatted.push(
-          `LIST: ${values.slice(0, 5).join(', ')}, … (+${values.length - 5})`
-        );
+        formatted.push(`LIST: ${values.slice(0, 5).join(', ')}, … (+${values.length - 5})`);
       }
       continue;
     }
@@ -603,10 +601,7 @@ export async function getDictionaryClassPropertyDetails(
 
         return normalizePropertyDetail(propertyName, propertyDef);
       } catch (error) {
-        log.warn(
-          { className, propertyName, error },
-          'Failed to fetch dictionary property details'
-        );
+        log.warn({ className, propertyName, error }, 'Failed to fetch dictionary property details');
         return null;
       }
     })

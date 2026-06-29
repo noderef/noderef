@@ -37,12 +37,7 @@ import {
   Tooltip,
   useComputedColorScheme,
 } from '@mantine/core';
-import {
-  IconAlertCircle,
-  IconFocusCentered,
-  IconZoomIn,
-  IconZoomOut,
-} from '@tabler/icons-react';
+import { IconAlertCircle, IconFocusCentered, IconZoomIn, IconZoomOut } from '@tabler/icons-react';
 import {
   Background,
   MiniMap,
@@ -141,11 +136,7 @@ function ModelExplorerCanvas() {
       const node = getNode(id);
       if (!node) return;
       setSelectedRecordId(id);
-      setCenter(
-        node.position.x + 125,
-        node.position.y + 70,
-        { zoom: 1.2, duration: 400 }
-      );
+      setCenter(node.position.x + 125, node.position.y + 70, { zoom: 1.2, duration: 400 });
       setInspectorOpen(true);
     },
     [getNode, setCenter]
@@ -174,7 +165,11 @@ function ModelExplorerCanvas() {
 
   return (
     <Flex direction="column" h="100%" style={{ minHeight: 0 }}>
-      <Box px="md" py="sm" style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}>
+      <Box
+        px="md"
+        py="sm"
+        style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}
+      >
         <Group justify="space-between" wrap="wrap" gap="sm">
           <Group gap="sm" wrap="nowrap" style={{ flex: '1 1 auto', minWidth: 0 }}>
             <MultiSelect
@@ -210,7 +205,10 @@ function ModelExplorerCanvas() {
           </Group>
           <Group gap={4}>
             <Tooltip label={t('modelExplorerFitView')}>
-              <ActionIcon variant="default" onClick={() => fitView({ padding: 0.2, duration: 300 })}>
+              <ActionIcon
+                variant="default"
+                onClick={() => fitView({ padding: 0.2, duration: 300 })}
+              >
                 <IconFocusCentered size={16} />
               </ActionIcon>
             </Tooltip>
@@ -231,11 +229,7 @@ function ModelExplorerCanvas() {
       <Flex flex={1} style={{ minHeight: 0 }}>
         <Box flex={1} pos="relative" style={{ minWidth: 0 }}>
           {loading && (
-            <Center
-              pos="absolute"
-              inset={0}
-              style={{ zIndex: 10, background: 'rgba(0,0,0,0.04)' }}
-            >
+            <Center pos="absolute" inset={0} style={{ zIndex: 10, background: 'rgba(0,0,0,0.04)' }}>
               <Stack align="center" gap="xs">
                 <Loader size="sm" />
                 <Text size="sm">{t('modelExplorerLoading')}</Text>
@@ -245,7 +239,11 @@ function ModelExplorerCanvas() {
 
           {error && (
             <Box p="md">
-              <Alert icon={<IconAlertCircle size={16} />} color="red" title={t('modelExplorerError')}>
+              <Alert
+                icon={<IconAlertCircle size={16} />}
+                color="red"
+                title={t('modelExplorerError')}
+              >
                 {error}
               </Alert>
             </Box>

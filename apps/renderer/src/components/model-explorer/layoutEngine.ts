@@ -19,10 +19,7 @@ import ELK from 'elkjs/lib/elk.bundled.js';
 import { getSchemaNodeDimensions } from './nodeDimensions';
 import type { SchemaNodeData } from './types';
 
-export async function computeLayout<T extends Node>(
-  nodes: T[],
-  edges: Edge[]
-): Promise<T[]> {
+export async function computeLayout<T extends Node>(nodes: T[], edges: Edge[]): Promise<T[]> {
   if (nodes.length === 0) {
     return nodes;
   }

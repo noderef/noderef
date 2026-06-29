@@ -1544,7 +1544,9 @@ export function SearchQueryBuilder({
                 WebkitOverflowScrolling: 'touch',
               }}
             >
-              <Pill.Group style={{ display: 'flex', flexWrap: 'nowrap', gap: 8, alignItems: 'center' }}>
+              <Pill.Group
+                style={{ display: 'flex', flexWrap: 'nowrap', gap: 8, alignItems: 'center' }}
+              >
                 {tokens.map(token => {
                   if (token.kind === 'path') {
                     return (

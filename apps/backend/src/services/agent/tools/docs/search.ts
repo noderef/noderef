@@ -33,7 +33,8 @@ export const hylandDocsSearchTool: ToolDefinition = {
     properties: {
       query: {
         type: 'string',
-        description: 'Topic search terms (configuration, API, error message), not the product name alone.',
+        description:
+          'Topic search terms (configuration, API, error message), not the product name alone.',
       },
       mapId: {
         type: 'string',

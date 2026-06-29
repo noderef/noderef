@@ -21,7 +21,8 @@ import {
   useUpdateStore,
 } from '@/core/store/updates';
 import { GITHUB_RELEASE_URL } from '@/core/updates/constants';
-import { Button, useMantineTheme } from '@mantine/core';
+import { formatBytes } from '@/utils/formatBytes';
+import { Button, Loader, useMantineTheme } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconDownload, IconRefresh } from '@tabler/icons-react';
 import { useCallback, useMemo } from 'react';
@@ -66,11 +67,16 @@ const UPDATE_BUTTON_COMPACT_EXTRA_PX = 12;
 
 function getUpdateButtonWidthLabels(t: TFunction, compact: boolean): string[] {
   if (compact) {
-    return [t('settings:updateCta'), t('settings:updateInstallRestart'), '100%'];
+    return [t('settings:updateCta'), t('settings:updateInstallRestart'), '100%', '100 MB'];
   }
   return [
     t('settings:updateCta'),
     t('settings:updateDownloading', { percent: 100 }),
+    t('settings:updateDownloadProgressKnown', {
+      loaded: formatBytes(100 * 1024 * 1024),
+      total: formatBytes(100 * 1024 * 1024),
+    }),
+    t('settings:updateDownloadProgressUnknown', { loaded: formatBytes(100 * 1024 * 1024) }),
     t('settings:updateDownloadingIndeterminate'),
     t('settings:updateInstallRestart'),
     t('settings:updateInstalling'),
@@ -115,6 +121,7 @@ export function UpdateActionButton({
   const status = useUpdateStore(state => state.status);
   const requiresInstaller = useUpdateStore(state => state.requiresInstaller);
   const downloadProgress = useUpdateStore(state => state.downloadProgress);
+  const downloadProgressDetails = useUpdateStore(state => state.downloadProgressDetails);
   const manifest = useUpdateStore(state => state.manifest);
   const latestRelease = useUpdateStore(state => state.latestRelease);
   const downloadUpdate = useUpdateStore(state => state.downloadUpdate);
@@ -138,7 +145,11 @@ export function UpdateActionButton({
         return t('settings:updateInstallRestart');
       }
       if (status === 'downloading') {
-        return downloadProgress === null ? '' : `${downloadProgress}%`;
+        return downloadProgress === null
+          ? downloadProgressDetails?.loaded
+            ? formatBytes(downloadProgressDetails.loaded, 1)
+            : t('settings:updateDownloadingIndeterminate')
+          : `${downloadProgress}%`;
       }
       return t('settings:updateCta');
     }
@@ -150,12 +161,23 @@ export function UpdateActionButton({
     }
     if (status === 'downloading') {
       if (downloadProgress === null) {
+        if (downloadProgressDetails?.loaded && downloadProgressDetails.total) {
+          return t('settings:updateDownloadProgressKnown', {
+            loaded: formatBytes(downloadProgressDetails.loaded),
+            total: formatBytes(downloadProgressDetails.total),
+          });
+        }
+        if (downloadProgressDetails?.loaded) {
+          return t('settings:updateDownloadProgressUnknown', {
+            loaded: formatBytes(downloadProgressDetails.loaded),
+          });
+        }
         return t('settings:updateDownloadingIndeterminate');
       }
       return t('settings:updateDownloading', { percent: downloadProgress });
     }
     return t('settings:updateCta');
-  }, [compact, downloadProgress, status, t, version]);
+  }, [compact, downloadProgress, downloadProgressDetails, status, t, version]);
 
   const fixedButtonWidth = useMemo(() => {
     const labels = getUpdateButtonWidthLabels(t, compact);
@@ -202,8 +224,8 @@ export function UpdateActionButton({
     return null;
   }
 
-  const isBusy = status === 'downloading' || status === 'installing';
-  const showIndeterminateLoader = status === 'downloading' && downloadProgress === null;
+  const isDownloading = status === 'downloading';
+  const isInstalling = status === 'installing';
   const showRestartIcon = status === 'downloaded' || status === 'installing';
   const iconSize = UPDATE_ICON_SIZE[size];
   const iconProps = { size: iconSize, stroke: 1.75 } as const;
@@ -215,11 +237,11 @@ export function UpdateActionButton({
       color="blue"
       fullWidth={fullWidth}
       onClick={() => void handleClick()}
-      disabled={isBusy}
-      loading={showIndeterminateLoader}
-      loaderProps={{ type: 'oval' }}
+      disabled={isInstalling}
       leftSection={
-        showIndeterminateLoader ? undefined : showRestartIcon ? (
+        isDownloading ? (
+          <Loader size={iconSize} color={variant === 'filled' ? 'white' : 'blue'} type="oval" />
+        ) : showRestartIcon ? (
           <IconRefresh {...iconProps} />
         ) : (
           <IconDownload {...iconProps} />

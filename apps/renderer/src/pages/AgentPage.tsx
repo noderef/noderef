@@ -823,8 +823,7 @@ export function AgentPage() {
     }
 
     const syncIsAtBottom = () => {
-      const distanceFromBottom =
-        viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+      const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
       isAtBottomRef.current = distanceFromBottom <= SCROLL_NEAR_BOTTOM_THRESHOLD_PX;
     };
 

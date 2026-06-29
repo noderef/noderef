@@ -47,9 +47,7 @@ function mergeSchemaRecords(existing: SchemaRecord, incoming: SchemaRecord): Sch
     properties: incoming.properties.length > 0 ? incoming.properties : existing.properties,
     associations: incoming.associations.length > 0 ? incoming.associations : existing.associations,
     mandatoryAspects:
-      incoming.mandatoryAspects.length > 0
-        ? incoming.mandatoryAspects
-        : existing.mandatoryAspects,
+      incoming.mandatoryAspects.length > 0 ? incoming.mandatoryAspects : existing.mandatoryAspects,
     description: incoming.description || existing.description,
   };
 }

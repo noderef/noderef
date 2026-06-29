@@ -49,7 +49,6 @@ const manifest = {
 };
 
 async function resetStore() {
-  await useUpdateStore.persist.clearStorage();
   useUpdateStore.setState({
     latestRelease: null,
     manifest: null,
@@ -57,9 +56,9 @@ async function resetStore() {
     requiresInstaller: false,
     status: 'idle',
     downloadProgress: null,
+    downloadProgressDetails: null,
     errorMessage: null,
     lastChecked: null,
-    lastNotifiedVersion: null,
   });
 }
 
@@ -92,6 +91,11 @@ describe('useUpdateStore', () => {
 
     await useUpdateStore.getState().downloadUpdate();
     expect(useUpdateStore.getState().status).toBe('downloaded');
+    expect(useUpdateStore.getState().downloadProgressDetails).toEqual({
+      percent: 100,
+      loaded: 10,
+      total: 10,
+    });
     expect(downloadAndWriteResources).toHaveBeenCalled();
   });
 
@@ -147,20 +151,21 @@ describe('useUpdateStore', () => {
     expect(useUpdateStore.getState().hasUpdate).toBe(true);
   });
 
-  it('uses GitHub release fallback in Vite dev even when Neutralino globals are set', async () => {
+  it('uses desktop updater in Vite dev when Neutralino globals are set', async () => {
     vi.stubEnv('DEV', true);
     vi.mocked(isNeutralinoMode).mockReturnValue(true);
-    vi.mocked(fetchLatestRelease).mockResolvedValue({
-      version: '9.9.9',
-      downloadUrl: 'https://github.com/noderef/noderef/releases/latest',
-      releaseUrl: 'https://github.com/noderef/noderef/releases/latest',
+    vi.mocked(checkDesktopUpdate).mockResolvedValue({
+      manifest,
+      hasUpdate: true,
+      requiresInstaller: false,
+      releaseUrl: manifest.data!.releaseUrl!,
     });
 
     await useUpdateStore.getState().checkForUpdates({ force: true });
 
-    expect(fetchLatestRelease).toHaveBeenCalled();
-    expect(checkDesktopUpdate).not.toHaveBeenCalled();
-    expect(useUpdateStore.getState().manifest).toBeNull();
+    expect(checkDesktopUpdate).toHaveBeenCalled();
+    expect(fetchLatestRelease).not.toHaveBeenCalled();
+    expect(useUpdateStore.getState().manifest).toEqual(manifest);
   });
 
   it('restarts after install when resources are downloaded', async () => {

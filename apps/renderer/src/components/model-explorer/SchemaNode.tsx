@@ -28,11 +28,13 @@ const NODE_CLASS: Record<SchemaNodeKind, string> = {
   aspect: 'model-explorer-aspect-node',
 };
 
-const KIND_LABEL_KEY: Record<SchemaNodeKind, 'modelExplorerLegendType' | 'modelExplorerLegendAspect'> =
-  {
-    type: 'modelExplorerLegendType',
-    aspect: 'modelExplorerLegendAspect',
-  };
+const KIND_LABEL_KEY: Record<
+  SchemaNodeKind,
+  'modelExplorerLegendType' | 'modelExplorerLegendAspect'
+> = {
+  type: 'modelExplorerLegendType',
+  aspect: 'modelExplorerLegendAspect',
+};
 
 function SchemaNode({ data, selected, kind }: NodeProps & { kind: SchemaNodeKind }) {
   const { t } = useTranslation('submenu');
@@ -58,7 +60,9 @@ function SchemaNode({ data, selected, kind }: NodeProps & { kind: SchemaNodeKind
             {prop.mandatory ? '* ' : ''}
             {prop.name}
           </span>
-          <span className="model-explorer-prop-type">{prop.dataType || t('modelExplorerNone')}</span>
+          <span className="model-explorer-prop-type">
+            {prop.dataType || t('modelExplorerNone')}
+          </span>
         </div>
       ))}
       {remaining > 0 && (

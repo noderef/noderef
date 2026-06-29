@@ -676,15 +676,18 @@ export function registerAlfrescoRpc(
           const candidate = payload as {
             entries?: unknown[];
             list?: {
-              entries?: Array<{
-                entry?: unknown;
-              } | unknown>;
+              entries?: Array<
+                | {
+                    entry?: unknown;
+                  }
+                | unknown
+              >;
             };
           };
 
           if (Array.isArray(candidate.entries)) {
-            return candidate.entries.filter(
-              (entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === 'object')
+            return candidate.entries.filter((entry): entry is Record<string, unknown> =>
+              Boolean(entry && typeof entry === 'object')
             );
           }
 
@@ -696,8 +699,8 @@ export function registerAlfrescoRpc(
                 }
                 return entry;
               })
-              .filter(
-                (entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === 'object')
+              .filter((entry): entry is Record<string, unknown> =>
+                Boolean(entry && typeof entry === 'object')
               );
           }
 

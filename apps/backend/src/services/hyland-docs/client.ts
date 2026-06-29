@@ -31,10 +31,11 @@ export class HylandDocsClient {
   private readonly fetchImpl: typeof fetch;
 
   constructor(options: HylandDocsClientOptions = {}) {
-    this.baseUrl = (options.baseUrl ?? process.env.HYLAND_DOCS_BASE_URL ?? DEFAULT_BASE_URL).replace(
-      /\/$/,
-      ''
-    );
+    this.baseUrl = (
+      options.baseUrl ??
+      process.env.HYLAND_DOCS_BASE_URL ??
+      DEFAULT_BASE_URL
+    ).replace(/\/$/, '');
     this.callingApp =
       options.callingApp ?? process.env.HYLAND_DOCS_CALLING_APP ?? DEFAULT_CALLING_APP;
     this.fetchImpl = options.fetchImpl ?? fetch;

@@ -27,29 +27,10 @@ import {
   downloadAndWriteResources,
   restartAfterUpdate,
 } from '@/core/updates/neutralinoUpdater';
+import type { DownloadProgress } from '@/core/updates/downloadResources';
 import type { UpdateFlowStatus, UpdateManifest } from '@/core/updates/types';
 import { isNewerVersion } from '@/utils/version';
 import { create } from 'zustand';
-import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
-
-const memoryPersistStorage = new Map<string, string>();
-
-const fallbackPersistStorage: StateStorage = {
-  getItem: name => memoryPersistStorage.get(name) ?? null,
-  setItem: (name, value) => {
-    memoryPersistStorage.set(name, value);
-  },
-  removeItem: name => {
-    memoryPersistStorage.delete(name);
-  },
-};
-
-function resolvePersistStorage(): StateStorage {
-  if (typeof window !== 'undefined' && window.localStorage) {
-    return window.localStorage;
-  }
-  return fallbackPersistStorage;
-}
 
 const CURRENT_VERSION =
   typeof __APP_VERSION__ !== 'undefined' && __APP_VERSION__ ? __APP_VERSION__ : '0.0.0';
@@ -75,9 +56,9 @@ interface UpdateState {
   requiresInstaller: boolean;
   status: UpdateFlowStatus;
   downloadProgress: number | null;
+  downloadProgressDetails: DownloadProgress | null;
   errorMessage: string | null;
   lastChecked: number | null;
-  lastNotifiedVersion: string | null;
 }
 
 interface UpdateActions {
@@ -85,167 +66,170 @@ interface UpdateActions {
   downloadUpdate: () => Promise<void>;
   installUpdate: () => Promise<void>;
   clearError: () => void;
-  markNotified: (version: string) => void;
 }
 
 let activeDownloadAbort: AbortController | null = null;
 
-export const useUpdateStore = create<UpdateState & UpdateActions>()(
-  persist(
-    (set, get) => ({
-      latestRelease: null,
-      manifest: null,
-      hasUpdate: false,
-      requiresInstaller: false,
-      status: 'idle',
-      downloadProgress: null,
-      errorMessage: null,
-      lastChecked: null,
-      lastNotifiedVersion: null,
+export const useUpdateStore = create<UpdateState & UpdateActions>()((set, get) => ({
+  latestRelease: null,
+  manifest: null,
+  hasUpdate: false,
+  requiresInstaller: false,
+  status: 'idle',
+  downloadProgress: null,
+  downloadProgressDetails: null,
+  errorMessage: null,
+  lastChecked: null,
 
-      async checkForUpdates({ force }: { force?: boolean } = {}) {
-        const { status, lastChecked, latestRelease } = get();
-        if (status === 'checking' || status === 'downloading' || status === 'installing') {
-          return latestRelease;
-        }
-
-        const recentlyChecked =
-          !force && lastChecked !== null && Date.now() - lastChecked < UPDATE_CHECK_INTERVAL_MS;
-        if (recentlyChecked) {
-          return latestRelease;
-        }
-
-        set({ status: 'checking', errorMessage: null });
-
-        try {
-          // GitHub release redirects break in the Neutralino webview (CORS). Proxy via
-          // the local backend when it is ready; fall back to Neutralino updater otherwise.
-          if (isNeutralinoMode() && !import.meta.env.DEV) {
-            const desktop = await checkDesktopUpdate(CURRENT_VERSION);
-            const hasUpdate = desktop.hasUpdate;
-
-            set({
-              manifest: desktop.manifest,
-              latestRelease: {
-                version: desktop.manifest.version,
-                downloadUrl: desktop.releaseUrl,
-                releaseUrl: desktop.releaseUrl,
-              },
-              hasUpdate,
-              requiresInstaller: desktop.requiresInstaller,
-              status: hasUpdate ? 'available' : 'idle',
-              downloadProgress: null,
-              errorMessage: null,
-              lastChecked: Date.now(),
-            });
-
-            return get().latestRelease;
-          }
-
-          const release = await fetchLatestRelease();
-          const nextRelease = release ?? latestRelease;
-          const hasUpdate =
-            nextRelease?.version && isNewerVersion(nextRelease.version, CURRENT_VERSION);
-
-          set({
-            manifest: null,
-            latestRelease: nextRelease,
-            hasUpdate: Boolean(hasUpdate),
-            requiresInstaller: false,
-            status: hasUpdate ? 'available' : 'idle',
-            downloadProgress: null,
-            errorMessage: null,
-            lastChecked: Date.now(),
-          });
-
-          return nextRelease;
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Update check failed';
-          set({
-            status: 'error',
-            errorMessage: message,
-            lastChecked: Date.now(),
-          });
-          return latestRelease;
-        }
-      },
-
-      async downloadUpdate() {
-        const { manifest, status, requiresInstaller } = get();
-        if (!manifest || status === 'downloading' || status === 'installing') {
-          return;
-        }
-        if (requiresInstaller) {
-          return;
-        }
-
-        activeDownloadAbort?.abort();
-        activeDownloadAbort = new AbortController();
-
-        set({ status: 'downloading', downloadProgress: null, errorMessage: null });
-
-        try {
-          await downloadAndWriteResources(
-            manifest,
-            progress => {
-              set({ downloadProgress: progress.percent });
-            },
-            activeDownloadAbort.signal
-          );
-          set({ status: 'downloaded', downloadProgress: 100, errorMessage: null });
-        } catch (error) {
-          if ((error as Error)?.name === 'AbortError') {
-            set({ status: 'available', downloadProgress: null });
-            return;
-          }
-          const message = error instanceof Error ? error.message : 'Download failed';
-          set({
-            status: 'error',
-            errorMessage: message,
-            downloadProgress: null,
-          });
-          throw error;
-        } finally {
-          activeDownloadAbort = null;
-        }
-      },
-
-      async installUpdate() {
-        const { status } = get();
-        if (status !== 'downloaded') {
-          return;
-        }
-
-        set({ status: 'installing', errorMessage: null });
-        try {
-          await restartAfterUpdate();
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Restart failed';
-          set({ status: 'error', errorMessage: message });
-          throw error;
-        }
-      },
-
-      clearError() {
-        const { hasUpdate, manifest } = get();
-        set({
-          status: hasUpdate && manifest ? 'available' : 'idle',
-          errorMessage: null,
-          downloadProgress: null,
-        });
-      },
-
-      markNotified: version => set({ lastNotifiedVersion: version }),
-    }),
-    {
-      name: 'updates-store',
-      storage: createJSONStorage(() => resolvePersistStorage()),
-      partialize: state => ({
-        lastNotifiedVersion: state.lastNotifiedVersion,
-      }),
+  async checkForUpdates({ force }: { force?: boolean } = {}) {
+    const { status, lastChecked, latestRelease } = get();
+    if (status === 'checking' || status === 'downloading' || status === 'installing') {
+      return latestRelease;
     }
-  )
-);
+
+    const recentlyChecked =
+      !force && lastChecked !== null && Date.now() - lastChecked < UPDATE_CHECK_INTERVAL_MS;
+    if (recentlyChecked) {
+      return latestRelease;
+    }
+
+    set({ status: 'checking', errorMessage: null });
+
+    try {
+      // Desktop uses the Neutralino manifest updater so the button can download
+      // resources.neu and restart. Browser mode falls back to the GitHub release page.
+      if (isNeutralinoMode()) {
+        const desktop = await checkDesktopUpdate(CURRENT_VERSION);
+        const hasUpdate = desktop.hasUpdate;
+
+        set({
+          manifest: desktop.manifest,
+          latestRelease: {
+            version: desktop.manifest.version,
+            downloadUrl: desktop.releaseUrl,
+            releaseUrl: desktop.releaseUrl,
+          },
+          hasUpdate,
+          requiresInstaller: desktop.requiresInstaller,
+          status: hasUpdate ? 'available' : 'idle',
+          downloadProgress: null,
+          downloadProgressDetails: null,
+          errorMessage: null,
+          lastChecked: Date.now(),
+        });
+
+        return get().latestRelease;
+      }
+
+      const release = await fetchLatestRelease();
+      const nextRelease = release ?? latestRelease;
+      const hasUpdate =
+        nextRelease?.version && isNewerVersion(nextRelease.version, CURRENT_VERSION);
+
+      set({
+        manifest: null,
+        latestRelease: nextRelease,
+        hasUpdate: Boolean(hasUpdate),
+        requiresInstaller: false,
+        status: hasUpdate ? 'available' : 'idle',
+        downloadProgress: null,
+        downloadProgressDetails: null,
+        errorMessage: null,
+        lastChecked: Date.now(),
+      });
+
+      return nextRelease;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Update check failed';
+      set({
+        status: 'error',
+        errorMessage: message,
+        lastChecked: Date.now(),
+      });
+      return latestRelease;
+    }
+  },
+
+  async downloadUpdate() {
+    const { manifest, status, requiresInstaller } = get();
+    if (!manifest || status === 'downloading' || status === 'installing') {
+      return;
+    }
+    if (requiresInstaller) {
+      return;
+    }
+
+    activeDownloadAbort?.abort();
+    activeDownloadAbort = new AbortController();
+
+    set({
+      status: 'downloading',
+      downloadProgress: null,
+      downloadProgressDetails: null,
+      errorMessage: null,
+    });
+
+    try {
+      await downloadAndWriteResources(
+        manifest,
+        progress => {
+          set({ downloadProgress: progress.percent, downloadProgressDetails: progress });
+        },
+        activeDownloadAbort.signal
+      );
+      const progressDetails = get().downloadProgressDetails;
+      set({
+        status: 'downloaded',
+        downloadProgress: 100,
+        downloadProgressDetails: progressDetails
+          ? { ...progressDetails, percent: 100 }
+          : { percent: 100, loaded: 0, total: null },
+        errorMessage: null,
+      });
+    } catch (error) {
+      if ((error as Error)?.name === 'AbortError') {
+        set({ status: 'available', downloadProgress: null, downloadProgressDetails: null });
+        return;
+      }
+      const message = error instanceof Error ? error.message : 'Download failed';
+      set({
+        status: 'error',
+        errorMessage: message,
+        downloadProgress: null,
+        downloadProgressDetails: null,
+      });
+      throw error;
+    } finally {
+      activeDownloadAbort = null;
+    }
+  },
+
+  async installUpdate() {
+    const { status } = get();
+    if (status !== 'downloaded') {
+      return;
+    }
+
+    set({ status: 'installing', errorMessage: null });
+    try {
+      await restartAfterUpdate();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Restart failed';
+      set({ status: 'error', errorMessage: message });
+      throw error;
+    }
+  },
+
+  clearError() {
+    const { hasUpdate, manifest } = get();
+    set({
+      status: hasUpdate && manifest ? 'available' : 'idle',
+      errorMessage: null,
+      downloadProgress: null,
+      downloadProgressDetails: null,
+    });
+  },
+}));
 
 export function getCurrentVersion(): string {
   return CURRENT_VERSION;

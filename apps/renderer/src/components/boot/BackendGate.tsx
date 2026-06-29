@@ -18,7 +18,6 @@ import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 're
 
 import {
   Alert,
-  Anchor,
   Button,
   Center,
   Group,
@@ -35,14 +34,14 @@ import { IconAlertTriangle, IconPlayerPlay, IconRefresh } from '@tabler/icons-re
 
 import { isBackendReady, startBackend, waitForBackend } from '@/core/ipc/rpc';
 
-import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
-import { os } from '@neutralinojs/lib';
+import { isNeutralinoMode } from '@/core/ipc/neutralino';
 
 import { useTranslation } from 'react-i18next';
 import { backendRpc } from '@/core/ipc/backend';
 import { useServersStore } from '@/core/store/servers';
 import { useLocalFilesStore } from '@/core/store/localFiles';
-import { getDownloadUrl, useUpdateStore } from '@/core/store/updates';
+import { useUpdateStore } from '@/core/store/updates';
+import { UpdateNotificationMessage } from '@/components/updates/UpdateNotificationMessage';
 
 type Phase = 'idle' | 'starting' | 'waiting' | 'ready' | 'error';
 
@@ -88,7 +87,6 @@ export function BackendGate({
   const setLocalFilesInitialized = useLocalFilesStore(state => state.setInitialized);
   const setLocalFilesLoadingMore = useLocalFilesStore(state => state.setLoadingMore);
   const checkForUpdates = useUpdateStore(state => state.checkForUpdates);
-  const markNotified = useUpdateStore(state => state.markNotified);
 
   useEffect(() => {
     progressRef.current = progress;
@@ -221,44 +219,18 @@ export function BackendGate({
 
       const state = useUpdateStore.getState();
       const latestVersion = state.latestRelease?.version;
-      if (!state.hasUpdate || !latestVersion || state.lastNotifiedVersion === latestVersion) {
+      if (!state.hasUpdate || !latestVersion) {
         return;
       }
 
-      const downloadTarget = getDownloadUrl(state.latestRelease);
-
-      const handleDownloadClick = async (e: React.MouseEvent) => {
-        e.preventDefault();
-        if (isNeutralinoMode()) {
-          try {
-            await ensureNeutralinoReady();
-            await os.open(downloadTarget);
-            return;
-          } catch (error) {
-            console.warn('Neutralino open failed, falling back to window.open', error);
-          }
-        }
-        window.open(downloadTarget, '_blank', 'noreferrer');
-      };
-
       notifications.show({
+        id: `update-available-${latestVersion}`,
         title: t('common:updateAvailable'),
-        message: (
-          <Anchor
-            href={downloadTarget}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={handleDownloadClick}
-          >
-            {t('common:updateAvailableMessage', { version: latestVersion })}
-          </Anchor>
-        ),
+        message: <UpdateNotificationMessage version={latestVersion} />,
         color: 'blue',
         withCloseButton: true,
-        autoClose: 9000,
+        autoClose: false,
       });
-
-      markNotified(latestVersion);
     };
 
     void runUpdateCheck();
@@ -266,7 +238,7 @@ export function BackendGate({
     return () => {
       cancelled = true;
     };
-  }, [phase, checkForUpdates, markNotified, t]);
+  }, [phase, checkForUpdates, t]);
 
   useEffect(() => {
     let cancelled = false;

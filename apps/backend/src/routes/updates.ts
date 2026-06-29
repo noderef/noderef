@@ -24,8 +24,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
 const GITHUB_API_RELEASE = 'https://api.github.com/repos/noderef/noderef/releases/latest';
-const GITHUB_RELEASE_DOWNLOAD_PREFIX =
-  'https://github.com/noderef/noderef/releases/download/';
+const GITHUB_RELEASE_DOWNLOAD_PREFIX = 'https://github.com/noderef/noderef/releases/download/';
 const RESOURCES_ASSET_NAME = 'noderef-resources.neu';
 const MANIFEST_ASSET_NAME = 'update_manifest.json';
 
@@ -63,9 +62,7 @@ function findAssetUrl(release: GitHubLatestRelease, assetName: string): string {
 }
 
 export function isAllowedResourcesUrl(url: string): boolean {
-  return (
-    url.startsWith(GITHUB_RELEASE_DOWNLOAD_PREFIX) && url.endsWith(`/${RESOURCES_ASSET_NAME}`)
-  );
+  return url.startsWith(GITHUB_RELEASE_DOWNLOAD_PREFIX) && url.endsWith(`/${RESOURCES_ASSET_NAME}`);
 }
 
 export function updatesManifestHandler(): RequestHandler {
@@ -75,7 +72,9 @@ export function updatesManifestHandler(): RequestHandler {
       const manifestUrl = findAssetUrl(release, MANIFEST_ASSET_NAME);
       const response = await fetch(manifestUrl, { redirect: 'follow' });
       if (!response.ok) {
-        res.status(502).json({ code: 'MANIFEST_FETCH_FAILED', message: 'Manifest download failed' });
+        res
+          .status(502)
+          .json({ code: 'MANIFEST_FETCH_FAILED', message: 'Manifest download failed' });
         return;
       }
 
@@ -101,7 +100,9 @@ export function updatesResourcesHandler(): RequestHandler {
     try {
       const response = await fetch(url, { redirect: 'follow' });
       if (!response.ok || !response.body) {
-        res.status(502).json({ code: 'RESOURCES_FETCH_FAILED', message: 'Resources download failed' });
+        res
+          .status(502)
+          .json({ code: 'RESOURCES_FETCH_FAILED', message: 'Resources download failed' });
         return;
       }
 

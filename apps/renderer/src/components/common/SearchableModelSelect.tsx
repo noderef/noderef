@@ -54,9 +54,7 @@ export const filterModelSelectOptions: OptionsFilter = ({ options, search, limit
           ('dropdownLabel' in option ? option.dropdownLabel : '') ?? ''
         ).toLowerCase();
         const value = String(option.value ?? '').toLowerCase();
-        return (
-          label.includes(query) || dropdownLabel.includes(query) || value.includes(query)
-        );
+        return label.includes(query) || dropdownLabel.includes(query) || value.includes(query);
       });
 
   return filtered.slice(0, maxItems);

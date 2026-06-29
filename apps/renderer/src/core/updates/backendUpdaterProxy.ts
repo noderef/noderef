@@ -16,8 +16,7 @@
 
 import { getBackendUrl, isBackendReady } from '@/core/ipc/backendConnection';
 
-const GITHUB_RELEASE_DOWNLOAD_PREFIX =
-  'https://github.com/noderef/noderef/releases/download/';
+const GITHUB_RELEASE_DOWNLOAD_PREFIX = 'https://github.com/noderef/noderef/releases/download/';
 const RESOURCES_ASSET_SUFFIX = '/noderef-resources.neu';
 
 export function isGitHubResourcesUrl(url: string): boolean {

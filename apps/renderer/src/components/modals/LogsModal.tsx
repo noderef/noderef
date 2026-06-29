@@ -17,11 +17,7 @@
 import { LogFilesList, type LogFile } from '@/components/logs/LogFilesList';
 import { TextEditorPane } from '@/components/text-editor/TextEditorPane';
 import { downloadLogFile, fetchLogFiles } from '@/core/api/logs';
-import {
-  ensureNeutralinoReady,
-  getSaveDialogPaths,
-  isNeutralinoMode,
-} from '@/core/ipc/neutralino';
+import { ensureNeutralinoReady, getSaveDialogPaths, isNeutralinoMode } from '@/core/ipc/neutralino';
 import { MODAL_KEYS } from '@/core/store/keys';
 import { useServersStore } from '@/core/store/servers';
 import { detectLanguageFromMetadata } from '@/features/text-editor/language';

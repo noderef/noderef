@@ -82,8 +82,7 @@ function normalizeCustomProperty(prop: Record<string, unknown>): ModelProperty {
       prop.indexTokenisationMode !== undefined
         ? String(prop.indexTokenisationMode) === 'TRUE'
         : undefined,
-    facetable:
-      prop.facetable !== undefined ? String(prop.facetable) === 'TRUE' : undefined,
+    facetable: prop.facetable !== undefined ? String(prop.facetable) === 'TRUE' : undefined,
   };
 }
 
@@ -103,14 +102,11 @@ function normalizeDictionaryProperty(
     dataType,
     mandatory: Boolean(propDef.mandatory),
     multiValued: Boolean(propDef.multiValued),
-    defaultValue:
-      propDef.defaultValue !== undefined ? String(propDef.defaultValue) : undefined,
+    defaultValue: propDef.defaultValue !== undefined ? String(propDef.defaultValue) : undefined,
     indexed: propDef.indexed !== undefined ? Boolean(propDef.indexed) : undefined,
     tokenised: propDef.tokenised !== undefined ? Boolean(propDef.tokenised) : undefined,
     facetable: propDef.facetable !== undefined ? Boolean(propDef.facetable) : undefined,
-    constraints: Array.isArray(propDef.constraints)
-      ? (propDef.constraints as string[])
-      : undefined,
+    constraints: Array.isArray(propDef.constraints) ? (propDef.constraints as string[]) : undefined,
   };
 }
 
@@ -184,10 +180,7 @@ export function normalizeDictionaryClass(classDef: Record<string, unknown>): Sch
   };
 
   appendAssociations(classDef.associations as Record<string, unknown> | undefined, 'association');
-  appendAssociations(
-    classDef.childassociations as Record<string, unknown> | undefined,
-    'child'
-  );
+  appendAssociations(classDef.childassociations as Record<string, unknown> | undefined, 'child');
 
   const mandatoryAspects: string[] = [];
   const appendAspectNames = (value: unknown) => {

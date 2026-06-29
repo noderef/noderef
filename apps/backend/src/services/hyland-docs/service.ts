@@ -236,7 +236,9 @@ export class HylandDocsService {
     return this.alfrescoPortalIndex ?? [];
   }
 
-  private async getPublicationPool(scope: import('./types.js').HylandDocsScope): Promise<HylandPublicationSummary[]> {
+  private async getPublicationPool(
+    scope: import('./types.js').HylandDocsScope
+  ): Promise<HylandPublicationSummary[]> {
     if (scope === 'alfresco_portal') {
       return this.getAlfrescoPortalIndex();
     }
@@ -282,7 +284,9 @@ export class HylandDocsService {
     const sameGuideVersions =
       top && ranked.filter(entry => entry.score === top.score && entry.title === top.title);
     if (top && sameGuideVersions && sameGuideVersions.length > 1 && top.score >= 12) {
-      const newest = [...sameGuideVersions].sort((a, b) => compareVersionsDesc(a.version, b.version))[0];
+      const newest = [...sameGuideVersions].sort((a, b) =>
+        compareVersionsDesc(a.version, b.version)
+      )[0];
       if (newest?.version) {
         return { mapId: newest.mapId, title: newest.title, confidence: 'high' };
       }
@@ -330,8 +334,7 @@ export class HylandDocsService {
           version,
           publications: [],
           totalInScope: 0,
-          hint:
-            'For scope "all", provide a query with a product or guide name. For browsing Alfresco guides, use scope "alfresco_portal".',
+          hint: 'For scope "all", provide a query with a product or guide name. For browsing Alfresco guides, use scope "alfresco_portal".',
         };
       }
       const maps = await this.loadMapsCatalog();
@@ -649,12 +652,17 @@ export class HylandDocsService {
       (typeof params.title === 'string' && params.title.trim()) ||
       (breadcrumb.length > 0 ? breadcrumb[breadcrumb.length - 1] : null);
     const readerUrl =
-      typeof params.readerUrl === 'string' && params.readerUrl.trim() ? params.readerUrl.trim() : null;
+      typeof params.readerUrl === 'string' && params.readerUrl.trim()
+        ? params.readerUrl.trim()
+        : null;
 
     return {
       mapId,
       contentId,
-      mapTitle: typeof params.mapTitle === 'string' && params.mapTitle.trim() ? params.mapTitle.trim() : null,
+      mapTitle:
+        typeof params.mapTitle === 'string' && params.mapTitle.trim()
+          ? params.mapTitle.trim()
+          : null,
       title,
       breadcrumb,
       readerUrl,

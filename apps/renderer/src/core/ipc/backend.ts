@@ -824,11 +824,7 @@ export const backendRpc = {
     },
 
     dictionary: {
-      async getClasses(
-        serverId: number,
-        baseUrl: string,
-        namespace: string
-      ): Promise<unknown[]> {
+      async getClasses(serverId: number, baseUrl: string, namespace: string): Promise<unknown[]> {
         return rpc<unknown[]>('alfresco.dictionary.getClasses', {
           serverId,
           baseUrl,

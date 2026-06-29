@@ -103,7 +103,9 @@ describe('HylandDocsService', () => {
             mapId: 'acs-map',
             mapTitle: 'Alfresco Content Services',
             contentId: 'topic-acs',
-            occurrences: [{ breadcrumb: ['Intro'], readerUrl: 'https://docs.hyland.com/r/Alfresco/ACS/26.1/x' }],
+            occurrences: [
+              { breadcrumb: ['Intro'], readerUrl: 'https://docs.hyland.com/r/Alfresco/ACS/26.1/x' },
+            ],
           },
         ],
       }),
