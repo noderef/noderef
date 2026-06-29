@@ -38,6 +38,7 @@ import {
 import { useDisclosure } from '@mantine/hooks';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { formatDurationSeconds } from '@/utils/formatTime';
 import { renderMarkdown } from './agentMarkdownRenderer';
 import {
   buildRunActivity,
@@ -46,18 +47,31 @@ import {
 } from './agentRunActivity';
 import { StreamingAgentMessage } from './StreamingAgentMessage';
 
+const computeRunDurationSeconds = (
+  createdAt: string | Date,
+  finishedAt?: string | Date | null
+): number => {
+  const start = new Date(createdAt).getTime();
+  const end = finishedAt ? new Date(finishedAt).getTime() : Date.now();
+  if (Number.isNaN(start) || Number.isNaN(end)) {
+    return 0;
+  }
+  return Math.max(0, Math.floor((end - start) / 1000));
+};
+
 const RunTimer = ({ createdAt }: { createdAt: string | Date }) => {
-  const [duration, setDuration] = useState(0);
+  const [durationSeconds, setDurationSeconds] = useState(() =>
+    computeRunDurationSeconds(createdAt)
+  );
 
   useEffect(() => {
-    const start = new Date(createdAt).getTime();
-    const update = () => setDuration(Math.floor((Date.now() - start) / 1000));
+    const update = () => setDurationSeconds(computeRunDurationSeconds(createdAt));
     update();
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
   }, [createdAt]);
 
-  return <>{duration}s</>;
+  return <>{formatDurationSeconds(durationSeconds)}</>;
 };
 
 const translateLabel = (
@@ -339,6 +353,18 @@ export function AgentRunTimelineItem({
     return isActive ? t('thinking') : t('activity');
   }, [runEvents, activity, t, isStreaming, isActive]);
 
+  const completedDurationSeconds = useMemo(
+    () => computeRunDurationSeconds(run.createdAt, run.finishedAt),
+    [run.createdAt, run.finishedAt]
+  );
+
+  const displayHeaderLabel = useMemo(() => {
+    if (isActive || completedDurationSeconds <= 0) {
+      return headerLabel;
+    }
+    return `${headerLabel} (${formatDurationSeconds(completedDurationSeconds)})`;
+  }, [headerLabel, isActive, completedDurationSeconds]);
+
   const [expanded, setExpanded] = useState(isActive);
 
   useEffect(() => {
@@ -403,7 +429,7 @@ export function AgentRunTimelineItem({
               <Group gap={6} wrap="nowrap" align="center">
                 <ActivityHeaderIcon isActive={isActive} />
                 <Text {...ACTIVITY_TEXT_PROPS} c="var(--mantine-color-text)" fw={400}>
-                  {headerLabel}
+                  {displayHeaderLabel}
                 </Text>
                 <ActivityChevron open={expanded} />
               </Group>

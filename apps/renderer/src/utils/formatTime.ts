@@ -64,3 +64,24 @@ export function formatRelativeTime(
   // Fallback (should not happen with POSITIVE_INFINITY)
   return formatter.format(Math.round(duration), 'year');
 }
+
+/**
+ * Format a duration in seconds as a compact human-readable string
+ * (e.g. "20 sec", "1 min", "1 min 3 sec").
+ */
+export function formatDurationSeconds(totalSeconds: number): string {
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+
+  if (seconds < 60) {
+    return `${seconds} sec`;
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+
+  if (remainingSeconds === 0) {
+    return `${minutes} min`;
+  }
+
+  return `${minutes} min ${remainingSeconds} sec`;
+}
