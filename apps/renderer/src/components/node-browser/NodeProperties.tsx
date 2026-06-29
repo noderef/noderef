@@ -17,7 +17,7 @@
 import { buildStreamUrl } from '@/core/ipc/alfresco';
 import type { AlfrescoNodeDetails } from '@/core/ipc/backend';
 import { backendRpc } from '@/core/ipc/backend';
-import { ensureNeutralinoReady } from '@/core/ipc/neutralino';
+import { ensureNeutralinoReady, getSaveDialogPaths } from '@/core/ipc/neutralino';
 import { backendFetch } from '@/core/ipc/rpc';
 import { useServersStore } from '@/core/store/servers';
 import { formatBytes } from '@/utils/formatBytes';
@@ -185,9 +185,8 @@ export function NodeProperties({ properties, serverId, nodeId, nodeName }: NodeP
 
       const safeFileName =
         fileName && fileName.trim() ? fileName.trim() : `content-${nodeId || 'download'}.bin`;
-      const resolveSavePath = (chosenPath: string | null, fallbackPath: string) => {
-        // If dialog returned nothing, use the suggested full path
-        const raw = (chosenPath || '').trim() || fallbackPath.trim();
+      const resolveSavePath = (chosenPath: string | null) => {
+        const raw = (chosenPath || '').trim();
         if (!raw) return null;
 
         // If user picked a directory (ends with slash), append filename
@@ -211,22 +210,13 @@ export function NodeProperties({ properties, serverId, nodeId, nodeName }: NodeP
       if (neutralinoAvailable) {
         try {
           await ensureNeutralinoReady();
-          let defaultSuggestedPath = safeFileName;
-
-          try {
-            const downloadsDir = await os.getPath('downloads');
-            if (downloadsDir) {
-              defaultSuggestedPath = `${downloadsDir}/${safeFileName}`;
-            }
-          } catch {
-            // ignore path resolution errors, fallback to filename only
-          }
+          const { defaultPath } = await getSaveDialogPaths(safeFileName);
 
           const savePath = await os.showSaveDialog(t('nodeBrowser:desktopSaveDialogTitle'), {
-            defaultPath: defaultSuggestedPath,
+            defaultPath,
           });
 
-          const finalPath = resolveSavePath(savePath, defaultSuggestedPath);
+          const finalPath = resolveSavePath(savePath);
 
           if (!finalPath) {
             showNotification({
@@ -235,23 +225,21 @@ export function NodeProperties({ properties, serverId, nodeId, nodeName }: NodeP
               color: 'yellow',
               autoClose: 4000,
             });
-            // Fall back to browser download to keep the flow working even if the native dialog returns empty
-          }
-
-          if (finalPath) {
-            await filesystem.writeBinaryFile(finalPath, arrayBuffer);
-
-            showNotification({
-              title: t('nodeBrowser:downloadSuccess'),
-              message: t('nodeBrowser:desktopDownloadSaved', {
-                path: finalPath,
-                bytes: arrayBuffer.byteLength,
-              }),
-              color: 'green',
-            });
-
             return;
           }
+
+          await filesystem.writeBinaryFile(finalPath, arrayBuffer);
+
+          showNotification({
+            title: t('nodeBrowser:downloadSuccess'),
+            message: t('nodeBrowser:desktopDownloadSaved', {
+              path: finalPath,
+              bytes: arrayBuffer.byteLength,
+            }),
+            color: 'green',
+          });
+
+          return;
         } catch (desktopError) {
           showNotification({
             title: t('nodeBrowser:desktopDownloadFallback'),
