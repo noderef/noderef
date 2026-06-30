@@ -15,6 +15,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { restartApp } from '@/core/ipc/neutralino';
 import {
   checkDesktopUpdate,
   downloadAndWriteResources,
@@ -24,6 +25,7 @@ import {
 
 vi.mock('@/core/ipc/neutralino', () => ({
   ensureNeutralinoReady: vi.fn(async () => undefined),
+  restartApp: vi.fn(async () => undefined),
 }));
 
 vi.mock('@/core/ipc/backendConnection', () => ({
@@ -33,6 +35,17 @@ vi.mock('@/core/ipc/backendConnection', () => ({
 
 const writeBinaryFile = vi.fn(async () => undefined);
 const restartProcess = vi.fn(async () => undefined);
+
+const GITHUB_RESOURCES_URL =
+  'https://github.com/noderef/noderef/releases/download/v0.10.1/noderef-resources.neu';
+
+function ndjsonResponse(lines: object[]): Response {
+  const body = lines.map(line => `${JSON.stringify(line)}\n`).join('');
+  return new Response(body, {
+    status: 200,
+    headers: { 'Content-Type': 'application/x-ndjson' },
+  });
+}
 
 describe('neutralinoUpdater', () => {
   beforeEach(() => {
@@ -46,37 +59,84 @@ describe('neutralinoUpdater', () => {
     } as unknown as Window;
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => new Response(new Uint8Array([1, 2, 3]), { status: 200 }))
+      vi.fn(async () =>
+        ndjsonResponse([
+          { type: 'progress', loaded: 5, total: 10 },
+          { type: 'progress', loaded: 10, total: 10 },
+          { type: 'done', loaded: 10 },
+        ])
+      )
     );
   });
 
-  it('writes downloaded resources to NL_PATH/resources.neu', async () => {
+  it('downloads GitHub resources through the backend write endpoint', async () => {
+    await downloadAndWriteResources({
+      applicationId: 'nl.noderef.desktop',
+      version: '1.0.0',
+      resourcesURL: GITHUB_RESOURCES_URL,
+    });
+
+    expect(getResourcesNeuPath()).toBe('/apps/NodeRef/resources.neu');
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:5111/updates/download',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          url: GITHUB_RESOURCES_URL,
+          targetPath: '/apps/NodeRef/resources.neu',
+        }),
+      })
+    );
+    // The renderer must never base64 the bundle through Neutralino on this path.
+    expect(writeBinaryFile).not.toHaveBeenCalled();
+  });
+
+  it('reports backend download progress and completes', async () => {
+    const events: Array<{ phase?: 'downloading' | 'writing'; percent: number | null }> = [];
+
+    await downloadAndWriteResources(
+      {
+        applicationId: 'nl.noderef.desktop',
+        version: '1.0.0',
+        resourcesURL: GITHUB_RESOURCES_URL,
+      },
+      progress => {
+        events.push({ phase: progress.phase, percent: progress.percent });
+      }
+    );
+
+    expect(events.some(event => event.phase === 'downloading')).toBe(true);
+    expect(events[events.length - 1]).toEqual({ phase: 'downloading', percent: 100 });
+  });
+
+  it('throws when the backend reports a download error', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      ndjsonResponse([{ type: 'error', message: 'disk full' }])
+    );
+
+    await expect(
+      downloadAndWriteResources({
+        applicationId: 'nl.noderef.desktop',
+        version: '1.0.0',
+        resourcesURL: GITHUB_RESOURCES_URL,
+      })
+    ).rejects.toThrow('disk full');
+  });
+
+  it('falls back to a Neutralino write for non-GitHub resource URLs', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(new Uint8Array([1, 2, 3]), { status: 200 })
+    );
+
     await downloadAndWriteResources({
       applicationId: 'nl.noderef.desktop',
       version: '1.0.0',
       resourcesURL: 'https://example.com/noderef-resources.neu',
     });
 
-    expect(getResourcesNeuPath()).toBe('/apps/NodeRef/resources.neu');
     expect(writeBinaryFile).toHaveBeenCalledWith(
       '/apps/NodeRef/resources.neu',
       expect.any(ArrayBuffer)
-    );
-  });
-
-  it('proxies GitHub resource downloads through the local backend', async () => {
-    const githubUrl =
-      'https://github.com/noderef/noderef/releases/download/v0.10.1/noderef-resources.neu';
-
-    await downloadAndWriteResources({
-      applicationId: 'nl.noderef.desktop',
-      version: '1.0.0',
-      resourcesURL: githubUrl,
-    });
-
-    expect(fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/updates/resources?url='),
-      expect.any(Object)
     );
   });
 
@@ -106,6 +166,6 @@ describe('neutralinoUpdater', () => {
 
   it('restarts the app after install', async () => {
     await restartAfterUpdate();
-    expect(restartProcess).toHaveBeenCalled();
+    expect(restartApp).toHaveBeenCalled();
   });
 });

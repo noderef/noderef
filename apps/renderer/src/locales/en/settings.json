@@ -41,6 +41,7 @@
   "updateDownloadingIndeterminate": "Downloading…",
   "updateDownloadProgressKnown": "Downloaded {{loaded}} of {{total}}",
   "updateDownloadProgressUnknown": "Downloaded {{loaded}}",
+  "updateSaving": "Saving update…",
   "updateDownloadedMessage": "Update downloaded. Restart to install.",
   "updateInstallRestart": "Restart",
   "updateInstalling": "Restarting…",

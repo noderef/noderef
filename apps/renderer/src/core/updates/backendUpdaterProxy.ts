@@ -35,6 +35,10 @@ export function getBackendResourcesProxyUrl(resourcesUrl: string): string {
   return `${getBackendUrl()}/updates/resources?url=${encodeURIComponent(resourcesUrl)}`;
 }
 
+export function getBackendResourcesDownloadUrl(): string {
+  return `${getBackendUrl()}/updates/download`;
+}
+
 export function resolveResourcesDownloadUrl(url: string): string {
   if (shouldUseBackendUpdaterProxy() && isGitHubResourcesUrl(url)) {
     return getBackendResourcesProxyUrl(url);

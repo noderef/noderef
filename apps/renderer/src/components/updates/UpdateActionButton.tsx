@@ -22,6 +22,7 @@ import {
 } from '@/core/store/updates';
 import { GITHUB_RELEASE_URL } from '@/core/updates/constants';
 import { formatBytes } from '@/utils/formatBytes';
+import { formatUpdateProgressLabel } from './updateProgressLabel';
 import { Button, Loader, useMantineTheme } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconDownload, IconRefresh } from '@tabler/icons-react';
@@ -67,7 +68,13 @@ const UPDATE_BUTTON_COMPACT_EXTRA_PX = 12;
 
 function getUpdateButtonWidthLabels(t: TFunction, compact: boolean): string[] {
   if (compact) {
-    return [t('settings:updateCta'), t('settings:updateInstallRestart'), '100%', '100 MB'];
+    return [
+      t('settings:updateCta'),
+      t('settings:updateInstallRestart'),
+      t('settings:updateSaving'),
+      '100%',
+      '100 MB',
+    ];
   }
   return [
     t('settings:updateCta'),
@@ -78,6 +85,7 @@ function getUpdateButtonWidthLabels(t: TFunction, compact: boolean): string[] {
     }),
     t('settings:updateDownloadProgressUnknown', { loaded: formatBytes(100 * 1024 * 1024) }),
     t('settings:updateDownloadingIndeterminate'),
+    t('settings:updateSaving'),
     t('settings:updateInstallRestart'),
     t('settings:updateInstalling'),
   ];
@@ -138,46 +146,48 @@ export function UpdateActionButton({
 
   const showUpdateButton = hasUpdate && Boolean(version) && status !== 'checking';
 
+  const phase = downloadProgressDetails?.phase ?? 'downloading';
+  const isWritingPhase = status === 'downloading' && phase === 'writing';
+
   const label = useMemo(() => {
     if (!version) return '';
-    if (compact) {
-      if (status === 'installing' || status === 'downloaded') {
-        return t('settings:updateInstallRestart');
-      }
-      if (status === 'downloading') {
+
+    if (status === 'installing') {
+      // Compact header has no room for "Restarting…"; show the same Restart label.
+      return compact ? t('settings:updateInstallRestart') : t('settings:updateInstalling');
+    }
+    if (status === 'downloaded') {
+      return t('settings:updateInstallRestart');
+    }
+    if (status === 'downloading') {
+      if (compact) {
+        if (isWritingPhase) {
+          return t('settings:updateSaving');
+        }
         return downloadProgress === null
           ? downloadProgressDetails?.loaded
             ? formatBytes(downloadProgressDetails.loaded, 1)
             : t('settings:updateDownloadingIndeterminate')
           : `${downloadProgress}%`;
       }
-      return t('settings:updateCta');
-    }
-    if (status === 'installing') {
-      return t('settings:updateInstalling');
-    }
-    if (status === 'downloaded') {
-      return t('settings:updateInstallRestart');
-    }
-    if (status === 'downloading') {
-      if (downloadProgress === null) {
-        if (downloadProgressDetails?.loaded && downloadProgressDetails.total) {
-          return t('settings:updateDownloadProgressKnown', {
-            loaded: formatBytes(downloadProgressDetails.loaded),
-            total: formatBytes(downloadProgressDetails.total),
-          });
-        }
-        if (downloadProgressDetails?.loaded) {
-          return t('settings:updateDownloadProgressUnknown', {
-            loaded: formatBytes(downloadProgressDetails.loaded),
-          });
-        }
-        return t('settings:updateDownloadingIndeterminate');
-      }
-      return t('settings:updateDownloading', { percent: downloadProgress });
+      return formatUpdateProgressLabel(t, {
+        progress: downloadProgress,
+        loaded: downloadProgressDetails?.loaded ?? null,
+        total: downloadProgressDetails?.total ?? null,
+        phase,
+      });
     }
     return t('settings:updateCta');
-  }, [compact, downloadProgress, downloadProgressDetails, status, t, version]);
+  }, [
+    compact,
+    downloadProgress,
+    downloadProgressDetails,
+    isWritingPhase,
+    phase,
+    status,
+    t,
+    version,
+  ]);
 
   const fixedButtonWidth = useMemo(() => {
     const labels = getUpdateButtonWidthLabels(t, compact);

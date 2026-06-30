@@ -42,6 +42,7 @@
   "updateDownloadingIndeterminate": "Descargando…",
   "updateDownloadProgressKnown": "{{loaded}} de {{total}} descargados",
   "updateDownloadProgressUnknown": "{{loaded}} descargados",
+  "updateSaving": "Guardando actualización…",
   "updateDownloadedMessage": "Actualización descargada. Reinicia para instalar.",
   "updateInstallRestart": "Reiniciar",
   "updateInstalling": "Reiniciando…",

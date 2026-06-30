@@ -41,6 +41,7 @@
   "updateDownloadingIndeterminate": "Bezig met downloaden…",
   "updateDownloadProgressKnown": "{{loaded}} van {{total}} gedownload",
   "updateDownloadProgressUnknown": "{{loaded}} gedownload",
+  "updateSaving": "Update opslaan…",
   "updateDownloadedMessage": "Update gedownload. Herstart om te installeren.",
   "updateInstallRestart": "Herstart",
   "updateInstalling": "Herstarten…",

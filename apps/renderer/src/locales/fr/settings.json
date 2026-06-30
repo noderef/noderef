@@ -41,6 +41,7 @@
   "updateDownloadingIndeterminate": "Téléchargement…",
   "updateDownloadProgressKnown": "{{loaded}} sur {{total}} téléchargés",
   "updateDownloadProgressUnknown": "{{loaded}} téléchargés",
+  "updateSaving": "Enregistrement de la mise à jour…",
   "updateDownloadedMessage": "Mise à jour téléchargée. Redémarrez pour l'installer.",
   "updateInstallRestart": "Redémarrer",
   "updateInstalling": "Redémarrage…",

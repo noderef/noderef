@@ -41,6 +41,7 @@
   "updateDownloadingIndeterminate": "Wird heruntergeladen…",
   "updateDownloadProgressKnown": "{{loaded}} von {{total}} heruntergeladen",
   "updateDownloadProgressUnknown": "{{loaded}} heruntergeladen",
+  "updateSaving": "Update wird gespeichert…",
   "updateDownloadedMessage": "Update heruntergeladen. Zum Installieren neu starten.",
   "updateInstallRestart": "Neustart",
   "updateInstalling": "Wird neu gestartet…",

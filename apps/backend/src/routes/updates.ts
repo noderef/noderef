@@ -20,6 +20,9 @@
  */
 
 import type { RequestHandler } from 'express';
+import { createWriteStream } from 'node:fs';
+import { mkdir, rename, rm } from 'node:fs/promises';
+import { basename, dirname } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
@@ -27,6 +30,7 @@ const GITHUB_API_RELEASE = 'https://api.github.com/repos/noderef/noderef/release
 const GITHUB_RELEASE_DOWNLOAD_PREFIX = 'https://github.com/noderef/noderef/releases/download/';
 const RESOURCES_ASSET_NAME = 'noderef-resources.neu';
 const MANIFEST_ASSET_NAME = 'update_manifest.json';
+const RESOURCES_TARGET_FILENAME = 'resources.neu';
 
 interface GitHubReleaseAsset {
   name?: string;
@@ -119,6 +123,95 @@ export function updatesResourcesHandler(): RequestHandler {
       if (!res.headersSent) {
         const message = error instanceof Error ? error.message : 'Resources fetch failed';
         res.status(502).json({ code: 'RESOURCES_FETCH_FAILED', message });
+      }
+    }
+  };
+}
+
+interface DownloadRequestBody {
+  url?: unknown;
+  targetPath?: unknown;
+}
+
+/**
+ * Downloads the resources bundle and writes it straight to disk on the Node
+ * side, streaming NDJSON progress back to the renderer. Writing the file here
+ * avoids base64-encoding tens of megabytes through the Neutralino IPC bridge,
+ * which froze the desktop UI during the update flow.
+ */
+export function updatesDownloadHandler(): RequestHandler {
+  return async (req, res) => {
+    const body = (req.body ?? {}) as DownloadRequestBody;
+    const url = typeof body.url === 'string' ? body.url.trim() : '';
+    const targetPath = typeof body.targetPath === 'string' ? body.targetPath.trim() : '';
+
+    if (!isAllowedResourcesUrl(url)) {
+      res.status(400).json({ code: 'INVALID_RESOURCES_URL', message: 'Invalid resources URL' });
+      return;
+    }
+    if (!targetPath || basename(targetPath) !== RESOURCES_TARGET_FILENAME) {
+      res.status(400).json({ code: 'INVALID_TARGET_PATH', message: 'Invalid target path' });
+      return;
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(url, { redirect: 'follow' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Resources download failed';
+      res.status(502).json({ code: 'RESOURCES_DOWNLOAD_FAILED', message });
+      return;
+    }
+
+    if (!response.ok || !response.body) {
+      res
+        .status(502)
+        .json({ code: 'RESOURCES_DOWNLOAD_FAILED', message: 'Resources download failed' });
+      return;
+    }
+
+    const totalHeader = response.headers.get('Content-Length');
+    const parsedTotal = totalHeader ? Number.parseInt(totalHeader, 10) : NaN;
+    const total = Number.isFinite(parsedTotal) && parsedTotal > 0 ? parsedTotal : null;
+
+    res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+
+    const writeEvent = (event: Record<string, unknown>): void => {
+      res.write(`${JSON.stringify(event)}\n`);
+    };
+
+    const tempPath = `${targetPath}.download`;
+    let loaded = 0;
+    let lastEmit = 0;
+
+    try {
+      await mkdir(dirname(targetPath), { recursive: true });
+
+      const nodeStream = Readable.fromWeb(response.body as import('stream/web').ReadableStream);
+      nodeStream.on('data', (chunk: Buffer) => {
+        loaded += chunk.length;
+        const now = Date.now();
+        if (now - lastEmit >= 100) {
+          lastEmit = now;
+          writeEvent({ type: 'progress', loaded, total });
+        }
+      });
+
+      await pipeline(nodeStream, createWriteStream(tempPath));
+      await rename(tempPath, targetPath);
+
+      writeEvent({ type: 'progress', loaded, total: total ?? loaded });
+      writeEvent({ type: 'done', loaded });
+      res.end();
+    } catch (error) {
+      await rm(tempPath, { force: true }).catch(() => undefined);
+      const message = error instanceof Error ? error.message : 'Resources download failed';
+      if (!res.headersSent) {
+        res.status(502).json({ code: 'RESOURCES_DOWNLOAD_FAILED', message });
+      } else {
+        writeEvent({ type: 'error', message });
+        res.end();
       }
     }
   };

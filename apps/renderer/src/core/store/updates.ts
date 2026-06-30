@@ -33,7 +33,8 @@ import { isNewerVersion } from '@/utils/version';
 import { create } from 'zustand';
 
 const CURRENT_VERSION =
-  typeof __APP_VERSION__ !== 'undefined' && __APP_VERSION__ ? __APP_VERSION__ : '0.0.0';
+  import.meta.env.VITE_UPDATE_CURRENT_VERSION?.trim() ||
+  (typeof __APP_VERSION__ !== 'undefined' && __APP_VERSION__ ? __APP_VERSION__ : '0.0.0');
 
 /**
  * Get the download URL from a release, with fallback to GitHub releases page.

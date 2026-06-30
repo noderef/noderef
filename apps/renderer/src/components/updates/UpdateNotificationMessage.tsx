@@ -18,35 +18,11 @@ import { Group, Progress, Stack, Text } from '@mantine/core';
 import { useTranslation } from 'react-i18next';
 
 import { useUpdateStore } from '@/core/store/updates';
-import { formatBytes } from '@/utils/formatBytes';
 import { UpdateActionButton } from './UpdateActionButton';
+import { formatUpdateProgressLabel } from './updateProgressLabel';
 
 interface UpdateNotificationMessageProps {
   version: string;
-}
-
-function formatProgressText(
-  t: ReturnType<typeof useTranslation>['t'],
-  progress: number | null,
-  loaded: number | null,
-  total: number | null
-): string {
-  if (progress !== null) {
-    return t('settings:updateDownloading', { percent: progress });
-  }
-
-  if (loaded && total) {
-    return t('settings:updateDownloadProgressKnown', {
-      loaded: formatBytes(loaded),
-      total: formatBytes(total),
-    });
-  }
-
-  if (loaded) {
-    return t('settings:updateDownloadProgressUnknown', { loaded: formatBytes(loaded) });
-  }
-
-  return t('settings:updateDownloadingIndeterminate');
 }
 
 export function UpdateNotificationMessage({ version }: UpdateNotificationMessageProps) {
@@ -56,10 +32,15 @@ export function UpdateNotificationMessage({ version }: UpdateNotificationMessage
   const downloadProgressDetails = useUpdateStore(state => state.downloadProgressDetails);
   const errorMessage = useUpdateStore(state => state.errorMessage);
 
-  const loaded = downloadProgressDetails?.loaded ?? null;
-  const total = downloadProgressDetails?.total ?? null;
+  const phase = downloadProgressDetails?.phase ?? 'downloading';
   const isDownloading = status === 'downloading';
-  const progressLabel = formatProgressText(t, downloadProgress, loaded, total);
+  const isWriting = isDownloading && phase === 'writing';
+  const progressLabel = formatUpdateProgressLabel(t, {
+    progress: downloadProgress,
+    loaded: downloadProgressDetails?.loaded ?? null,
+    total: downloadProgressDetails?.total ?? null,
+    phase,
+  });
 
   return (
     <Stack gap="xs">
@@ -68,9 +49,9 @@ export function UpdateNotificationMessage({ version }: UpdateNotificationMessage
       {isDownloading && (
         <Stack gap={4}>
           <Progress
-            value={downloadProgress ?? 100}
-            striped={downloadProgress === null}
-            animated={downloadProgress === null}
+            value={isWriting ? 100 : (downloadProgress ?? 100)}
+            striped={isWriting || downloadProgress === null}
+            animated={isWriting || downloadProgress === null}
           />
           <Text size="xs" c="dimmed">
             {progressLabel}

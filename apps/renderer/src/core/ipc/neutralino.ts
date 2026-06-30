@@ -228,6 +228,45 @@ function setupQuitOnClose(): void {
 }
 
 /**
+ * Relaunch the desktop application after an in-place update writes resources.neu.
+ *
+ * Neutralino's built-in `app.restartProcess()` relaunches the inner executable
+ * directly, which does not reliably start a new GUI instance on macOS (the app
+ * appears to do nothing). There we relaunch the `.app` bundle with `open -n`
+ * instead. Other platforms fall back to the built-in restart. The backend is
+ * shut down first so the relaunched instance starts cleanly.
+ */
+export async function restartApp(): Promise<void> {
+  await ensureNeutralinoReady();
+
+  try {
+    await shutdownBackend();
+  } catch (err) {
+    console.warn('[Neutralino] Backend shutdown before restart failed:', err);
+  }
+
+  const nlPath: string = (window as any).NL_PATH || '';
+  const appIndex = nlPath.indexOf('.app');
+
+  if (appIndex >= 0) {
+    const appPath = nlPath.slice(0, appIndex + 4);
+    try {
+      // `open -n` launches a brand-new instance of the bundle, detached from
+      // this process — the relaunch Neutralino cannot perform on macOS.
+      await os.execCommand(`open -n "${appPath}"`, { background: true });
+      // Give the new instance a moment to spawn before tearing this one down.
+      await new Promise(resolve => setTimeout(resolve, 500));
+      await app.killProcess();
+      return;
+    } catch (err) {
+      console.error('[Neutralino] macOS relaunch via `open` failed, falling back:', err);
+    }
+  }
+
+  await app.restartProcess();
+}
+
+/**
  * Open an http(s) URL in the system browser (Neutralino) or a new tab (browser dev).
  */
 export async function openExternalUrl(url: string): Promise<void> {

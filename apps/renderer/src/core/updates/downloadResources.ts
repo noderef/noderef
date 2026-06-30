@@ -19,6 +19,21 @@ export interface DownloadProgress {
   percent: number | null;
   loaded: number;
   total: number | null;
+  /**
+   * Current step in the update pipeline. `downloading` while bytes are arriving,
+   * `writing` while the buffer is being persisted to disk. Defaults to `downloading`.
+   */
+  phase?: 'downloading' | 'writing';
+}
+
+/**
+ * Percentage of bytes downloaded, or `null` when the total size is unknown.
+ */
+export function computeDownloadPercent(loaded: number, total: number | null): number | null {
+  if (!total || !Number.isFinite(total) || total <= 0) {
+    return null;
+  }
+  return Math.min(100, Math.round((loaded / total) * 100));
 }
 
 export async function downloadResourcesWithProgress(
@@ -56,7 +71,7 @@ export async function downloadResourcesWithProgress(
     chunks.push(value);
     loaded += value.byteLength;
     onProgress?.({
-      percent: hasTotal ? Math.min(100, Math.round((loaded / total) * 100)) : null,
+      percent: computeDownloadPercent(loaded, hasTotal ? total : null),
       loaded,
       total: hasTotal ? total : null,
     });
