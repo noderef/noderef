@@ -85,7 +85,7 @@ const manifest: Manifest = {
 
   actions: {
     description:
-      'Create and execute Alfresco repository actions: add aspects, move/copy nodes, transform content, extract metadata, and invoke custom actions.',
+      'Create and execute Alfresco repository actions: copy, move, version, mail, export/import, rules, counters, and custom actions.',
     tags: [
       'actions',
       'alfresco',
@@ -96,6 +96,12 @@ const manifest: Manifest = {
       'metadata',
       'copy',
       'move',
+      'mail',
+      'email',
+      'version',
+      'export',
+      'import',
+      'rules',
       'repo',
     ],
   },

@@ -51,8 +51,9 @@ function example_addAspect() {
  * Copy a node to another folder using "copy".
  *
  * Parameters:
- *   - destination-folder (nodeRef)
- *   - inherit-permissions (boolean, optional)
+ *   - destination-folder (nodeRef, required)
+ *   - deep-copy (boolean, optional)
+ *   - overwrite-copy (boolean, optional)
  */
 function example_copyNode() {
   var source = companyhome.childByNamePath('Shared/test.txt');
@@ -64,7 +65,14 @@ function example_copyNode() {
   }
 
   var action = actions.create('copy');
+  if (!action) {
+    logger.log('Action not available: copy');
+    return;
+  }
+
   action.parameters['destination-folder'] = targetFolder.nodeRef.toString();
+  action.parameters['deep-copy'] = true;
+  action.parameters['overwrite-copy'] = true;
 
   source.executeAction(action);
 
@@ -133,6 +141,229 @@ function example_extractMetadata() {
 }
 
 /**
+ * Count the direct children of a folder using "count-children".
+ *
+ * The result is written back to the action as the "result" parameter.
+ */
+function example_countChildren() {
+  var folder = companyhome.childByNamePath('Shared');
+  if (!folder) {
+    logger.log('Folder not found');
+    return;
+  }
+
+  var action = actions.create('count-children');
+  if (!action) {
+    logger.log('Action not available: count-children');
+    return;
+  }
+
+  folder.executeAction(action);
+
+  var count = action.parameters['result'];
+  logger.log('Child count for ' + folder.name + ': ' + count);
+}
+
+/**
+ * Increment the cm:counter property on a node using "counter".
+ *
+ * Adds cm:countable on first run, then increments on each execution.
+ */
+function example_counter() {
+  var node = companyhome.childByNamePath('Shared/test.txt');
+  if (!node) {
+    logger.log('File not found');
+    return;
+  }
+
+  var action = actions.create('counter');
+  if (!action) {
+    logger.log('Action not available: counter');
+    return;
+  }
+
+  node.executeAction(action);
+
+  var value = node.properties['cm:counter'];
+  logger.log('Counter on ' + node.name + ': ' + value);
+}
+
+/**
+ * Create a new version of a versionable node using "create-version".
+ *
+ * Parameters:
+ *   - description (text, optional)
+ *   - minor-change (boolean, optional) — false creates a major version
+ *
+ * The node must already have the cm:versionable aspect.
+ */
+function example_createVersion() {
+  var node = companyhome.childByNamePath('Shared/test.txt');
+  if (!node) {
+    logger.log('File not found');
+    return;
+  }
+
+  if (!node.hasAspect('cm:versionable')) {
+    logger.log('Node is not versionable — add cm:versionable first');
+    return;
+  }
+
+  var action = actions.create('create-version');
+  if (!action) {
+    logger.log('Action not available: create-version');
+    return;
+  }
+
+  action.parameters['description'] = 'Updated via script';
+  action.parameters['minor-change'] = false;
+
+  node.executeAction(action);
+
+  logger.log('Created version for: ' + node.nodeRef);
+}
+
+/**
+ * Specialise a node to a more specific subtype using "specialise-type".
+ *
+ * Parameters:
+ *   - type-name (QName, required) — must be a subtype of the node's current type
+ */
+function example_specialiseType() {
+  var node = companyhome.childByNamePath('Shared/test.txt');
+  if (!node) {
+    logger.log('File not found');
+    return;
+  }
+
+  var action = actions.create('specialise-type');
+  if (!action) {
+    logger.log('Action not available: specialise-type');
+    return;
+  }
+
+  // Replace with a QName that is a strict subtype of the node's current type
+  action.parameters['type-name'] = 'my:invoice';
+
+  var before = node.typeShort;
+  node.executeAction(action);
+
+  logger.log('Type before: ' + before + ', after: ' + node.typeShort);
+}
+
+/**
+ * Run all enabled folder rules on child nodes using "execute-all-rules".
+ *
+ * Parameters:
+ *   - execute-inherited-rules (boolean, optional)
+ *   - run-all-rules-on-children (boolean, optional)
+ *
+ * WARNING: triggers every enabled rule on the folder's children.
+ */
+function example_executeAllRules() {
+  var folder = companyhome.childByNamePath('Shared');
+  if (!folder) {
+    logger.log('Folder not found');
+    return;
+  }
+
+  var action = actions.create('execute-all-rules');
+  if (!action) {
+    logger.log('Action not available: execute-all-rules');
+    return;
+  }
+
+  action.parameters['execute-inherited-rules'] = true;
+  action.parameters['run-all-rules-on-children'] = true;
+
+  folder.executeAction(action);
+
+  logger.log('Executed all rules for folder: ' + folder.name);
+}
+
+/**
+ * Send a plain-text email using "mail".
+ *
+ * Parameters:
+ *   - to (text) / to_many (array) — recipient(s)
+ *   - subject (text, required)
+ *   - text (text) / html (text) — message body
+ *   - from, fromPersonalName, cc, bcc, template, template_model,
+ *     locale, subjectParams, ignore_send_failure, send_after_commit
+ *
+ * WARNING: sends real email when SMTP is configured.
+ */
+function example_mail_simpleText() {
+  var action = actions.create('mail');
+  if (!action) {
+    logger.log('Action not available: mail');
+    return;
+  }
+
+  action.parameters['to'] = 'recipient@example.com';
+  action.parameters['subject'] = 'NodeRef mail action test';
+  action.parameters['text'] = 'Hello from an Alfresco script.';
+
+  action.execute(companyhome);
+
+  logger.log('Mail action executed.');
+}
+
+/**
+ * Send email about a document node using "mail".
+ *
+ * When executed against a content node, template models include
+ * document, space, person, to, date, and url.
+ */
+function example_mail_aboutDocument() {
+  var doc = companyhome.childByNamePath('Shared/test.txt');
+  if (!doc) {
+    logger.log('Document not found');
+    return;
+  }
+
+  var action = actions.create('mail');
+  if (!action) {
+    logger.log('Action not available: mail');
+    return;
+  }
+
+  action.parameters['to'] = 'recipient@example.com';
+  action.parameters['subject'] = 'Document update';
+  action.parameters['text'] =
+    'The document "' + doc.name + '" was processed.\n\nNodeRef: ' + doc.nodeRef;
+
+  doc.executeAction(action);
+
+  logger.log('Mail action executed for document: ' + doc.name);
+}
+
+/**
+ * Send email using a FreeMarker template and custom model values.
+ *
+ * template can be a repository template node or a classpath location
+ * such as "alfresco/templates/notify_user_email.ftl".
+ */
+function example_mail_withTemplate() {
+  var action = actions.create('mail');
+  if (!action) {
+    logger.log('Action not available: mail');
+    return;
+  }
+
+  action.parameters['to'] = 'recipient@example.com';
+  action.parameters['subject'] = 'workflow.task.email.subject';
+  action.parameters['template'] = 'alfresco/templates/notify_user_email.ftl';
+  action.parameters['template_model'] = {
+    customMessage: 'Extra context from the script',
+  };
+
+  action.execute(companyhome);
+
+  logger.log('Mail action executed with template.');
+}
+
+/**
  * Alfresco supports composite actions and condition-based actions, but the
  * Script API exposes only create/execute primitives. If your repository is
  * configured with custom action definitions, you can call them the same way:
@@ -165,15 +396,15 @@ function example_runCustomAction() {
 }
 
 /**
- * Export a node structure to an ACP file.
+ * Export a node structure to an ACP file using "export".
  *
  * Parameters:
- *   - store: Store containing the node (e.g. "workspace://SpacesStore")
- *   - package-name: Name of the ACP file (without extension)
- *   - destination: Folder where the ACP file will be saved
- *   - include-children: boolean
- *   - include-self: boolean
- *   - encoding: Character encoding (e.g. "UTF-8")
+ *   - store (text, required)
+ *   - package-name (text, required)
+ *   - destination (nodeRef, required)
+ *   - encoding (text, required)
+ *   - include-children (boolean, optional)
+ *   - include-self (boolean, optional)
  */
 function example_exportACP() {
   // Example path - adjust as needed
@@ -203,11 +434,13 @@ function example_exportACP() {
 }
 
 /**
- * Import an ACP file to a destination folder.
+ * Import an ACP or ZIP package using "import".
  *
  * Parameters:
- *   - destination: Target folder (nodeRef)
- *   - encoding: Character encoding (e.g. "UTF-8")
+ *   - destination (nodeRef, required)
+ *   - encoding (text, optional)
+ *
+ * Execute on the ACP/ZIP content node. WARNING: creates nodes in the destination folder.
  */
 function example_importACP() {
   // Example paths - adjust as needed
