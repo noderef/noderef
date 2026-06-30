@@ -39,7 +39,7 @@ const CURRENT_VERSION =
 /**
  * Get the download URL from a release, with fallback to GitHub releases page.
  */
-export function getDownloadUrl(release: LatestRelease | null): string {
+function getDownloadUrl(release: LatestRelease | null): string {
   return release?.downloadUrl || release?.releaseUrl || GITHUB_RELEASE_URL;
 }
 
