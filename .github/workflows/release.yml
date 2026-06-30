@@ -51,12 +51,10 @@ jobs:
 
       - name: Build installers (mac / win / linux)
         # Neutralino cross-builds mac_*, win_*, linux_* into dist/
-        run: pnpm build:installers
-
-      - name: Generate Neutralino updater assets
+        # and generates updater assets (resources.neu, backend tarball, manifest)
         env:
           GITHUB_REF_NAME: ${{ github.ref_name }}
-        run: node ./scripts/generate-updater-assets.mjs
+        run: pnpm build:installers
 
       - name: Upload raw dist outputs
         uses: actions/upload-artifact@v4

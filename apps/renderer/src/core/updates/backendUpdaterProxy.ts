@@ -18,9 +18,14 @@ import { getBackendUrl, isBackendReady } from '@/core/ipc/backendConnection';
 
 const GITHUB_RELEASE_DOWNLOAD_PREFIX = 'https://github.com/noderef/noderef/releases/download/';
 const RESOURCES_ASSET_SUFFIX = '/noderef-resources.neu';
+const BACKEND_ASSET_SUFFIX = '/noderef-backend.tar.gz';
 
 export function isGitHubResourcesUrl(url: string): boolean {
   return url.startsWith(GITHUB_RELEASE_DOWNLOAD_PREFIX) && url.endsWith(RESOURCES_ASSET_SUFFIX);
+}
+
+export function isGitHubBackendUrl(url: string): boolean {
+  return url.startsWith(GITHUB_RELEASE_DOWNLOAD_PREFIX) && url.endsWith(BACKEND_ASSET_SUFFIX);
 }
 
 export function shouldUseBackendUpdaterProxy(): boolean {
@@ -37,6 +42,10 @@ export function getBackendResourcesProxyUrl(resourcesUrl: string): string {
 
 export function getBackendResourcesDownloadUrl(): string {
   return `${getBackendUrl()}/updates/download`;
+}
+
+export function getBackendArchiveDownloadUrl(): string {
+  return `${getBackendUrl()}/updates/download-backend`;
 }
 
 export function resolveResourcesDownloadUrl(url: string): string {

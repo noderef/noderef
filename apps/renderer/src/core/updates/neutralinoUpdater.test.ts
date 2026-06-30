@@ -38,6 +38,8 @@ const restartProcess = vi.fn(async () => undefined);
 
 const GITHUB_RESOURCES_URL =
   'https://github.com/noderef/noderef/releases/download/v0.10.1/noderef-resources.neu';
+const GITHUB_BACKEND_URL =
+  'https://github.com/noderef/noderef/releases/download/v0.10.1/noderef-backend.tar.gz';
 
 function ndjsonResponse(lines: object[]): Response {
   const body = lines.map(line => `${JSON.stringify(line)}\n`).join('');
@@ -66,6 +68,52 @@ describe('neutralinoUpdater', () => {
           { type: 'done', loaded: 10 },
         ])
       )
+    );
+  });
+
+  it('downloads backend and resources when manifest includes backendURL', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        ndjsonResponse([
+          { type: 'progress', loaded: 3, total: 6, phase: 'downloading' },
+          { type: 'done', loaded: 6 },
+        ])
+      )
+      .mockResolvedValueOnce(
+        ndjsonResponse([
+          { type: 'progress', loaded: 5, total: 10 },
+          { type: 'done', loaded: 10 },
+        ])
+      );
+
+    await downloadAndWriteResources({
+      applicationId: 'nl.noderef.desktop',
+      version: '1.0.0',
+      resourcesURL: GITHUB_RESOURCES_URL,
+      backendURL: GITHUB_BACKEND_URL,
+    });
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      'http://127.0.0.1:5111/updates/download-backend',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          url: GITHUB_BACKEND_URL,
+          targetDir: '/apps/NodeRef',
+        }),
+      })
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      'http://127.0.0.1:5111/updates/download',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          url: GITHUB_RESOURCES_URL,
+          targetPath: '/apps/NodeRef/resources.neu',
+        }),
+      })
     );
   });
 

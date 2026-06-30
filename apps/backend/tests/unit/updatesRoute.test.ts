@@ -15,7 +15,14 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { isAllowedResourcesUrl } from '../../src/routes/updates.js';
+import {
+  isAllowedBackendUrl,
+  isAllowedResourcesUrl,
+  isValidBackendTargetDir,
+} from '../../src/routes/updates.js';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 describe('updates route helpers', () => {
   it('allows noderef GitHub resources URLs only', () => {
@@ -30,5 +37,30 @@ describe('updates route helpers', () => {
         'https://github.com/noderef/noderef/releases/download/v0.10.1/update_manifest.json'
       )
     ).toBe(false);
+  });
+
+  it('allows noderef GitHub backend URLs only', () => {
+    expect(
+      isAllowedBackendUrl(
+        'https://github.com/noderef/noderef/releases/download/v0.10.1/noderef-backend.tar.gz'
+      )
+    ).toBe(true);
+    expect(isAllowedBackendUrl('https://example.com/noderef-backend.tar.gz')).toBe(false);
+    expect(
+      isAllowedBackendUrl(
+        'https://github.com/noderef/noderef/releases/download/v0.10.1/noderef-resources.neu'
+      )
+    ).toBe(false);
+  });
+
+  it('validates backend target directories', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'noderef-backend-target-'));
+    try {
+      expect(await isValidBackendTargetDir(dir)).toBe(false);
+      await writeFile(join(dir, 'resources.neu'), 'stub');
+      expect(await isValidBackendTargetDir(dir)).toBe(true);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

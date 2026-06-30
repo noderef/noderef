@@ -27,6 +27,7 @@ import { ServerService } from '../services/serverService.js';
 import { healthHandler, type HealthRouteOptions } from './health.js';
 import { oauthCallbackHandler } from './oauth.js';
 import {
+  updatesDownloadBackendHandler,
   updatesDownloadHandler,
   updatesManifestHandler,
   updatesResourcesHandler,
@@ -75,6 +76,7 @@ export async function registerRoutes({
   app.get('/updates/manifest', updatesManifestHandler());
   app.get('/updates/resources', updatesResourcesHandler());
   app.post('/updates/download', updatesDownloadHandler());
+  app.post('/updates/download-backend', updatesDownloadBackendHandler());
 
   // Optional Docker web password gate endpoints
   app.get('/web-auth/status', webAuthStatusHandler());

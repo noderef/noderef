@@ -15,7 +15,7 @@
     "dev:renderer:open": "pnpm --filter @app/renderer dev:open",
     "dev:backend": "pnpm --filter @app/backend dev",
     "dev:neutralino:open": "node -e \"setTimeout(()=>{}, 1000)\" && neu run -- --url=http://127.0.0.1:3000",
-    "build:installers": "rimraf dist/mac_* dist/win_* dist/linux_* dist/*.zip dist/*.AppImage resources/node-src/dist apps/*/dist packages/*/dist .deploy-backend 2>/dev/null || true && node ./scripts/copy-icons.js && node ./scripts/bin/build-installers.mjs",
+    "build:installers": "rimraf dist/mac_* dist/win_* dist/linux_* dist/updater dist/*.zip dist/*.AppImage resources/node-src/dist apps/*/dist packages/*/dist .deploy-backend 2>/dev/null || true && node ./scripts/copy-icons.js && node ./scripts/bin/build-installers.mjs",
     "neu:build-scripts": "node ./scripts/ensure-build-scripts.js",
     "package": "node ./scripts/package.mjs",
     "package:mac": "node ./scripts/package.mjs --target=mac",

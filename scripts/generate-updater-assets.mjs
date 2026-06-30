@@ -16,6 +16,7 @@
  * limitations under the License.
  */
 
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -26,6 +27,7 @@ const root = path.resolve(__dirname, '..');
 const APP_ID = 'nl.noderef.desktop';
 const GITHUB_REPO = 'noderef/noderef';
 const RESOURCES_ASSET_NAME = 'noderef-resources.neu';
+const BACKEND_ASSET_NAME = 'noderef-backend.tar.gz';
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -105,6 +107,76 @@ function findResourcesNeu(explicitPath, neuConfig) {
   );
 }
 
+function copyDir(src, dest) {
+  fs.mkdirSync(dest, { recursive: true });
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDir(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
+/**
+ * Packages the platform-independent backend runtime (bundle, skills, prisma schema,
+ * build-meta) for in-app updates. The bundled `node` binary and Prisma native
+ * engine stay from the installed app.
+ */
+function buildBackendTarball(outDir, version) {
+  const nodeSrcDist = path.join(root, 'resources', 'node-src', 'dist');
+  const nodeSrcSkills = path.join(root, 'resources', 'node-src', 'skills');
+  const prismaDir = path.join(root, 'apps', 'backend', 'prisma');
+
+  if (!fs.existsSync(nodeSrcDist)) {
+    throw new Error(
+      `Backend update asset missing: ${nodeSrcDist}\nRun the backend bundle build first.`
+    );
+  }
+  if (!fs.existsSync(prismaDir)) {
+    throw new Error(`Backend update asset missing: ${prismaDir}`);
+  }
+
+  const stagingRoot = path.join(outDir, '.backend-staging');
+  fs.rmSync(stagingRoot, { recursive: true, force: true });
+  fs.mkdirSync(stagingRoot, { recursive: true });
+
+  copyDir(nodeSrcDist, path.join(stagingRoot, 'node-src', 'dist'));
+  if (fs.existsSync(nodeSrcSkills)) {
+    copyDir(nodeSrcSkills, path.join(stagingRoot, 'node-src', 'skills'));
+  }
+  copyDir(prismaDir, path.join(stagingRoot, 'node-src', 'prisma'));
+
+  // Generate build-meta.json from the validated release version rather than
+  // relying on resources/build-meta.json, which the renderer build wipes when it
+  // empties the resources/ output dir. The backend reads its version from here.
+  fs.mkdirSync(path.join(stagingRoot, 'resources'), { recursive: true });
+  const buildMeta = {
+    version,
+    applicationId: APP_ID,
+    generatedAt: new Date().toISOString(),
+  };
+  fs.writeFileSync(
+    path.join(stagingRoot, 'resources', 'build-meta.json'),
+    `${JSON.stringify(buildMeta, null, 2)}\n`
+  );
+
+  const tarballPath = path.join(outDir, BACKEND_ASSET_NAME);
+  execFileSync('tar', ['-czf', tarballPath, '-C', stagingRoot, 'node-src', 'resources'], {
+    stdio: 'inherit',
+  });
+  fs.rmSync(stagingRoot, { recursive: true, force: true });
+
+  if (!fs.existsSync(tarballPath)) {
+    throw new Error(`Failed to create ${BACKEND_ASSET_NAME}`);
+  }
+
+  console.log(`✓ wrote ${path.relative(root, tarballPath)} (v${version})`);
+  return tarballPath;
+}
+
 function main() {
   const options = parseArgs(process.argv);
   const rootPkg = readJson(path.join(root, 'package.json'));
@@ -135,14 +207,17 @@ function main() {
 
   const resourcesDest = path.join(options.outDir, RESOURCES_ASSET_NAME);
   fs.copyFileSync(resourcesNeu, resourcesDest);
+  buildBackendTarball(options.outDir, version);
 
   const releaseUrl = `https://github.com/${GITHUB_REPO}/releases/tag/${releaseTag}`;
   const resourcesURL = `https://github.com/${GITHUB_REPO}/releases/download/${releaseTag}/${RESOURCES_ASSET_NAME}`;
+  const backendURL = `https://github.com/${GITHUB_REPO}/releases/download/${releaseTag}/${BACKEND_ASSET_NAME}`;
 
   const manifest = {
     applicationId: APP_ID,
     version,
     resourcesURL,
+    backendURL,
     data: {
       releaseUrl,
       requiresInstaller: options.requiresInstaller,
@@ -158,6 +233,7 @@ function main() {
   console.log(`✓ wrote ${path.relative(root, resourcesDest)}`);
   console.log(`✓ wrote ${path.relative(root, manifestPath)}`);
   console.log(`  resourcesURL: ${resourcesURL}`);
+  console.log(`  backendURL: ${backendURL}`);
 }
 
 main();

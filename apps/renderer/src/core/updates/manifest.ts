@@ -41,6 +41,10 @@ export function parseUpdateManifest(raw: unknown): ManifestValidationResult {
   const applicationId = typeof raw.applicationId === 'string' ? raw.applicationId.trim() : '';
   const version = normalizeVersion(typeof raw.version === 'string' ? raw.version : '');
   const resourcesURL = typeof raw.resourcesURL === 'string' ? raw.resourcesURL.trim() : '';
+  const backendURL =
+    typeof raw.backendURL === 'string' && raw.backendURL.trim().length > 0
+      ? raw.backendURL.trim()
+      : undefined;
 
   if (!applicationId || !version || !resourcesURL) {
     return { ok: false, error: 'invalid-shape' };
@@ -52,6 +56,10 @@ export function parseUpdateManifest(raw: unknown): ManifestValidationResult {
 
   if (!/^https?:\/\//i.test(resourcesURL)) {
     return { ok: false, error: 'missing-resources-url' };
+  }
+
+  if (backendURL && !/^https?:\/\//i.test(backendURL)) {
+    return { ok: false, error: 'invalid-shape' };
   }
 
   let data: UpdateManifestData | undefined;
@@ -83,6 +91,7 @@ export function parseUpdateManifest(raw: unknown): ManifestValidationResult {
       applicationId,
       version,
       resourcesURL,
+      backendURL,
       data,
     },
   };

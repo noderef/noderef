@@ -17,7 +17,7 @@
 /* eslint-disable no-console */
 // Shared Neutralino initialization and utilities
 import { app, events, init as neutralinoInit, os } from '@neutralinojs/lib';
-import { getBackendUrl, isBackendReady } from './backendConnection';
+import { getBackendUrl, isBackendReady, setBackendReady } from './backendConnection';
 
 let ready = false;
 let initPromise: Promise<void> | null = null;
@@ -119,10 +119,69 @@ export async function getSaveDialogPaths(fileName: string): Promise<{
 /**
  * Attempt to shut down the backend process gracefully.
  * 1. POST /shutdown to the backend HTTP endpoint
- * 2. Fallback: read PID file and kill the process via OS command
+ * 2. Wait until /health stops responding
+ * 3. Fallback: read PID file and force-kill the process
  */
+async function isBackendProcessAlive(): Promise<boolean> {
+  if (!isBackendReady()) {
+    return false;
+  }
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 1000);
+    const response = await fetch(`${getBackendUrl()}/health`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForBackendExit(timeoutMs = 6000): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (!(await isBackendProcessAlive())) {
+      return true;
+    }
+    await new Promise(resolve => setTimeout(resolve, 200));
+  }
+  return !(await isBackendProcessAlive());
+}
+
+async function readBackendPid(): Promise<string | null> {
+  const NL = (window as any).Neutralino;
+  if (!NL?.os) return null;
+
+  const dataDir = await NL.os.getPath('data');
+  const APP_ID = 'nl.noderef.desktop';
+  const sep = dataDir.includes('\\') ? '\\' : '/';
+  const pidDir = dataDir.endsWith(APP_ID) ? dataDir : `${dataDir}${sep}${APP_ID}`;
+  const pidPath = `${pidDir}${sep}.runtime${sep}backend-pid`;
+
+  const nlPath = (window as any).NL_PATH || '';
+  const isWin = /^[A-Za-z]:/.test(nlPath) || nlPath.includes('\\');
+  const readCmd = isWin ? `cmd /c type "${pidPath}"` : `cat "${pidPath}"`;
+
+  const result = await NL.os.execCommand(readCmd, { background: false });
+  const pid = String(result?.stdOut || result || '').trim();
+  return pid && /^\d+$/.test(pid) ? pid : null;
+}
+
+async function forceKillBackendPid(pid: string): Promise<void> {
+  const NL = (window as any).Neutralino;
+  if (!NL?.os) return;
+
+  const nlPath = (window as any).NL_PATH || '';
+  const isWin = /^[A-Za-z]:/.test(nlPath) || nlPath.includes('\\');
+  const killCmd = isWin ? `taskkill /F /PID ${pid}` : `kill -9 ${pid}`;
+  await NL.os.execCommand(killCmd, { background: true });
+  console.log('[Neutralino] Backend force-killed via PID:', pid);
+}
+
 async function shutdownBackend(): Promise<void> {
-  // Strategy 1: HTTP shutdown endpoint
   if (isBackendReady()) {
     try {
       const url = getBackendUrl();
@@ -134,40 +193,27 @@ async function shutdownBackend(): Promise<void> {
       });
       clearTimeout(timeout);
       console.log('[Neutralino] Backend shutdown requested via HTTP');
-      // Give backend a moment to exit gracefully
-      await new Promise(r => setTimeout(r, 500));
-      return;
     } catch (err) {
       console.warn('[Neutralino] HTTP shutdown failed, trying PID fallback:', err);
     }
   }
 
-  // Strategy 2: Read PID file and kill the process
+  if (await waitForBackendExit()) {
+    setBackendReady(false);
+    return;
+  }
+
   try {
-    const NL = (window as any).Neutralino;
-    if (!NL?.os) return;
-
-    const dataDir = await NL.os.getPath('data');
-    const APP_ID = 'nl.noderef.desktop';
-    const sep = dataDir.includes('\\') ? '\\' : '/';
-    const pidDir = dataDir.endsWith(APP_ID) ? dataDir : `${dataDir}${sep}${APP_ID}`;
-    const pidPath = `${pidDir}${sep}.runtime${sep}backend-pid`;
-
-    const nlPath = (window as any).NL_PATH || '';
-    const isWin = /^[A-Za-z]:/.test(nlPath) || nlPath.includes('\\');
-    const readCmd = isWin ? `cmd /c type "${pidPath}"` : `cat "${pidPath}"`;
-
-    const result = await NL.os.execCommand(readCmd, { background: false });
-    const pid = String(result?.stdOut || result || '').trim();
-
-    if (pid && /^\d+$/.test(pid)) {
-      const killCmd = isWin ? `taskkill /F /PID ${pid}` : `kill ${pid}`;
-      await NL.os.execCommand(killCmd, { background: true });
-      console.log('[Neutralino] Backend killed via PID:', pid);
+    const pid = await readBackendPid();
+    if (pid) {
+      await forceKillBackendPid(pid);
+      await waitForBackendExit(3000);
     }
   } catch (err) {
     console.warn('[Neutralino] PID kill fallback failed:', err);
   }
+
+  setBackendReady(false);
 }
 
 /**
@@ -245,16 +291,15 @@ export async function restartApp(): Promise<void> {
     console.warn('[Neutralino] Backend shutdown before restart failed:', err);
   }
 
+  setBackendReady(false);
+
   const nlPath: string = (window as any).NL_PATH || '';
   const appIndex = nlPath.indexOf('.app');
 
   if (appIndex >= 0) {
     const appPath = nlPath.slice(0, appIndex + 4);
     try {
-      // `open -n` launches a brand-new instance of the bundle, detached from
-      // this process — the relaunch Neutralino cannot perform on macOS.
       await os.execCommand(`open -n "${appPath}"`, { background: true });
-      // Give the new instance a moment to spawn before tearing this one down.
       await new Promise(resolve => setTimeout(resolve, 500));
       await app.killProcess();
       return;

@@ -26,6 +26,8 @@ export interface UpdateManifest {
   applicationId: string;
   version: string;
   resourcesURL: string;
+  /** Platform-independent backend bundle (server, prisma schema, build-meta). */
+  backendURL?: string;
   data?: UpdateManifestData;
 }
 

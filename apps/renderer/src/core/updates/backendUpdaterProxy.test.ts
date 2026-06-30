@@ -16,8 +16,10 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  getBackendArchiveDownloadUrl,
   getBackendManifestUrl,
   getBackendResourcesProxyUrl,
+  isGitHubBackendUrl,
   isGitHubResourcesUrl,
   resolveResourcesDownloadUrl,
 } from './backendUpdaterProxy';
@@ -43,8 +45,18 @@ describe('backendUpdaterProxy', () => {
     expect(isGitHubResourcesUrl('https://example.com/noderef-resources.neu')).toBe(false);
   });
 
+  it('detects GitHub backend URLs', () => {
+    expect(
+      isGitHubBackendUrl(
+        'https://github.com/noderef/noderef/releases/download/v0.10.1/noderef-backend.tar.gz'
+      )
+    ).toBe(true);
+    expect(isGitHubBackendUrl('https://example.com/noderef-backend.tar.gz')).toBe(false);
+  });
+
   it('routes manifest and resources through the local backend', () => {
     expect(getBackendManifestUrl()).toBe('http://127.0.0.1:5111/updates/manifest');
+    expect(getBackendArchiveDownloadUrl()).toBe('http://127.0.0.1:5111/updates/download-backend');
     expect(
       getBackendResourcesProxyUrl(
         'https://github.com/noderef/noderef/releases/download/v0.10.1/noderef-resources.neu'

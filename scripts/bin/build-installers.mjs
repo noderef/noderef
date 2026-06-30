@@ -50,4 +50,7 @@ sh('./build-scripts/build-linux.sh');
 info('Injecting runtime…');
 sh('node ./scripts/bin/copy-runtime.mjs');
 
+info('Generating updater assets (resources.neu + backend tarball + manifest)…');
+sh('node ./scripts/generate-updater-assets.mjs');
+
 console.log('✓ installers ready');

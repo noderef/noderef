@@ -32,6 +32,8 @@ describe('parseUpdateManifest', () => {
   it('accepts a valid manifest', () => {
     const result = parseUpdateManifest({
       ...baseManifest,
+      backendURL:
+        'https://github.com/noderef/noderef/releases/download/v1.0.0/noderef-backend.tar.gz',
       data: {
         releaseUrl: 'https://github.com/noderef/noderef/releases/tag/v1.0.0',
         minimumNeutralinoVersion: '6.7.0',
@@ -40,6 +42,7 @@ describe('parseUpdateManifest', () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.manifest.version).toBe('1.0.0');
+      expect(result.manifest.backendURL).toContain('noderef-backend.tar.gz');
       expect(result.manifest.data?.minimumNeutralinoVersion).toBe('6.7.0');
     }
   });

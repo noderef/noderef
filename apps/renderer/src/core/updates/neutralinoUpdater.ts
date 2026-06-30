@@ -16,8 +16,10 @@
 
 import { ensureNeutralinoReady, restartApp } from '@/core/ipc/neutralino';
 import {
+  getBackendArchiveDownloadUrl,
   getBackendManifestUrl,
   getBackendResourcesDownloadUrl,
+  isGitHubBackendUrl,
   isGitHubResourcesUrl,
   resolveResourcesDownloadUrl,
   shouldUseBackendUpdaterProxy,
@@ -36,13 +38,18 @@ import {
 } from './manifest';
 import type { UpdateManifest } from './types';
 
-export function getResourcesNeuPath(): string {
+/** App Resources root (holds resources.neu, node-src, node binary). */
+function getResourcesRootPath(): string {
   const nlPath = typeof window !== 'undefined' ? (window as Window).NL_PATH : undefined;
   if (!nlPath) {
     throw new Error('NL_PATH is not available');
   }
-  const separator = nlPath.includes('\\') ? '\\' : '/';
-  return `${nlPath}${separator}resources.neu`;
+  return nlPath;
+}
+
+export function getResourcesNeuPath(): string {
+  const separator = getResourcesRootPath().includes('\\') ? '\\' : '/';
+  return `${getResourcesRootPath()}${separator}resources.neu`;
 }
 
 function getRuntimeVersion(): string | null {
@@ -56,6 +63,20 @@ interface BackendDownloadEvent {
   loaded?: number;
   total?: number | null;
   message?: string;
+  phase?: 'downloading' | 'writing';
+}
+
+function scaleProgress(
+  progress: DownloadProgress,
+  rangeStart: number,
+  rangeEnd: number
+): DownloadProgress {
+  const span = rangeEnd - rangeStart;
+  const percent =
+    progress.percent === null
+      ? null
+      : Math.min(rangeEnd, Math.round(rangeStart + (progress.percent * span) / 100));
+  return { ...progress, percent };
 }
 
 function reportBackendProgress(
@@ -64,42 +85,21 @@ function reportBackendProgress(
 ): void {
   const loaded = typeof event.loaded === 'number' ? event.loaded : 0;
   const total = typeof event.total === 'number' && event.total > 0 ? event.total : null;
+  const phase = event.phase === 'writing' ? 'writing' : 'downloading';
   onProgress?.({
-    percent: computeDownloadPercent(loaded, total),
+    percent: phase === 'writing' ? null : computeDownloadPercent(loaded, total),
     loaded,
     total,
-    phase: 'downloading',
+    phase,
   });
 }
 
-/**
- * Asks the local Node backend to download the resources bundle and write it
- * straight to disk, consuming the NDJSON progress stream it returns. This keeps
- * the heavy file I/O off the Neutralino IPC bridge, which would otherwise
- * base64-encode tens of megabytes on the main thread and freeze the UI.
- */
-async function downloadResourcesViaBackend(
-  resourcesUrl: string,
-  targetPath: string,
-  onProgress?: (progress: DownloadProgress) => void,
-  signal?: AbortSignal
+async function consumeNdjsonDownloadStream(
+  response: Response,
+  onProgress?: (progress: DownloadProgress) => void
 ): Promise<void> {
-  const response = await fetch(getBackendResourcesDownloadUrl(), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url: resourcesUrl, targetPath }),
-    signal,
-  });
-
-  if (!response.ok || !response.body) {
-    let message = `Download failed (${response.status})`;
-    try {
-      const data = (await response.json()) as { message?: string };
-      if (data?.message) message = data.message;
-    } catch {
-      // Response had no JSON body; keep the status-based message.
-    }
-    throw new Error(message);
+  if (!response.body) {
+    throw new Error('Download failed: empty response body');
   }
 
   const reader = response.body.getReader();
@@ -147,10 +147,72 @@ async function downloadResourcesViaBackend(
   }
 }
 
+async function postNdjsonDownload(
+  endpoint: string,
+  body: Record<string, string>,
+  onProgress?: (progress: DownloadProgress) => void,
+  signal?: AbortSignal
+): Promise<void> {
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  });
+
+  if (!response.ok) {
+    let message = `Download failed (${response.status})`;
+    try {
+      const data = (await response.json()) as { message?: string };
+      if (data?.message) message = data.message;
+    } catch {
+      // Response had no JSON body; keep the status-based message.
+    }
+    throw new Error(message);
+  }
+
+  await consumeNdjsonDownloadStream(response, onProgress);
+}
+
+/**
+ * Asks the local Node backend to download the resources bundle and write it
+ * straight to disk, consuming the NDJSON progress stream it returns.
+ */
+async function downloadResourcesViaBackend(
+  resourcesUrl: string,
+  targetPath: string,
+  onProgress?: (progress: DownloadProgress) => void,
+  signal?: AbortSignal
+): Promise<void> {
+  await postNdjsonDownload(
+    getBackendResourcesDownloadUrl(),
+    { url: resourcesUrl, targetPath },
+    onProgress,
+    signal
+  );
+}
+
+/**
+ * Downloads and overlays the platform-independent backend bundle (server code,
+ * prisma schema, build-meta) into the app Resources directory.
+ */
+async function downloadBackendViaBackend(
+  backendUrl: string,
+  targetDir: string,
+  onProgress?: (progress: DownloadProgress) => void,
+  signal?: AbortSignal
+): Promise<void> {
+  await postNdjsonDownload(
+    getBackendArchiveDownloadUrl(),
+    { url: backendUrl, targetDir },
+    onProgress,
+    signal
+  );
+}
+
 /**
  * Fallback path when the backend is unavailable: download into memory and write
- * the whole buffer through Neutralino in one call. Only used in the rare case
- * the local backend is not ready.
+ * the whole buffer through Neutralino in one call.
  */
 async function downloadResourcesViaNeutralino(
   resourcesUrl: string,
@@ -263,19 +325,50 @@ export async function downloadAndWriteResources(
 ): Promise<void> {
   await ensureNeutralinoReady();
   const targetPath = getResourcesNeuPath();
+  const targetDir = getResourcesRootPath();
   const resourcesUrl = manifest.resourcesURL;
+  const backendUrl = manifest.backendURL;
+  const useBackendProxy = shouldUseBackendUpdaterProxy();
+
+  const hasBackendUpdate =
+    Boolean(backendUrl) && useBackendProxy && isGitHubBackendUrl(backendUrl!);
+
+  if (backendUrl && !useBackendProxy) {
+    throw new Error('Backend update requires a running local backend');
+  }
+
+  const backendWeight = hasBackendUpdate ? 35 : 0;
 
   try {
-    if (shouldUseBackendUpdaterProxy() && isGitHubResourcesUrl(resourcesUrl)) {
-      await downloadResourcesViaBackend(resourcesUrl, targetPath, onProgress, signal);
+    if (hasBackendUpdate) {
+      await downloadBackendViaBackend(
+        backendUrl!,
+        targetDir,
+        progress => onProgress?.(scaleProgress(progress, 0, backendWeight)),
+        signal
+      );
+    }
+
+    if (useBackendProxy && isGitHubResourcesUrl(resourcesUrl)) {
+      await downloadResourcesViaBackend(
+        resourcesUrl,
+        targetPath,
+        progress => onProgress?.(scaleProgress(progress, backendWeight, 100)),
+        signal
+      );
       return;
     }
-    await downloadResourcesViaNeutralino(resourcesUrl, targetPath, onProgress, signal);
+    await downloadResourcesViaNeutralino(
+      resourcesUrl,
+      targetPath,
+      progress => onProgress?.(scaleProgress(progress, backendWeight, 100)),
+      signal
+    );
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       throw error;
     }
-    console.error('[updater] Failed to download/write resources.neu', { targetPath, error });
+    console.error('[updater] Failed to apply desktop update', { targetPath, targetDir, error });
     throw error instanceof Error ? error : new Error(`Failed to write update to ${targetPath}`);
   }
 }
