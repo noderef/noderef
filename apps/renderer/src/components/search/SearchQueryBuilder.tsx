@@ -777,7 +777,10 @@ export function SearchQueryBuilder({
             value: `history::${item.id}`,
             label: item.query,
             kind: 'text',
-            description: item.resultsCount !== null ? `${item.resultsCount} results` : undefined,
+            description:
+              item.resultsCount !== null
+                ? t('totalResults', { count: item.resultsCount })
+                : undefined,
             meta: { query: item.query },
           })),
         });
