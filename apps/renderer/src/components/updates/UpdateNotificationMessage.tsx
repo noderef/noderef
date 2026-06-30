@@ -19,7 +19,6 @@ import { useTranslation } from 'react-i18next';
 
 import { useUpdateStore } from '@/core/store/updates';
 import { UpdateActionButton } from './UpdateActionButton';
-import { formatUpdateProgressLabel } from './updateProgressLabel';
 
 interface UpdateNotificationMessageProps {
   version: string;
@@ -35,28 +34,17 @@ export function UpdateNotificationMessage({ version }: UpdateNotificationMessage
   const phase = downloadProgressDetails?.phase ?? 'downloading';
   const isDownloading = status === 'downloading';
   const isWriting = isDownloading && phase === 'writing';
-  const progressLabel = formatUpdateProgressLabel(t, {
-    progress: downloadProgress,
-    loaded: downloadProgressDetails?.loaded ?? null,
-    total: downloadProgressDetails?.total ?? null,
-    phase,
-  });
 
   return (
     <Stack gap="xs">
       <Text size="sm">{t('common:updateAvailableMessage', { version })}</Text>
 
       {isDownloading && (
-        <Stack gap={4}>
-          <Progress
-            value={isWriting ? 100 : (downloadProgress ?? 100)}
-            striped={isWriting || downloadProgress === null}
-            animated={isWriting || downloadProgress === null}
-          />
-          <Text size="xs" c="dimmed">
-            {progressLabel}
-          </Text>
-        </Stack>
+        <Progress
+          value={isWriting ? 100 : (downloadProgress ?? 100)}
+          striped={isWriting || downloadProgress === null}
+          animated={isWriting || downloadProgress === null}
+        />
       )}
 
       {status === 'downloaded' && (

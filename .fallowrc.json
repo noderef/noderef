@@ -5,7 +5,9 @@
     "apps/backend/src/ai/libs/*.js",
     "apps/renderer/src/main.tsx",
     "scripts/gh-post-release.mjs",
-    "scripts/gh-release-generate-changelog.mjs"
+    "scripts/gh-release-generate-changelog.mjs",
+    "scripts/bin/build-installers.mjs",
+    "scripts/generate-updater-assets.mjs"
   ],
   "ignorePatterns": [
     "apps/renderer/public/neutralino.js",

@@ -230,6 +230,7 @@ export function BackendGate({
         color: 'blue',
         withCloseButton: true,
         autoClose: false,
+        position: 'bottom-right',
       });
     };
 
