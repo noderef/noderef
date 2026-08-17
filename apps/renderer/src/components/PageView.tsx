@@ -49,6 +49,7 @@ export function PageView() {
     'search',
     'fileFolderBrowser',
     'agent',
+    'nodeBrowser',
   ]);
 
   // Resolve route configuration

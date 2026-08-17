@@ -20,6 +20,7 @@ import { useFileFolderBrowserActionsStore } from '@/core/store/fileFolderBrowser
 import { useJsConsoleStore } from '@/core/store/jsConsole';
 import { MODAL_KEYS } from '@/core/store/keys';
 import { useLocalFilesStore } from '@/core/store/localFiles';
+import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
 import { useSavedSearchesStore } from '@/core/store/savedSearches';
 import { useTextEditorStore } from '@/core/store/textEditor';
 import { useModal } from '@/hooks/useModal';
@@ -34,6 +35,7 @@ import { useTranslation } from 'react-i18next';
 interface UsePageActionsOptions {
   activeServerId: number | null;
   activeNodeBrowserTab: {
+    id: string;
     serverId: number;
     nodeId: string;
     nodeName: string;
@@ -54,10 +56,11 @@ export function usePageActions(options: UsePageActionsOptions) {
     selectedServerIds,
   } = options;
   const { navigate } = useNavigation();
-  const { t } = useTranslation(['submenu', 'common']);
+  const { t } = useTranslation(['submenu', 'common', 'nodeBrowser']);
   const { open: openSaveSearchModal } = useModal(MODAL_KEYS.SAVE_SEARCH);
   const activeSavedSearchId = useSavedSearchesStore(state => state.activeSavedSearchId);
   const triggerCreateFolder = useFileFolderBrowserActionsStore(state => state.triggerCreateFolder);
+  const requestNodeBrowserRefresh = useNodeBrowserTabsStore(state => state.requestRefresh);
 
   // JS Console specific state
   const setJsConsoleCode = useJsConsoleStore(state => state.setCode);
@@ -362,6 +365,12 @@ export function usePageActions(options: UsePageActionsOptions) {
       onCreateFolder: () => {
         triggerCreateFolder();
       },
+      onRefreshNodeBrowser: () => {
+        if (!activeNodeBrowserTab) {
+          return;
+        }
+        requestNodeBrowserRefresh(activeNodeBrowserTab.id);
+      },
     }),
     [
       activeServerId,
@@ -389,6 +398,7 @@ export function usePageActions(options: UsePageActionsOptions) {
       selectedServerIds,
       activeSavedSearchId,
       triggerCreateFolder,
+      requestNodeBrowserRefresh,
       textEditorLocalFileId,
       updateLocalFileInStore,
     ]

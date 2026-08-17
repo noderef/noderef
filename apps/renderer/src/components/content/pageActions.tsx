@@ -27,6 +27,7 @@ import {
   IconFileText,
   IconFolderPlus,
   IconHelp,
+  IconRefresh,
   IconTextWrap,
 } from '@tabler/icons-react';
 import type { TFunction } from 'i18next';
@@ -122,6 +123,9 @@ export function getPageActions(
     },
     onCreateFolder: () => {
       /* Create folder */
+    },
+    onRefreshNodeBrowser: () => {
+      /* Refresh node browser */
     },
     onSaveSearch: () => {
       /* Save search */
@@ -224,6 +228,12 @@ export function getPageActions(
     // Node Browser - Browser specific actions
     'node-browser': {
       actionIcons: [
+        {
+          icon: <IconRefresh size={18} />,
+          label: t('nodeBrowser:refresh'),
+          onClick: defaultHandlers.onRefreshNodeBrowser,
+          disabled: !context?.nodeBrowserNodeId,
+        },
         {
           icon: <IconFileText size={18} />,
           label: t('submenu:textEditor'),

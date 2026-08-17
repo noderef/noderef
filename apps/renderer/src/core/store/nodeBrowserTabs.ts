@@ -30,6 +30,7 @@ interface NodeBrowserTabsState {
   tabs: NodeBrowserTab[];
   activeTabId: string | null;
   previewTabId: string | null; // The tab that gets replaced on single click
+  refreshRequests: Record<string, number>;
 }
 
 interface NodeBrowserTabsActions {
@@ -46,6 +47,7 @@ interface NodeBrowserTabsActions {
     metadata: Partial<Pick<NodeBrowserTab, 'mimeType' | 'nodeType'>>
   ) => void;
   pruneTabsForServers: (validServerIds: number[]) => void;
+  requestRefresh: (tabId: string) => void;
 }
 
 export const useNodeBrowserTabsStore = create<NodeBrowserTabsState & NodeBrowserTabsActions>()(
@@ -53,6 +55,7 @@ export const useNodeBrowserTabsStore = create<NodeBrowserTabsState & NodeBrowser
     tabs: [],
     activeTabId: null,
     previewTabId: null,
+    refreshRequests: {},
 
     openTab: (tab, options = {}) => {
       const { tabs, previewTabId } = get();
@@ -110,8 +113,9 @@ export const useNodeBrowserTabsStore = create<NodeBrowserTabsState & NodeBrowser
     },
 
     closeTab: tabId => {
-      const { tabs, activeTabId, previewTabId } = get();
+      const { tabs, activeTabId, previewTabId, refreshRequests } = get();
       const newTabs = tabs.filter(t => t.id !== tabId);
+      const { [tabId]: _removed, ...remainingRefreshRequests } = refreshRequests;
 
       let newActiveTabId = activeTabId;
       let newPreviewTabId = previewTabId;
@@ -138,6 +142,7 @@ export const useNodeBrowserTabsStore = create<NodeBrowserTabsState & NodeBrowser
         tabs: newTabs,
         activeTabId: newActiveTabId,
         previewTabId: newPreviewTabId,
+        refreshRequests: remainingRefreshRequests,
       });
     },
 
@@ -152,7 +157,7 @@ export const useNodeBrowserTabsStore = create<NodeBrowserTabsState & NodeBrowser
     },
 
     clearAllTabs: () => {
-      set({ tabs: [], activeTabId: null, previewTabId: null });
+      set({ tabs: [], activeTabId: null, previewTabId: null, refreshRequests: {} });
     },
 
     updateTabMetadata: (tabId, metadata) => {
@@ -179,12 +184,28 @@ export const useNodeBrowserTabsStore = create<NodeBrowserTabsState & NodeBrowser
           previewTabId = null;
         }
 
+        const refreshRequests = Object.fromEntries(
+          Object.entries(state.refreshRequests).filter(([tabId]) =>
+            filteredTabs.some(tab => tab.id === tabId)
+          )
+        );
+
         return {
           tabs: filteredTabs,
           activeTabId,
           previewTabId,
+          refreshRequests,
         };
       });
+    },
+
+    requestRefresh: tabId => {
+      set(state => ({
+        refreshRequests: {
+          ...state.refreshRequests,
+          [tabId]: (state.refreshRequests[tabId] ?? 0) + 1,
+        },
+      }));
     },
   })
 );

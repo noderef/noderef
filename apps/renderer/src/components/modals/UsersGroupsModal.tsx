@@ -1446,7 +1446,7 @@ function MembersModal({
         document.execCommand('insertText', false, text);
       }
     },
-    [onSearchQueryChange]
+    [combobox, onSearchQueryChange]
   );
 
   useDesktopClipboardHandlers({

@@ -52,6 +52,7 @@ export function NodeBrowser({ tabId, serverId, nodeId, nodeName: _nodeName }: No
   const [nodeData, setNodeData] = useState<AlfrescoNodeDetails | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
   const updateTabMetadata = useNodeBrowserTabsStore(state => state.updateTabMetadata);
+  const refreshRequest = useNodeBrowserTabsStore(state => state.refreshRequests[tabId] ?? 0);
   const serverExists = useServersStore(state =>
     state.servers.some(server => server.id === serverId)
   );
@@ -111,7 +112,7 @@ export function NodeBrowser({ tabId, serverId, nodeId, nodeName: _nodeName }: No
         fetchTimeoutRef.current = null;
       }
     };
-  }, [serverExists, serverId, nodeId, tabId, updateTabMetadata, t, refreshToken]);
+  }, [serverExists, serverId, nodeId, tabId, updateTabMetadata, t, refreshToken, refreshRequest]);
 
   if (loading) {
     return (
