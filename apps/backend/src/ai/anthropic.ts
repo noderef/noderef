@@ -71,7 +71,7 @@ export async function callAnthropic({
   const response = await client.messages.create({
     model,
     max_tokens: maxTokens,
-    temperature,
+    ...samplingParamsForModel(model, temperature),
     ...(system ? { system } : {}),
     messages,
   });
@@ -158,7 +158,7 @@ export async function callWithTools({
   const response = await client.messages.create({
     model,
     max_tokens: maxTokens,
-    temperature,
+    ...samplingParamsForModel(model, temperature),
     system,
     messages,
     tools: tools as Anthropic.Tool[],
@@ -261,7 +261,7 @@ export async function callWithToolsStream({
   const stream = client.messages.stream({
     model,
     max_tokens: maxTokens,
-    temperature,
+    ...samplingParamsForModel(model, temperature),
     system,
     messages,
     tools: tools as Anthropic.Tool[],
@@ -395,13 +395,54 @@ export async function listAnthropicModels({
 }
 
 /** Native Anthropic IDs and OpenRouter slugs such as `anthropic/claude-3.5-sonnet`. */
-function modelSupportsAnthropicPrefill(model: string): boolean {
+function normalizeAnthropicModelName(model: string): string {
   const normalized = model.trim().toLowerCase();
   if (!normalized) {
+    return '';
+  }
+  return normalized.includes('/') ? (normalized.split('/').pop() ?? normalized) : normalized;
+}
+
+function modelSupportsAnthropicPrefill(model: string): boolean {
+  return normalizeAnthropicModelName(model).startsWith('claude');
+}
+
+/**
+ * Claude Opus 4.7+ (and later families such as Fable/Mythos) reject temperature/top_p/top_k.
+ * Omit those params entirely; Sonnet and earlier Opus models still accept them.
+ */
+export function modelSupportsSamplingParams(model: string): boolean {
+  const modelName = normalizeAnthropicModelName(model);
+  if (!modelName) {
+    return true;
+  }
+
+  if (modelName.startsWith('claude-fable') || modelName.startsWith('claude-mythos')) {
     return false;
   }
-  const modelName = normalized.includes('/')
-    ? (normalized.split('/').pop() ?? normalized)
-    : normalized;
-  return modelName.startsWith('claude');
+
+  const opusMatch = modelName.match(/^claude-opus-(\d+)(?:-(\d+))?/);
+  if (!opusMatch) {
+    return true;
+  }
+
+  const major = Number(opusMatch[1]);
+  const minor = opusMatch[2] != null ? Number(opusMatch[2]) : 0;
+  if (major > 4) {
+    return false;
+  }
+  if (major === 4 && minor >= 7) {
+    return false;
+  }
+  return true;
+}
+
+function samplingParamsForModel(
+  model: string,
+  temperature: number | undefined
+): { temperature?: number } {
+  if (temperature === undefined || !modelSupportsSamplingParams(model)) {
+    return {};
+  }
+  return { temperature };
 }
