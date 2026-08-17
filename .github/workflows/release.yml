@@ -214,8 +214,8 @@ jobs:
       - name: Install dpkg-dev for .deb packaging
         run: sudo apt-get update && sudo apt-get install -y dpkg-dev
 
-      - name: Package Linux (tar.gz + AppImage + .deb for x64 only)
-        # Uses dist/linux_*/NodeRef and NodeRef.AppImage
+      - name: Package Linux (tar.gz + optional AppImage + .deb for x64 only)
+        # Uses dist/linux_*/NodeRef. AppImage is copied only when Neutralino produced one.
         # Creates .deb package only for x64 architecture
         run: pnpm package:linux
 
@@ -278,6 +278,7 @@ jobs:
   # 6) Create the GitHub Release with all installers + RELEASE_NOTES
   release:
     runs-on: ubuntu-22.04
+    timeout-minutes: 45
     needs:
       - package-mac
       - package-windows
@@ -335,19 +336,10 @@ jobs:
           cat generated_notes.md >> FINAL_RELEASE_NOTES.md
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          body_path: FINAL_RELEASE_NOTES.md
-          files: |
-            artifacts/mac/*.dmg
-            artifacts/win/NodeRef-win-*.zip
-            artifacts/win/NodeRef-win-*.msi
-            artifacts/linux/NodeRef-linux-*.tar.gz
-            artifacts/linux/NodeRef-linux-*.AppImage
-            artifacts/linux/noderef_*.deb
-            artifacts/updater/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_NOTES_FILE: FINAL_RELEASE_NOTES.md
+        run: node ./scripts/gh-create-release.mjs
 
       - name: Post-release cleanup
         if: success()
