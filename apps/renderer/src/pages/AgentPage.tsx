@@ -26,6 +26,7 @@ import { MODAL_KEYS } from '@/core/store/keys';
 import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
 import { useServersStore } from '@/core/store/servers';
 import { useUIStore } from '@/core/store/ui';
+import { openExternalUrl } from '@/core/ipc/neutralino';
 import { writeClipboardText } from '@/core/utils/clipboard';
 import { useModal } from '@/hooks/useModal';
 import { useNavigation } from '@/hooks/useNavigation';
@@ -1083,6 +1084,13 @@ export function AgentPage() {
         parseNodeBrowserLink(anchor.getAttribute('href') || '') ||
         parseNodeBrowserLink(anchor.href);
       if (!link) {
+        // Keep http(s) out of the Neutralino webview so the app stays usable.
+        const href = anchor.getAttribute('href') || anchor.href;
+        if (/^https?:\/\//i.test(href) || /^https?:\/\//i.test(anchor.href)) {
+          event.preventDefault();
+          event.stopPropagation();
+          void openExternalUrl(anchor.href);
+        }
         return;
       }
 
