@@ -19,7 +19,7 @@
  * Handles all backend.repository.* RPC methods
  */
 
-import { NodesApi, SearchApi, SitesApi } from '@alfresco/js-api';
+import { NodesApi, SitesApi } from '@alfresco/js-api';
 import { z } from 'zod';
 import { buildSlingshotContentUrl } from '../../lib/alfresco-url.js';
 import { AppErrors } from '../../lib/errors.js';
@@ -31,6 +31,7 @@ import {
   fetchSlingshotNodeData,
   getNodePropertyValue,
   normalizeNodeRef,
+  resolveSystemNodeId,
 } from './helpers.js';
 import type { Routes, RpcContext } from './types.js';
 import { getCurrentUserId, withAuth, withCredentials } from './withAuth.js';
@@ -98,18 +99,10 @@ export function registerRepositoryHandlers(routes: Routes, ctx: RpcContext): voi
     handler: async params => {
       const { serverId } = params as { serverId: number };
 
-      // First get the system node ID using the API
+      // Resolve /sys:system via the Nodes API so this works when search/SOLR is down
       const systemNodeId = await withAuth(ctx, serverId, async api => {
-        const searchApi = new SearchApi(api);
-        const searchResult = await searchApi.search({
-          query: {
-            query: 'PATH:"/sys:system"',
-            language: 'afts',
-          },
-          fields: ['id'],
-        });
-
-        const nodeId = searchResult?.list?.entries?.[0]?.entry?.id;
+        const nodesApi = new NodesApi(api);
+        const nodeId = await resolveSystemNodeId(nodesApi);
         if (!nodeId) {
           return AppErrors.notFound('System node');
         }

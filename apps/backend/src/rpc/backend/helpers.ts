@@ -262,3 +262,73 @@ function mapNodeEntry(entry: any) {
     path: entry.path?.name,
   };
 }
+
+const SYSTEM_FOLDER_NAME = 'system';
+
+type NodesApiLike = {
+  getNode: (nodeId: string, opts?: Record<string, unknown>) => Promise<any>;
+  listNodeChildren: (nodeId: string, opts?: Record<string, unknown>) => Promise<any>;
+};
+
+function findSystemChildId(result: any): string | undefined {
+  const entries = result?.list?.entries;
+  if (!Array.isArray(entries)) {
+    return undefined;
+  }
+
+  const match = entries.find((item: any) => {
+    const name = item?.entry?.name;
+    return typeof name === 'string' && name.toLowerCase() === SYSTEM_FOLDER_NAME;
+  });
+
+  return typeof match?.entry?.id === 'string' ? match.entry.id : undefined;
+}
+
+async function listSystemChildId(
+  nodesApi: NodesApiLike,
+  parentId: string
+): Promise<string | undefined> {
+  const result = await nodesApi.listNodeChildren(parentId, {
+    fields: ['id', 'name'],
+    maxItems: 200,
+  });
+  return findSystemChildId(result);
+}
+
+/**
+ * Resolve the /sys:system node ID via the Nodes API.
+ * Avoids AFTS search so the System tree still loads when SOLR is unavailable.
+ */
+export async function resolveSystemNodeId(nodesApi: NodesApiLike): Promise<string | null> {
+  const companyHome = await nodesApi.getNode('-root-');
+  const storeRootId = companyHome?.entry?.parentId;
+  const rootId = companyHome?.entry?.id;
+
+  if (typeof storeRootId === 'string' && storeRootId) {
+    try {
+      const fromStoreRoot = await listSystemChildId(nodesApi, storeRootId);
+      if (fromStoreRoot) {
+        return fromStoreRoot;
+      }
+      return null;
+    } catch (err) {
+      log.warn(
+        { err, storeRootId },
+        'Failed to list store root children while resolving sys:system'
+      );
+    }
+  }
+
+  if (typeof rootId === 'string' && rootId) {
+    try {
+      const fromRoot = await listSystemChildId(nodesApi, rootId);
+      if (fromRoot) {
+        return fromRoot;
+      }
+    } catch (err) {
+      log.warn({ err, rootId }, 'Failed to list -root- children while resolving sys:system');
+    }
+  }
+
+  return null;
+}
