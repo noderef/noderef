@@ -15,8 +15,13 @@
  */
 
 import { alfrescoRpc } from '@/core/ipc/alfresco';
+import { isNeutralinoMode } from '@/core/ipc/neutralino';
 import { MODAL_KEYS } from '@/core/store/keys';
 import { useServersStore } from '@/core/store/servers';
+import {
+  useDesktopClipboardHandlers,
+  type EditableTarget,
+} from '@/hooks/useDesktopClipboardHandlers';
 import { useModal } from '@/hooks/useModal';
 import {
   Accordion,
@@ -40,7 +45,7 @@ import {
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import { IconPlus, IconSearch, IconTrash, IconUsers, IconUsersGroup } from '@tabler/icons-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   buildGroupListWhereDisplayNameContains,
@@ -136,6 +141,87 @@ export function UsersGroupsModal() {
   const membersRequestRef = useRef(0);
 
   const server = modalPayload ? getServerById(modalPayload.serverId) : undefined;
+
+  const modalContentRef = useRef<HTMLDivElement | null>(null);
+  const createUserModalRef = useRef<HTMLDivElement | null>(null);
+  const createGroupModalRef = useRef<HTMLDivElement | null>(null);
+  const isDesktopMode = useMemo(
+    () => typeof window !== 'undefined' && isNeutralinoMode() && !!(window as any).Neutralino,
+    []
+  );
+
+  const handleInsertText = useCallback((editableTarget: EditableTarget, text: string) => {
+    if (
+      editableTarget instanceof HTMLInputElement ||
+      editableTarget instanceof HTMLTextAreaElement
+    ) {
+      const { selectionStart, selectionEnd, value } = editableTarget;
+      const start = selectionStart ?? value.length;
+      const end = selectionEnd ?? value.length;
+      const newValue = value.slice(0, start) + text + value.slice(end);
+      const cursorPos = start + text.length;
+      const fieldName = editableTarget.getAttribute('data-field') || '';
+
+      switch (fieldName) {
+        case 'searchQuery':
+          setSearchQuery(newValue);
+          break;
+        case 'newUserName':
+          setNewUserName(newValue);
+          break;
+        case 'newUserEmail':
+          setNewUserEmail(newValue);
+          break;
+        case 'newUserFirstName':
+          setNewUserFirstName(newValue);
+          break;
+        case 'newUserLastName':
+          setNewUserLastName(newValue);
+          break;
+        case 'newUserPassword':
+          setNewUserPassword(newValue);
+          break;
+        case 'newGroupId':
+          setNewGroupId(newValue);
+          break;
+        case 'newGroupDisplayName':
+          setNewGroupDisplayName(newValue);
+          break;
+        default:
+          editableTarget.setRangeText(text, start, end, 'end');
+          editableTarget.dispatchEvent(new Event('input', { bubbles: true }));
+          break;
+      }
+
+      setTimeout(() => {
+        if (document.activeElement === editableTarget) {
+          editableTarget.setSelectionRange(cursorPos, cursorPos);
+        }
+      }, 0);
+    } else if (editableTarget.isContentEditable) {
+      document.execCommand('insertText', false, text);
+    }
+  }, []);
+
+  useDesktopClipboardHandlers({
+    isEnabled: isOpen && isDesktopMode,
+    containerRef: modalContentRef,
+    onInsertText: handleInsertText,
+    enableCopyCut: true,
+    enableReadOnlyCopy: true,
+  });
+  useDesktopClipboardHandlers({
+    isEnabled: isOpen && isDesktopMode && showCreateUser,
+    containerRef: createUserModalRef,
+    onInsertText: handleInsertText,
+    enableCopyCut: true,
+  });
+  useDesktopClipboardHandlers({
+    isEnabled: isOpen && isDesktopMode && showCreateGroup,
+    containerRef: createGroupModalRef,
+    onInsertText: handleInsertText,
+    enableCopyCut: true,
+  });
 
   /* ---- Data loading ---- */
 
@@ -910,6 +996,7 @@ export function UsersGroupsModal() {
         returnFocus
         transitionProps={{ duration: 300, transition: 'fade' }}
       >
+        <div ref={modalContentRef} style={{ display: 'contents' }}>
         <Stack gap="sm">
           <SegmentedControl
             value={activeTab}
@@ -926,6 +1013,7 @@ export function UsersGroupsModal() {
             placeholder={t('usersGroups:searchPlaceholder')}
             leftSection={<IconSearch size={14} />}
             autoComplete="off"
+            data-field="searchQuery"
           />
 
           {activeTab === 'users' ? (
@@ -1134,6 +1222,7 @@ export function UsersGroupsModal() {
             </Stack>
           )}
         </Stack>
+        </div>
       </Modal>
 
       {/* Create User sub-modal */}
@@ -1146,6 +1235,7 @@ export function UsersGroupsModal() {
         trapFocus
         transitionProps={{ duration: 200, transition: 'pop' }}
       >
+        <div ref={createUserModalRef} style={{ display: 'contents' }}>
         <Stack gap="sm">
           <Group grow>
             <TextInput
@@ -1154,6 +1244,7 @@ export function UsersGroupsModal() {
               value={newUserName}
               onChange={e => setNewUserName(e.currentTarget.value)}
               required
+              data-field="newUserName"
             />
             <TextInput
               label={t('usersGroups:email')}
@@ -1161,6 +1252,7 @@ export function UsersGroupsModal() {
               value={newUserEmail}
               onChange={e => setNewUserEmail(e.currentTarget.value)}
               required
+              data-field="newUserEmail"
               error={
                 newUserEmail.trim() && !EMAIL_REGEX.test(newUserEmail.trim())
                   ? t('usersGroups:invalidEmail')
@@ -1175,12 +1267,14 @@ export function UsersGroupsModal() {
               value={newUserFirstName}
               onChange={e => setNewUserFirstName(e.currentTarget.value)}
               required
+              data-field="newUserFirstName"
             />
             <TextInput
               label={t('usersGroups:lastName')}
               placeholder={t('usersGroups:lastNamePlaceholder')}
               value={newUserLastName}
               onChange={e => setNewUserLastName(e.currentTarget.value)}
+              data-field="newUserLastName"
             />
           </Group>
           <TextInput
@@ -1190,6 +1284,7 @@ export function UsersGroupsModal() {
             value={newUserPassword}
             onChange={e => setNewUserPassword(e.currentTarget.value)}
             required
+            data-field="newUserPassword"
           />
           <MultiSelect
             label={t('usersGroups:assignToGroups')}
@@ -1219,6 +1314,7 @@ export function UsersGroupsModal() {
             </Button>
           </Group>
         </Stack>
+        </div>
       </Modal>
 
       {/* Create Group sub-modal */}
@@ -1231,6 +1327,7 @@ export function UsersGroupsModal() {
         trapFocus
         transitionProps={{ duration: 200, transition: 'pop' }}
       >
+        <div ref={createGroupModalRef} style={{ display: 'contents' }}>
         <Stack gap="sm">
           <Group grow>
             <TextInput
@@ -1239,12 +1336,14 @@ export function UsersGroupsModal() {
               value={newGroupId}
               onChange={e => setNewGroupId(e.currentTarget.value)}
               required
+              data-field="newGroupId"
             />
             <TextInput
               label={t('usersGroups:groupDisplayName')}
               placeholder={t('usersGroups:groupDisplayNamePlaceholder')}
               value={newGroupDisplayName}
               onChange={e => setNewGroupDisplayName(e.currentTarget.value)}
+              data-field="newGroupDisplayName"
             />
           </Group>
           <Group justify="flex-end">
@@ -1260,6 +1359,7 @@ export function UsersGroupsModal() {
             </Button>
           </Group>
         </Stack>
+        </div>
       </Modal>
 
       {/* Members sub-modal */}
@@ -1277,6 +1377,7 @@ export function UsersGroupsModal() {
         memberSearchLoading={memberSearchLoading}
         onAddMember={handleAddMember}
         onRemoveMember={handleRemoveMember}
+        isDesktopMode={isDesktopMode}
       />
     </>
   );
@@ -1300,6 +1401,7 @@ function MembersModal({
   memberSearchLoading,
   onAddMember,
   onRemoveMember,
+  isDesktopMode,
 }: {
   opened: boolean;
   onClose: () => void;
@@ -1314,10 +1416,45 @@ function MembersModal({
   memberSearchLoading: boolean;
   onAddMember: (member: AuthorityResult) => void;
   onRemoveMember: (memberId: string) => void;
+  isDesktopMode: boolean;
 }) {
   const { t } = useTranslation(['usersGroups', 'common']);
   const combobox = useCombobox({
     onDropdownClose: () => combobox.resetSelectedOption(),
+  });
+  const modalContentRef = useRef<HTMLDivElement | null>(null);
+
+  const handleInsertText = useCallback(
+    (editableTarget: EditableTarget, text: string) => {
+      if (
+        editableTarget instanceof HTMLInputElement ||
+        editableTarget instanceof HTMLTextAreaElement
+      ) {
+        const { selectionStart, selectionEnd, value } = editableTarget;
+        const start = selectionStart ?? value.length;
+        const end = selectionEnd ?? value.length;
+        const newValue = value.slice(0, start) + text + value.slice(end);
+        const cursorPos = start + text.length;
+        onSearchQueryChange(newValue);
+        combobox.openDropdown();
+        setTimeout(() => {
+          if (document.activeElement === editableTarget) {
+            editableTarget.setSelectionRange(cursorPos, cursorPos);
+          }
+        }, 0);
+      } else if (editableTarget.isContentEditable) {
+        document.execCommand('insertText', false, text);
+      }
+    },
+    [onSearchQueryChange]
+  );
+
+  useDesktopClipboardHandlers({
+    isEnabled: opened && isDesktopMode,
+    containerRef: modalContentRef,
+    onInsertText: handleInsertText,
+    enableCopyCut: true,
+    enableReadOnlyCopy: true,
   });
 
   const filteredMembers = members.filter(member => member.type === memberSearchType);
@@ -1331,6 +1468,7 @@ function MembersModal({
       centered
       styles={{ body: { minHeight: 440 } }}
     >
+      <div ref={modalContentRef} style={{ display: 'contents' }}>
       <Stack gap="sm" mih={380}>
         <SegmentedControl
           value={memberSearchType}
@@ -1450,6 +1588,7 @@ function MembersModal({
           )}
         </ScrollArea>
       </Stack>
+      </div>
     </Modal>
   );
 }
