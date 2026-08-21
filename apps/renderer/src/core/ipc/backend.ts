@@ -621,7 +621,7 @@ export const backendRpc = {
 
     /**
      * Load the /sys:system root children in a single RPC call.
-     * Resolved via the Nodes API (not AFTS), so it works when SOLR is down.
+     * Resolved via the Nodes API (store root sys:children), then Slingshot, then AFTS.
      */
     async getSystemTreeRoot(serverId: number): Promise<{
       systemNodeId: string;

@@ -19,7 +19,7 @@
  * Handles all backend.repository.* RPC methods
  */
 
-import { NodesApi, SitesApi } from '@alfresco/js-api';
+import { NodesApi, SearchApi, SitesApi } from '@alfresco/js-api';
 import { z } from 'zod';
 import { buildSlingshotContentUrl } from '../../lib/alfresco-url.js';
 import { AppErrors } from '../../lib/errors.js';
@@ -34,7 +34,7 @@ import {
   resolveSystemNodeId,
 } from './helpers.js';
 import type { Routes, RpcContext } from './types.js';
-import { getCurrentUserId, withAuth, withCredentials } from './withAuth.js';
+import { getCurrentUserId, withAuth, withAuthAndCredentials, withCredentials } from './withAuth.js';
 
 const log = createLogger('backend.rpc.repository');
 
@@ -99,36 +99,53 @@ export function registerRepositoryHandlers(routes: Routes, ctx: RpcContext): voi
     handler: async params => {
       const { serverId } = params as { serverId: number };
 
-      // Resolve /sys:system via the Nodes API so this works when search/SOLR is down
-      const systemNodeId = await withAuth(ctx, serverId, async api => {
-        const nodesApi = new NodesApi(api);
-        const nodeId = await resolveSystemNodeId(nodesApi);
-        if (!nodeId) {
-          return AppErrors.notFound('System node');
+      return withAuthAndCredentials(
+        ctx,
+        serverId,
+        async ({ api, username, token, authType, server }) => {
+          const nodesApi = new NodesApi(api);
+          const searchApi = new SearchApi(api);
+          const slingshotAuthType = authType as 'basic' | 'openid_connect';
+
+          const fetchSlingshotNode = async (nodeId: string) => {
+            const { nodeData } = await fetchSlingshotNodeData(
+              server.baseUrl,
+              nodeId,
+              username || '',
+              token!,
+              slingshotAuthType
+            );
+            return nodeData;
+          };
+
+          // Company Home parent + sys:children first (no SOLR). Slingshot/AFTS are fallbacks.
+          const systemNodeId = await resolveSystemNodeId(nodesApi, {
+            searchApi,
+            fetchSlingshotNode,
+          });
+          if (!systemNodeId) {
+            return AppErrors.notFound('System node');
+          }
+
+          const { nodeData, slingshotUrl } = await fetchSlingshotNodeData(
+            server.baseUrl,
+            systemNodeId,
+            username || '',
+            token!,
+            slingshotAuthType
+          );
+
+          log.debug(
+            { serverId, systemNodeId, slingshotUrl, childCount: nodeData.children?.length || 0 },
+            'Fetched system tree root children'
+          );
+
+          return {
+            systemNodeId,
+            children: nodeData.children ?? [],
+          };
         }
-        return nodeId;
-      });
-
-      // Then fetch children using credentials (Slingshot API)
-      return withCredentials(ctx, serverId, async ({ username, token, authType, server }) => {
-        const { nodeData, slingshotUrl } = await fetchSlingshotNodeData(
-          server.baseUrl,
-          systemNodeId,
-          username || '',
-          token!,
-          authType as 'basic' | 'openid_connect'
-        );
-
-        log.debug(
-          { serverId, systemNodeId, slingshotUrl, childCount: nodeData.children?.length || 0 },
-          'Fetched system tree root children'
-        );
-
-        return {
-          systemNodeId,
-          children: nodeData.children ?? [],
-        };
-      });
+      );
     },
   };
 

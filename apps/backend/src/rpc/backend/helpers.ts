@@ -264,11 +264,35 @@ function mapNodeEntry(entry: any) {
 }
 
 const SYSTEM_FOLDER_NAME = 'system';
+const SYSTEM_FOLDER_QNAME = 'sys:system';
+const STORE_CHILDREN_ASSOC = 'sys:children';
 
 type NodesApiLike = {
   getNode: (nodeId: string, opts?: Record<string, unknown>) => Promise<any>;
   listNodeChildren: (nodeId: string, opts?: Record<string, unknown>) => Promise<any>;
+  listParents?: (nodeId: string, opts?: Record<string, unknown>) => Promise<any>;
 };
+
+type SearchApiLike = {
+  search: (query: unknown) => Promise<any>;
+};
+
+export type ResolveSystemNodeIdOptions = {
+  searchApi?: SearchApiLike;
+  fetchSlingshotNode?: (nodeId: string) => Promise<any>;
+};
+
+function isSystemFolderName(name: unknown): boolean {
+  return typeof name === 'string' && name.toLowerCase() === SYSTEM_FOLDER_NAME;
+}
+
+function nodeIdFromRef(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !value) {
+    return undefined;
+  }
+  const uuid = value.split('/').pop();
+  return uuid || undefined;
+}
 
 function findSystemChildId(result: any): string | undefined {
   const entries = result?.list?.entries;
@@ -276,57 +300,182 @@ function findSystemChildId(result: any): string | undefined {
     return undefined;
   }
 
-  const match = entries.find((item: any) => {
-    const name = item?.entry?.name;
-    return typeof name === 'string' && name.toLowerCase() === SYSTEM_FOLDER_NAME;
+  const match = entries.find((item: any) => isSystemFolderName(item?.entry?.name));
+  return typeof match?.entry?.id === 'string' ? match.entry.id : undefined;
+}
+
+function findSystemSlingshotChildId(nodeData: any): string | undefined {
+  const children = nodeData?.children;
+  if (!Array.isArray(children)) {
+    return undefined;
+  }
+
+  const match = children.find((child: any) => {
+    const qname = child?.name?.prefixedName ?? child?.qname?.prefixedName;
+    const name = child?.name?.name ?? child?.name;
+    return qname === SYSTEM_FOLDER_QNAME || isSystemFolderName(name);
   });
 
-  return typeof match?.entry?.id === 'string' ? match.entry.id : undefined;
+  return nodeIdFromRef(match?.nodeRef);
 }
 
 async function listSystemChildId(
   nodesApi: NodesApiLike,
-  parentId: string
+  parentId: string,
+  assocType?: string
 ): Promise<string | undefined> {
   const result = await nodesApi.listNodeChildren(parentId, {
-    fields: ['id', 'name'],
+    ...(assocType ? { where: `(assocType='${assocType}')` } : {}),
     maxItems: 200,
   });
   return findSystemChildId(result);
 }
 
-/**
- * Resolve the /sys:system node ID via the Nodes API.
- * Avoids AFTS search so the System tree still loads when SOLR is unavailable.
- */
-export async function resolveSystemNodeId(nodesApi: NodesApiLike): Promise<string | null> {
+async function resolveStoreRootId(
+  nodesApi: NodesApiLike,
+  companyHome: any
+): Promise<string | undefined> {
+  const parentId = companyHome?.entry?.parentId;
+  if (typeof parentId === 'string' && parentId) {
+    return parentId;
+  }
+
+  // GET /nodes/-root- is Company Home and Alfresco omits parentId on purpose.
+  if (!nodesApi.listParents) {
+    return undefined;
+  }
+
+  try {
+    const parents = await nodesApi.listParents('-root-', {
+      where: '(isPrimary=true)',
+      maxItems: 10,
+    });
+    const id = parents?.list?.entries?.[0]?.entry?.id;
+    return typeof id === 'string' && id ? id : undefined;
+  } catch (err) {
+    log.warn({ err }, 'Failed to list parents of -root- while resolving sys:system');
+    return undefined;
+  }
+}
+
+async function tryListSystemChild(
+  nodesApi: NodesApiLike,
+  parentId: string,
+  assocType?: string
+): Promise<string | undefined> {
+  try {
+    return await listSystemChildId(nodesApi, parentId, assocType);
+  } catch (err) {
+    log.warn(
+      { err, parentId, assocType },
+      'Failed to list children while resolving sys:system'
+    );
+    return undefined;
+  }
+}
+
+async function resolveViaNodesApi(nodesApi: NodesApiLike): Promise<string | undefined> {
   const companyHome = await nodesApi.getNode('-root-');
-  const storeRootId = companyHome?.entry?.parentId;
+  const storeRootId = await resolveStoreRootId(nodesApi, companyHome);
   const rootId = companyHome?.entry?.id;
 
-  if (typeof storeRootId === 'string' && storeRootId) {
-    try {
-      const fromStoreRoot = await listSystemChildId(nodesApi, storeRootId);
-      if (fromStoreRoot) {
-        return fromStoreRoot;
-      }
-      return null;
-    } catch (err) {
-      log.warn(
-        { err, storeRootId },
-        'Failed to list store root children while resolving sys:system'
-      );
+  if (storeRootId) {
+    const fromStoreRoot =
+      (await tryListSystemChild(nodesApi, storeRootId, STORE_CHILDREN_ASSOC)) ??
+      (await tryListSystemChild(nodesApi, storeRootId));
+    if (fromStoreRoot) {
+      return fromStoreRoot;
     }
   }
 
-  if (typeof rootId === 'string' && rootId) {
+  // `-root-` is Company Home; only sys:children is safe here so we don't pick a
+  // user folder named "system". Some servers may still map -root- to store root.
+  const maybeRootIds = ['-root-', typeof rootId === 'string' ? rootId : undefined];
+  const seen = new Set(storeRootId ? [storeRootId] : []);
+  for (const parentId of maybeRootIds) {
+    if (!parentId || seen.has(parentId)) {
+      continue;
+    }
+    seen.add(parentId);
+    const fromRoot = await tryListSystemChild(nodesApi, parentId, STORE_CHILDREN_ASSOC);
+    if (fromRoot) {
+      return fromRoot;
+    }
+  }
+
+  return undefined;
+}
+
+async function resolveViaSlingshot(
+  nodesApi: NodesApiLike,
+  fetchSlingshotNode: (nodeId: string) => Promise<any>
+): Promise<string | undefined> {
+  const companyHome = await nodesApi.getNode('-root-');
+  const companyHomeId = companyHome?.entry?.id;
+  if (typeof companyHomeId !== 'string' || !companyHomeId) {
+    return undefined;
+  }
+
+  const companyHomeData = await fetchSlingshotNode(companyHomeId);
+  const storeRootId = nodeIdFromRef(extractParentRefFromSlingshotNode(companyHomeData));
+  if (!storeRootId) {
+    return undefined;
+  }
+
+  const storeRootData = await fetchSlingshotNode(storeRootId);
+  return findSystemSlingshotChildId(storeRootData);
+}
+
+async function resolveViaSearch(searchApi: SearchApiLike): Promise<string | undefined> {
+  const searchResult = await searchApi.search({
+    query: {
+      query: `PATH:"/${SYSTEM_FOLDER_QNAME}"`,
+      language: 'afts',
+    },
+    fields: ['id'],
+  });
+  const nodeId = searchResult?.list?.entries?.[0]?.entry?.id;
+  return typeof nodeId === 'string' && nodeId ? nodeId : undefined;
+}
+
+/**
+ * Resolve the /sys:system node ID without depending on SOLR first.
+ *
+ * `-root-` is Company Home. Its parent (the SpacesStore root) is hidden on GET
+ * /nodes, and sys:system is a sys:children sibling — not a cm:contains child.
+ */
+export async function resolveSystemNodeId(
+  nodesApi: NodesApiLike,
+  options?: ResolveSystemNodeIdOptions
+): Promise<string | null> {
+  try {
+    const fromNodes = await resolveViaNodesApi(nodesApi);
+    if (fromNodes) {
+      return fromNodes;
+    }
+  } catch (err) {
+    log.warn({ err }, 'Nodes API lookup failed while resolving sys:system');
+  }
+
+  if (options?.fetchSlingshotNode) {
     try {
-      const fromRoot = await listSystemChildId(nodesApi, rootId);
-      if (fromRoot) {
-        return fromRoot;
+      const fromSlingshot = await resolveViaSlingshot(nodesApi, options.fetchSlingshotNode);
+      if (fromSlingshot) {
+        return fromSlingshot;
       }
     } catch (err) {
-      log.warn({ err, rootId }, 'Failed to list -root- children while resolving sys:system');
+      log.warn({ err }, 'Slingshot lookup failed while resolving sys:system');
+    }
+  }
+
+  if (options?.searchApi) {
+    try {
+      const fromSearch = await resolveViaSearch(options.searchApi);
+      if (fromSearch) {
+        return fromSearch;
+      }
+    } catch (err) {
+      log.warn({ err }, 'AFTS fallback failed while resolving sys:system');
     }
   }
 
