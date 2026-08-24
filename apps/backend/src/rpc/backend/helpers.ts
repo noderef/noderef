@@ -274,7 +274,8 @@ type NodesApiLike = {
 };
 
 type SearchApiLike = {
-  search: (query: unknown) => Promise<any>;
+  // Method syntax so Alfresco SearchApi (SearchRequest) is assignable under strictFunctionTypes.
+  search(query: unknown): Promise<any>;
 };
 
 export type ResolveSystemNodeIdOptions = {
