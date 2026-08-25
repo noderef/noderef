@@ -31,12 +31,14 @@ import type {
   ValidateOidcCredentialsRes,
 } from '@app/contracts';
 import { createLogger } from '../../lib/logger.js';
+import { resolveAlfrescoAdminStatus } from './adminStatus.js';
 import {
   dropClient,
   getClient,
   updateOAuth2Token,
   type OAuth2AuthDescriptor,
 } from './clientFactory.js';
+import { ensureEcmTicket } from './oidcTicketService.js';
 import { mapError } from './errorMapper.js';
 
 const log = createLogger('alfresco.auth');
@@ -128,20 +130,7 @@ export async function validateCredentials(
       throw loginError;
     }
 
-    // Retrieve current user information with full capabilities
-    const peopleApi = new PeopleApi(api);
-    const personEntry = await peopleApi.getPerson('-me-');
-
-    // Check if user is admin
-    const isAdmin = personEntry.entry.capabilities?.isAdmin === true;
-
-    // Map to user object
-    const user = {
-      id: personEntry.entry.id,
-      displayName:
-        personEntry.entry.displayName || personEntry.entry.firstName || personEntry.entry.id,
-      email: personEntry.entry.email,
-    };
+    const { isAdmin, user } = await resolveAlfrescoAdminStatus(api);
 
     // Drop the client after validation (we'll create a new one when adding the server)
     dropClient(req.baseUrl);
@@ -243,32 +232,14 @@ export async function validateOidcCredentials(
     };
 
     api = getClient(req.baseUrl, oauth2Auth);
+    await ensureEcmTicket(api, req.baseUrl, req.accessToken);
 
-    // Retrieve current user information with full capabilities
-    const peopleApi = new PeopleApi(api);
-    const personEntry = await peopleApi.getPerson('-me-');
+    const { isAdmin, user } = await resolveAlfrescoAdminStatus(api);
 
-    // Check if user is admin
-    const isAdmin = personEntry.entry.capabilities?.isAdmin === true;
+    log.info({ userId: user.id, isAdmin }, 'OIDC credential validation completed');
 
-    log.info(
-      {
-        userId: personEntry.entry.id,
-        isAdmin,
-      },
-      'OIDC credential validation completed'
-    );
-
-    // Map to user object
-    const user = {
-      id: personEntry.entry.id,
-      displayName:
-        personEntry.entry.displayName || personEntry.entry.firstName || personEntry.entry.id,
-      email: personEntry.entry.email,
-    };
-
-    // Drop the client after validation (we'll create a new one when adding the server)
-    dropClient(req.baseUrl);
+    // Drop only the OIDC client so a basic-auth client for the same host is kept
+    dropClient(req.baseUrl, oauth2Auth);
 
     return {
       valid: true,
@@ -291,6 +262,17 @@ export async function validateOidcCredentials(
       }
     } catch {
       // Ignore errors when extracting error message
+    }
+
+    try {
+      dropClient(req.baseUrl, {
+        type: 'oauth2',
+        clientId: req.oidcClientId,
+        host: req.oidcHost,
+        realm: req.oidcRealm,
+      });
+    } catch {
+      // Ignore cleanup errors
     }
 
     return {

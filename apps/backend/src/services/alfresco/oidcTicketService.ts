@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import type { AlfrescoApi } from '@alfresco/js-api';
 import { createLogger } from '../../lib/logger.js';
 
 const log = createLogger('alfresco.oidc-ticket');
@@ -34,7 +35,10 @@ const log = createLogger('alfresco.oidc-ticket');
  * @param accessToken The OIDC access token from Keycloak
  * @returns The Alfresco ticket (without TICKET_ prefix)
  */
-async function exchangeOidcTokenForTicket(baseUrl: string, accessToken: string): Promise<string> {
+export async function exchangeOidcTokenForTicket(
+  baseUrl: string,
+  accessToken: string
+): Promise<string> {
   try {
     // Normalize baseUrl
     let normalizedUrl = baseUrl.replace(/\/$/, '');
@@ -76,6 +80,34 @@ async function exchangeOidcTokenForTicket(baseUrl: string, accessToken: string):
   } catch (error) {
     log.error({ error, baseUrl }, 'Failed to get Alfresco ticket');
     throw error;
+  }
+}
+
+/**
+ * Ensure the Alfresco JS-API client has an ECM ticket.
+ * OIDC setToken() exchanges the ticket asynchronously; waiting here avoids
+ * People/admin checks running on a Bearer-only session that omits capabilities.
+ */
+export async function ensureEcmTicket(
+  client: AlfrescoApi,
+  baseUrl: string,
+  accessToken: string
+): Promise<string | null> {
+  const existing = client.config?.ticketEcm || client.getTicketEcm?.();
+  if (existing) {
+    return existing;
+  }
+
+  try {
+    const ticket = await exchangeOidcTokenForTicket(baseUrl, accessToken);
+    client.setTicket(ticket, '');
+    if (client.config) {
+      client.config.ticketEcm = ticket;
+    }
+    return ticket;
+  } catch (error) {
+    log.debug({ error, baseUrl }, 'OIDC ticket exchange skipped; continuing with Bearer token');
+    return null;
   }
 }
 

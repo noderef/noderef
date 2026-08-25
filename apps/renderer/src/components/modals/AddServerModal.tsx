@@ -739,7 +739,7 @@ export function AddServerModal() {
     (serverType === 'alfresco'
       ? authType === 'basic'
         ? credentialsValid && isAdmin
-        : oidcAuthenticated
+        : oidcAuthenticated && isAdmin
       : true);
 
   const serverTypes = [
