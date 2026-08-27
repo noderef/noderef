@@ -68,7 +68,6 @@
   "metaGeneral": "Général",
   "metaAllProperties": "Toutes les propriétés",
   "metaComments": "Commentaires",
-  "metaCommentsSoon": "Les commentaires ne sont pas encore disponibles.",
   "metaName": "Nom",
   "metaTitle": "Titre",
   "metaDescription": "Description",
@@ -78,5 +77,10 @@
   "metaModified": "Modifié le",
   "metaContentType": "Type de contenu",
   "metaMimeType": "Type MIME",
-  "metaSize": "Taille"
+  "metaSize": "Taille",
+  "commentsPlaceholder": "Ajouter un commentaire…",
+  "commentsAddAction": "Commenter",
+  "commentsEmpty": "Aucun commentaire",
+  "commentsLoadError": "Impossible de charger les commentaires",
+  "commentsAddError": "Impossible d'ajouter le commentaire"
 }

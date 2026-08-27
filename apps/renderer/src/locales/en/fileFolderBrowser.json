@@ -68,7 +68,6 @@
   "metaGeneral": "General",
   "metaAllProperties": "All properties",
   "metaComments": "Comments",
-  "metaCommentsSoon": "Comments are not available yet.",
   "metaName": "Name",
   "metaTitle": "Title",
   "metaDescription": "Description",
@@ -78,5 +77,10 @@
   "metaModified": "Modified",
   "metaContentType": "Content type",
   "metaMimeType": "MIME type",
-  "metaSize": "Size"
+  "metaSize": "Size",
+  "commentsPlaceholder": "Add a comment…",
+  "commentsAddAction": "Comment",
+  "commentsEmpty": "No comments yet",
+  "commentsLoadError": "Failed to load comments",
+  "commentsAddError": "Failed to add comment"
 }

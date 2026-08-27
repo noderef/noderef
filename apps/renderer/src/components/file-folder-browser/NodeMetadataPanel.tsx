@@ -15,6 +15,7 @@
  */
 
 import { NodeAspects } from '@/components/node-browser/NodeAspects';
+import { NodeComments } from './NodeComments';
 import { backendRpc, type AlfrescoNodeDetails } from '@/core/ipc/backend';
 import { formatBytes } from '@/utils/formatBytes';
 import {
@@ -253,9 +254,7 @@ export function NodeMetadataPanel({
         <Tabs.List grow>
           <Tabs.Tab value="properties">{t('nodeBrowser:properties')}</Tabs.Tab>
           <Tabs.Tab value="aspects">{t('nodeBrowser:aspects')}</Tabs.Tab>
-          <Tabs.Tab value="comments" disabled>
-            {t('fileFolderBrowser:metaComments')}
-          </Tabs.Tab>
+          <Tabs.Tab value="comments">{t('fileFolderBrowser:metaComments')}</Tabs.Tab>
         </Tabs.List>
 
         <Tabs.Panel value="properties" style={{ flex: 1, minHeight: 0 }}>
@@ -314,10 +313,10 @@ export function NodeMetadataPanel({
           </ScrollArea>
         </Tabs.Panel>
 
-        <Tabs.Panel value="comments">
-          <Text size="sm" c="dimmed" p="md">
-            {t('fileFolderBrowser:metaCommentsSoon')}
-          </Text>
+        <Tabs.Panel value="comments" style={{ flex: 1, minHeight: 0 }}>
+          <ScrollArea style={{ height: '100%' }}>
+            <NodeComments serverId={serverId} nodeId={nodeId} />
+          </ScrollArea>
         </Tabs.Panel>
       </Tabs>
     );

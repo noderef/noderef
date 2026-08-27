@@ -68,7 +68,6 @@
   "metaGeneral": "Algemeen",
   "metaAllProperties": "Alle eigenschappen",
   "metaComments": "Opmerkingen",
-  "metaCommentsSoon": "Opmerkingen zijn nog niet beschikbaar.",
   "metaName": "Naam",
   "metaTitle": "Titel",
   "metaDescription": "Beschrijving",
@@ -78,5 +77,10 @@
   "metaModified": "Datum gewijzigd",
   "metaContentType": "Contenttype",
   "metaMimeType": "MIME-type",
-  "metaSize": "Grootte"
+  "metaSize": "Grootte",
+  "commentsPlaceholder": "Opmerking toevoegen…",
+  "commentsAddAction": "Plaatsen",
+  "commentsEmpty": "Nog geen opmerkingen",
+  "commentsLoadError": "Opmerkingen laden mislukt",
+  "commentsAddError": "Opmerking toevoegen mislukt"
 }
