@@ -461,7 +461,9 @@ export function FileFolderBrowserView({
   const { open: openPermissionsModal } = useModal(MODAL_KEYS.NODE_PERMISSIONS);
   const loadRemoteTextFile = useTextEditorStore(state => state.loadRemoteFile);
   const isCompact = useMediaQuery('(max-width: 1024px)');
-  const tableColumnCount = isCompact ? 4 : 5;
+  // The metadata panel claims 30% of the row, leaving no room for the description column.
+  const showDescription = !isCompact && !metadataOpen;
+  const tableColumnCount = showDescription ? 5 : 4;
 
   // Resizable Name column - width is persisted per server in localStorage
   const {
@@ -1721,7 +1723,7 @@ export function FileFolderBrowserView({
                   isResizing={isResizingNameColumn}
                 />
               </Table.Th>
-              {!isCompact && <Table.Th>{t('fileFolderBrowser:description')}</Table.Th>}
+              {showDescription && <Table.Th>{t('fileFolderBrowser:description')}</Table.Th>}
               <Table.Th style={{ width: 150 }}>{t('fileFolderBrowser:modified')}</Table.Th>
               <Table.Th style={{ width: 150 }}>{t('fileFolderBrowser:modifiedBy')}</Table.Th>
             </Table.Tr>
@@ -1773,7 +1775,7 @@ export function FileFolderBrowserView({
                     </div>
                   </div>
                 </Table.Td>
-                {!isCompact && (
+                {showDescription && (
                   <Table.Td>
                     <Text size="sm" c="dimmed" lineClamp={2}>
                       {getDescription(child)}
@@ -1985,31 +1987,14 @@ export function FileFolderBrowserView({
           </Paper>
           {metadataOpen && (
             <div style={{ flex: '0 0 30%', minWidth: 0, minHeight: 0 }}>
-              {metadataNode ? (
-                <NodeMetadataPanel
-                  serverId={serverId}
-                  nodeId={metadataNode.id}
-                  nodeName={metadataNode.name}
-                  isFolder={metadataNode.isFolder}
-                  onClose={() => setMetadataOpen(false)}
-                />
-              ) : (
-                <Paper
-                  withBorder
-                  radius="md"
-                  style={{
-                    height: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: 'var(--mantine-spacing-md)',
-                  }}
-                >
-                  <Text size="sm" c="dimmed" ta="center">
-                    {t('fileFolderBrowser:metadataNoSelection')}
-                  </Text>
-                </Paper>
-              )}
+              {/* Without a selection the panel describes the folder currently being browsed. */}
+              <NodeMetadataPanel
+                serverId={serverId}
+                nodeId={metadataNode?.id ?? nodeId}
+                nodeName={metadataNode?.name ?? nodeName}
+                isFolder={metadataNode?.isFolder ?? true}
+                onClose={() => setMetadataOpen(false)}
+              />
             </div>
           )}
         </Group>

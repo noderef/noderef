@@ -65,7 +65,6 @@
   "closeMetadata": "Cerrar el panel de metadatos",
   "metadataLoadError": "No se pudieron cargar los metadatos",
   "metadataToggle": "Mostrar u ocultar el panel de metadatos",
-  "metadataNoSelection": "Selecciona un elemento para ver sus metadatos",
   "metaGeneral": "General",
   "metaAllProperties": "Todas las propiedades",
   "metaComments": "Comentarios",

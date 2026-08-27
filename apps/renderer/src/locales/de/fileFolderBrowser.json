@@ -65,7 +65,6 @@
   "closeMetadata": "Metadatenbereich schließen",
   "metadataLoadError": "Metadaten konnten nicht geladen werden",
   "metadataToggle": "Metadatenbereich umschalten",
-  "metadataNoSelection": "Element auswählen, um die Metadaten anzuzeigen",
   "metaGeneral": "Allgemein",
   "metaAllProperties": "Alle Eigenschaften",
   "metaComments": "Kommentare",

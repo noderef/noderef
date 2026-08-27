@@ -65,7 +65,6 @@
   "closeMetadata": "Close metadata panel",
   "metadataLoadError": "Failed to load metadata",
   "metadataToggle": "Toggle metadata panel",
-  "metadataNoSelection": "Select an item to view its metadata",
   "metaGeneral": "General",
   "metaAllProperties": "All properties",
   "metaComments": "Comments",

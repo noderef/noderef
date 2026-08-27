@@ -65,7 +65,6 @@
   "closeMetadata": "Fermer le panneau des métadonnées",
   "metadataLoadError": "Échec du chargement des métadonnées",
   "metadataToggle": "Afficher ou masquer le panneau des métadonnées",
-  "metadataNoSelection": "Sélectionnez un élément pour voir ses métadonnées",
   "metaGeneral": "Général",
   "metaAllProperties": "Toutes les propriétés",
   "metaComments": "Commentaires",
