@@ -59,5 +59,9 @@
   "jsConsoleLoadError": "JavaScript-bestand kon niet worden geladen",
   "documentContextTitle": "Documentcontext ingesteld",
   "documentContextMessage": "\"{{name}}\" ingesteld als documentcontext",
-  "openInTextEditorError": "Bestand kon niet worden geopend"
+  "openInTextEditorError": "Bestand kon niet worden geopend",
+  "metadata": "Metadata",
+  "metadataAction": "Metadata tonen",
+  "closeMetadata": "Metadatapaneel sluiten",
+  "metadataLoadError": "Metadata laden mislukt"
 }

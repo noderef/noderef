@@ -59,5 +59,9 @@
   "jsConsoleLoadError": "No se pudo cargar el archivo JavaScript",
   "documentContextTitle": "Contexto del documento establecido",
   "documentContextMessage": "\"{{name}}\" se estableció como contexto del documento",
-  "openInTextEditorError": "No se pudo abrir el archivo"
+  "openInTextEditorError": "No se pudo abrir el archivo",
+  "metadata": "Metadatos",
+  "metadataAction": "Mostrar metadatos",
+  "closeMetadata": "Cerrar el panel de metadatos",
+  "metadataLoadError": "No se pudieron cargar los metadatos"
 }

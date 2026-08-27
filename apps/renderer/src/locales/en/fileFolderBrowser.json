@@ -59,5 +59,9 @@
   "jsConsoleLoadError": "Failed to load JavaScript file",
   "documentContextTitle": "Document context set",
   "documentContextMessage": "\"{{name}}\" set as document context",
-  "openInTextEditorError": "Failed to open file"
+  "openInTextEditorError": "Failed to open file",
+  "metadata": "Metadata",
+  "metadataAction": "Show metadata",
+  "closeMetadata": "Close metadata panel",
+  "metadataLoadError": "Failed to load metadata"
 }

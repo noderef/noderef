@@ -74,6 +74,7 @@ import {
   IconEdit,
   IconFileSearch,
   IconFolder,
+  IconListDetails,
   IconLock,
   IconPhoto,
   IconPlus,
@@ -90,6 +91,7 @@ import { fromEvent } from 'file-selector';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { DropEvent, FileWithPath } from 'react-dropzone';
 import { useTranslation } from 'react-i18next';
+import { NodeMetadataPanel } from './NodeMetadataPanel';
 
 interface FileFolderBrowserViewProps {
   serverId: number;
@@ -422,6 +424,7 @@ export function FileFolderBrowserView({
   const [contextMenuOpened, setContextMenuOpened] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
   const [selectedItem, setSelectedItem] = useState<RepositoryNode | null>(null);
+  const [metadataNode, setMetadataNode] = useState<RepositoryNode | null>(null);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ completed: number; total: number } | null>(
     null
@@ -559,6 +562,7 @@ export function FileFolderBrowserView({
       const childIds = new Set(children.map(child => child.id));
       return prev.filter(id => childIds.has(id));
     });
+    setMetadataNode(prev => (prev ? (children.find(child => child.id === prev.id) ?? null) : null));
   }, [children]);
 
   const uploadFileToFolder = useCallback(
@@ -1142,10 +1146,21 @@ export function FileFolderBrowserView({
   };
 
   const handleRowKeyDown = (event: React.KeyboardEvent, node: RepositoryNode) => {
-    if (event.key === 'Enter' || event.key === ' ') {
+    if (event.key === 'Enter') {
       event.preventDefault();
       handleOpenNode(node);
+      return;
     }
+    if (event.key === ' ') {
+      event.preventDefault();
+      setMetadataNode(node);
+    }
+  };
+
+  const handleShowMetadata = () => {
+    if (!selectedItem) return;
+    setMetadataNode(selectedItem);
+    setContextMenuOpened(false);
   };
 
   const handleRowContextMenu = (event: React.MouseEvent, node: RepositoryNode) => {
@@ -1707,11 +1722,16 @@ export function FileFolderBrowserView({
             {sortedChildren.map(child => (
               <Table.Tr
                 key={child.id}
-                onClick={() => handleOpenNode(child)}
+                onClick={() => setMetadataNode(child)}
+                onDoubleClick={() => handleOpenNode(child)}
                 onKeyDown={event => handleRowKeyDown(event, child)}
                 tabIndex={0}
                 onContextMenu={event => handleRowContextMenu(event, child)}
-                style={{ cursor: 'pointer' }}
+                style={{
+                  cursor: 'pointer',
+                  backgroundColor:
+                    metadataNode?.id === child.id ? 'var(--mantine-color-blue-light)' : undefined,
+                }}
               >
                 <Table.Td style={{ width: 32 }}>
                   <Checkbox
@@ -1936,13 +1956,25 @@ export function FileFolderBrowserView({
             />
           </div>
         )}
-        <Paper
-          withBorder
-          radius="md"
-          style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}
-        >
-          {renderContent()}
-        </Paper>
+        <Group align="stretch" gap="md" wrap="nowrap" style={{ flex: 1, minHeight: 0 }}>
+          <Paper
+            withBorder
+            radius="md"
+            style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0 }}
+          >
+            {renderContent()}
+          </Paper>
+          {metadataNode && (
+            <div style={{ flex: '0 0 30%', minWidth: 0, minHeight: 0 }}>
+              <NodeMetadataPanel
+                serverId={serverId}
+                nodeId={metadataNode.id}
+                nodeName={metadataNode.name}
+                onClose={() => setMetadataNode(null)}
+              />
+            </div>
+          )}
+        </Group>
       </Dropzone>
 
       <Menu
@@ -1999,6 +2031,9 @@ export function FileFolderBrowserView({
           {selectedItem && (
             <>
               <Menu.Divider />
+              <Menu.Item leftSection={<IconListDetails size={14} />} onClick={handleShowMetadata}>
+                {t('fileFolderBrowser:metadataAction')}
+              </Menu.Item>
               <Menu.Item leftSection={<IconLock size={14} />} onClick={handleManagePermissions}>
                 {t('submenu:managePermissionsAction')}
               </Menu.Item>

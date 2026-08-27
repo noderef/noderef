@@ -59,5 +59,9 @@
   "jsConsoleLoadError": "Impossible de charger le fichier JavaScript",
   "documentContextTitle": "Contexte du document défini",
   "documentContextMessage": "\"{{name}}\" défini comme contexte du document",
-  "openInTextEditorError": "Impossible d'ouvrir le fichier"
+  "openInTextEditorError": "Impossible d'ouvrir le fichier",
+  "metadata": "Métadonnées",
+  "metadataAction": "Afficher les métadonnées",
+  "closeMetadata": "Fermer le panneau des métadonnées",
+  "metadataLoadError": "Échec du chargement des métadonnées"
 }
