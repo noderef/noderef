@@ -63,5 +63,21 @@
   "metadata": "Metadaten",
   "metadataAction": "Metadaten anzeigen",
   "closeMetadata": "Metadatenbereich schließen",
-  "metadataLoadError": "Metadaten konnten nicht geladen werden"
+  "metadataLoadError": "Metadaten konnten nicht geladen werden",
+  "metadataToggle": "Metadatenbereich umschalten",
+  "metadataNoSelection": "Element auswählen, um die Metadaten anzuzeigen",
+  "metaGeneral": "Allgemein",
+  "metaAllProperties": "Alle Eigenschaften",
+  "metaComments": "Kommentare",
+  "metaCommentsSoon": "Kommentare sind noch nicht verfügbar.",
+  "metaName": "Name",
+  "metaTitle": "Titel",
+  "metaDescription": "Beschreibung",
+  "metaCreator": "Ersteller",
+  "metaCreated": "Erstellt am",
+  "metaModifier": "Geändert von",
+  "metaModified": "Geändert am",
+  "metaContentType": "Inhaltstyp",
+  "metaMimeType": "MIME-Typ",
+  "metaSize": "Grösse"
 }

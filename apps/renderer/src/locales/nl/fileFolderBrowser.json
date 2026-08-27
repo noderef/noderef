@@ -63,5 +63,21 @@
   "metadata": "Metadata",
   "metadataAction": "Metadata tonen",
   "closeMetadata": "Metadatapaneel sluiten",
-  "metadataLoadError": "Metadata laden mislukt"
+  "metadataLoadError": "Metadata laden mislukt",
+  "metadataToggle": "Metadatapaneel in- of uitklappen",
+  "metadataNoSelection": "Selecteer een item om de metadata te zien",
+  "metaGeneral": "Algemeen",
+  "metaAllProperties": "Alle eigenschappen",
+  "metaComments": "Opmerkingen",
+  "metaCommentsSoon": "Opmerkingen zijn nog niet beschikbaar.",
+  "metaName": "Naam",
+  "metaTitle": "Titel",
+  "metaDescription": "Beschrijving",
+  "metaCreator": "Maker",
+  "metaCreated": "Datum gemaakt",
+  "metaModifier": "Gewijzigd door",
+  "metaModified": "Datum gewijzigd",
+  "metaContentType": "Contenttype",
+  "metaMimeType": "MIME-type",
+  "metaSize": "Grootte"
 }

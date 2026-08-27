@@ -74,6 +74,8 @@ import {
   IconEdit,
   IconFileSearch,
   IconFolder,
+  IconLayoutSidebarRightCollapse,
+  IconLayoutSidebarRightExpand,
   IconListDetails,
   IconLock,
   IconPhoto,
@@ -425,6 +427,7 @@ export function FileFolderBrowserView({
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
   const [selectedItem, setSelectedItem] = useState<RepositoryNode | null>(null);
   const [metadataNode, setMetadataNode] = useState<RepositoryNode | null>(null);
+  const [metadataOpen, setMetadataOpen] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ completed: number; total: number } | null>(
     null
@@ -1153,13 +1156,18 @@ export function FileFolderBrowserView({
     }
     if (event.key === ' ') {
       event.preventDefault();
-      setMetadataNode(node);
+      handleSelectNode(node);
     }
+  };
+
+  const handleSelectNode = (node: RepositoryNode) => {
+    setMetadataNode(node);
+    setMetadataOpen(true);
   };
 
   const handleShowMetadata = () => {
     if (!selectedItem) return;
-    setMetadataNode(selectedItem);
+    handleSelectNode(selectedItem);
     setContextMenuOpened(false);
   };
 
@@ -1722,7 +1730,7 @@ export function FileFolderBrowserView({
             {sortedChildren.map(child => (
               <Table.Tr
                 key={child.id}
-                onClick={() => setMetadataNode(child)}
+                onClick={() => handleSelectNode(child)}
                 onDoubleClick={() => handleOpenNode(child)}
                 onKeyDown={event => handleRowKeyDown(event, child)}
                 tabIndex={0}
@@ -1899,6 +1907,17 @@ export function FileFolderBrowserView({
           >
             <IconRefresh size={18} />
           </ActionIcon>
+          <ActionIcon
+            variant={metadataOpen ? 'light' : 'subtle'}
+            onClick={() => setMetadataOpen(open => !open)}
+            aria-label={t('fileFolderBrowser:metadataToggle')}
+          >
+            {metadataOpen ? (
+              <IconLayoutSidebarRightCollapse size={18} />
+            ) : (
+              <IconLayoutSidebarRightExpand size={18} />
+            )}
+          </ActionIcon>
         </Group>
       </Group>
 
@@ -1964,14 +1983,33 @@ export function FileFolderBrowserView({
           >
             {renderContent()}
           </Paper>
-          {metadataNode && (
+          {metadataOpen && (
             <div style={{ flex: '0 0 30%', minWidth: 0, minHeight: 0 }}>
-              <NodeMetadataPanel
-                serverId={serverId}
-                nodeId={metadataNode.id}
-                nodeName={metadataNode.name}
-                onClose={() => setMetadataNode(null)}
-              />
+              {metadataNode ? (
+                <NodeMetadataPanel
+                  serverId={serverId}
+                  nodeId={metadataNode.id}
+                  nodeName={metadataNode.name}
+                  isFolder={metadataNode.isFolder}
+                  onClose={() => setMetadataOpen(false)}
+                />
+              ) : (
+                <Paper
+                  withBorder
+                  radius="md"
+                  style={{
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 'var(--mantine-spacing-md)',
+                  }}
+                >
+                  <Text size="sm" c="dimmed" ta="center">
+                    {t('fileFolderBrowser:metadataNoSelection')}
+                  </Text>
+                </Paper>
+              )}
             </div>
           )}
         </Group>

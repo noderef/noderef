@@ -63,5 +63,21 @@
   "metadata": "Métadonnées",
   "metadataAction": "Afficher les métadonnées",
   "closeMetadata": "Fermer le panneau des métadonnées",
-  "metadataLoadError": "Échec du chargement des métadonnées"
+  "metadataLoadError": "Échec du chargement des métadonnées",
+  "metadataToggle": "Afficher ou masquer le panneau des métadonnées",
+  "metadataNoSelection": "Sélectionnez un élément pour voir ses métadonnées",
+  "metaGeneral": "Général",
+  "metaAllProperties": "Toutes les propriétés",
+  "metaComments": "Commentaires",
+  "metaCommentsSoon": "Les commentaires ne sont pas encore disponibles.",
+  "metaName": "Nom",
+  "metaTitle": "Titre",
+  "metaDescription": "Description",
+  "metaCreator": "Créateur",
+  "metaCreated": "Créé le",
+  "metaModifier": "Modifié par",
+  "metaModified": "Modifié le",
+  "metaContentType": "Type de contenu",
+  "metaMimeType": "Type MIME",
+  "metaSize": "Taille"
 }

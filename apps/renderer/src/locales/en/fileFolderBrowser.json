@@ -63,5 +63,21 @@
   "metadata": "Metadata",
   "metadataAction": "Show metadata",
   "closeMetadata": "Close metadata panel",
-  "metadataLoadError": "Failed to load metadata"
+  "metadataLoadError": "Failed to load metadata",
+  "metadataToggle": "Toggle metadata panel",
+  "metadataNoSelection": "Select an item to view its metadata",
+  "metaGeneral": "General",
+  "metaAllProperties": "All properties",
+  "metaComments": "Comments",
+  "metaCommentsSoon": "Comments are not available yet.",
+  "metaName": "Name",
+  "metaTitle": "Title",
+  "metaDescription": "Description",
+  "metaCreator": "Creator",
+  "metaCreated": "Created",
+  "metaModifier": "Modified by",
+  "metaModified": "Modified",
+  "metaContentType": "Content type",
+  "metaMimeType": "MIME type",
+  "metaSize": "Size"
 }

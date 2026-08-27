@@ -63,5 +63,21 @@
   "metadata": "Metadatos",
   "metadataAction": "Mostrar metadatos",
   "closeMetadata": "Cerrar el panel de metadatos",
-  "metadataLoadError": "No se pudieron cargar los metadatos"
+  "metadataLoadError": "No se pudieron cargar los metadatos",
+  "metadataToggle": "Mostrar u ocultar el panel de metadatos",
+  "metadataNoSelection": "Selecciona un elemento para ver sus metadatos",
+  "metaGeneral": "General",
+  "metaAllProperties": "Todas las propiedades",
+  "metaComments": "Comentarios",
+  "metaCommentsSoon": "Los comentarios aún no están disponibles.",
+  "metaName": "Nombre",
+  "metaTitle": "Título",
+  "metaDescription": "Descripción",
+  "metaCreator": "Creador",
+  "metaCreated": "Fecha de creación",
+  "metaModifier": "Modificado por",
+  "metaModified": "Fecha de modificación",
+  "metaContentType": "Tipo de contenido",
+  "metaMimeType": "Tipo MIME",
+  "metaSize": "Tamaño"
 }
