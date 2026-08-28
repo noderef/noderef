@@ -78,6 +78,7 @@
   "nodeBrowser": "Node-Browser",
   "fileFolderBrowser": "Durchsuchen",
   "managePermissionsAction": "Berechtigungen",
+  "refreshAction": "Aktualisieren",
   "renameAction": "Umbenennen",
   "deleteAction": "Löschen",
   "openInJsConsole": "In JavaScript Console öffnen",

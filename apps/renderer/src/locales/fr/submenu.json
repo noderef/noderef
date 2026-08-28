@@ -78,6 +78,7 @@
   "nodeBrowser": "Navigateur de nœuds",
   "fileFolderBrowser": "Parcourir",
   "managePermissionsAction": "Permissions",
+  "refreshAction": "Actualiser",
   "renameAction": "Renommer",
   "deleteAction": "Supprimer",
   "openInJsConsole": "Ouvrir dans la JavaScript Console",
