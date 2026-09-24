@@ -19,7 +19,19 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { cleanupRuntimeFiles, publishPort } from '../../src/lib/port.js';
+import { cleanupRuntimeFiles, isRetryableBindError, publishPort } from '../../src/lib/port.js';
+
+describe('retryable bind errors', () => {
+  it('treats a busy port and a Windows excluded port as retryable', () => {
+    expect(isRetryableBindError('EADDRINUSE')).toBe(true);
+    expect(isRetryableBindError('EACCES')).toBe(true);
+  });
+
+  it('does not retry other bind failures', () => {
+    expect(isRetryableBindError('EADDRNOTAVAIL')).toBe(false);
+    expect(isRetryableBindError(undefined)).toBe(false);
+  });
+});
 
 describe('port runtime files', () => {
   let prevDataDir: string | undefined;
