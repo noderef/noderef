@@ -262,9 +262,9 @@ function generateWixXml(buildPath, arch, version, iconPath, licensePath, useHeat
     : dirStructure.componentRefs;
 
   // When using heat.exe, the directory structure is defined in the harvested fragment
-  // We still need to define INSTALLFOLDER in the main Product
+  // We still need to define APPLICATIONFOLDER in the main Product
   const directoryStructure = useHeat
-    ? '          <!-- Files harvested by heat.exe will be installed to INSTALLFOLDER -->'
+    ? '          <!-- Files harvested by heat.exe will be installed to APPLICATIONFOLDER -->'
     : dirStructure.directoryStructure;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -275,7 +275,13 @@ function generateWixXml(buildPath, arch, version, iconPath, licensePath, useHeat
            Version="${msiVersion}"
            Manufacturer="NodeRef"
            UpgradeCode="${upgradeCode}">
-    <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
+    <Package InstallerVersion="500" Compressed="yes" />
+
+    <!-- Dual-purpose package: WixUI_Advanced lets the user pick "all users" (UAC) or "just me" (no admin).
+         No MSIINSTALLPERUSER: silent installs by an admin must stay per-machine. -->
+    <Property Id="ALLUSERS" Value="2" />
+    <Property Id="ApplicationFolderName" Value="NodeRef" />
+    <Property Id="WixAppFolder" Value="WixPerMachineFolder" />
     
     <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
     
@@ -289,7 +295,7 @@ ${componentRefs}
     
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFilesFolder">
-        <Directory Id="INSTALLFOLDER" Name="NodeRef">
+        <Directory Id="APPLICATIONFOLDER" Name="NodeRef">
 ${directoryStructure}
         </Directory>
       </Directory>
@@ -299,8 +305,8 @@ ${directoryStructure}
             <Shortcut Id="ApplicationStartMenuShortcut"
                       Name="NodeRef"
                       Description="NodeRef - The desktop app every Alfresco admin deserves"
-                      Target="[INSTALLFOLDER]NodeRef.exe"
-                      WorkingDirectory="INSTALLFOLDER"${normalizedIconPath ? '\n                      Icon="AppIcon"' : ''} />
+                      Target="[APPLICATIONFOLDER]NodeRef.exe"
+                      WorkingDirectory="APPLICATIONFOLDER"${normalizedIconPath ? '\n                      Icon="AppIcon"' : ''} />
             <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
             <RegistryValue Root="HKCU" Key="Software\\NodeRef" Name="installed" Type="integer" Value="1" KeyPath="yes" />
           </Component>
@@ -311,7 +317,7 @@ ${directoryStructure}
     ${normalizedIconPath ? '<Property Id="ARPPRODUCTICON" Value="AppIcon" />' : ''}
     ${normalizedLicensePath ? `<WixVariable Id="WixUILicenseRtf" Value="${normalizedLicensePath}" />` : ''}
     
-    <UIRef Id="WixUI_Minimal" />
+    <UIRef Id="WixUI_Advanced" />
   </Product>
 </Wix>`;
 }
@@ -325,7 +331,7 @@ function generateDirectoryStructure(buildPath) {
   const rootGuid = `{${crypto.randomUUID().toUpperCase()}}`;
   const rootComponentId = 'Component_Root';
   directories.set('', {
-    id: 'INSTALLFOLDER',
+    id: 'APPLICATIONFOLDER',
     guid: rootGuid,
     components: [
       `          <Component Id="${rootComponentId}" Guid="${rootGuid}">
@@ -350,7 +356,7 @@ function generateDirectoryStructure(buildPath) {
           if (!directories.has(dirKey)) {
             const dirId = dirKey
               ? `Dir_${dirKey.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50)}`
-              : 'INSTALLFOLDER';
+              : 'APPLICATIONFOLDER';
             const dirGuid = `{${crypto.randomUUID().toUpperCase()}}`;
             directories.set(dirKey, { id: dirId, guid: dirGuid, components: [] });
           }
@@ -453,7 +459,7 @@ async function createMsiInstaller(buildPath, arch, version, iconPath, wixTools) 
         // -var: use variable for source directory (allows -b flag in light.exe)
         // Note: We don't use -sfrag because we need the Fragment wrapper for ComponentGroup
         run(
-          `"${wixTools.heat}" dir "${buildPath}" -nologo -gg -g1 -srd -sreg -scom -ke -out "${harvestedWxsPath}" -cg ApplicationFiles -dr INSTALLFOLDER -var var.SourceDir`
+          `"${wixTools.heat}" dir "${buildPath}" -nologo -gg -g1 -srd -sreg -scom -ke -out "${harvestedWxsPath}" -cg ApplicationFiles -dr APPLICATIONFOLDER -var var.SourceDir`
         );
         useHeat = true;
       } catch (err) {

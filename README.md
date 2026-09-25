@@ -245,7 +245,7 @@ The backend compiles to `resources/node-src/dist/server.js` and this command pro
 #### Platform outputs
 
 - **macOS:** `noderef-mac_x64`, `noderef-mac_arm64`, `noderef-mac_universal`
-- **Windows:** `noderef-win_x64.exe` (MSI: `dist/noderef-win_x64.msi`)
+- **Windows:** `noderef-win_x64.exe` (MSI: `dist/noderef-win_x64.msi`; choose "Advanced" in the installer to install for all users or just for the current user, no admin rights needed)
 - **Linux:** `noderef-linux_x64`, `noderef-linux_arm64`, `noderef-linux_armhf`
 - **Resources bundle:** `resources.neu`
 
