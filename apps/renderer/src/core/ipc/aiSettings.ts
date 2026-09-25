@@ -33,6 +33,7 @@ export async function saveAiSettings(input: {
   provider: string;
   model: string;
   token?: string;
+  baseURL?: string;
   enabled?: boolean;
 }): Promise<{ success: boolean }> {
   return rpc<{ success: boolean }>('backend.ai.saveSettings', input);
@@ -51,6 +52,7 @@ export interface AiModelsResponse {
 export async function listAiModels(params: {
   provider?: string;
   token?: string;
+  baseURL?: string;
 }): Promise<AiModelsResponse> {
   return rpc<AiModelsResponse>('backend.ai.listModels', params);
 }
@@ -60,7 +62,12 @@ export interface AiProvidersResponse {
   providers: Array<{
     id: string;
     label: string;
+    /** True once the provider has saved settings (a token, or a base URL for keyless providers). */
     hasToken: boolean;
+    hasApiKey: boolean;
+    requiresBaseUrl: boolean;
+    tokenOptional: boolean;
+    baseURL: string | null;
     defaultModel: string;
     modelCatalogMode: 'api' | 'api_with_fallback' | 'static';
     capabilities: AiCapability[];

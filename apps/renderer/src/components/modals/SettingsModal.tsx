@@ -36,6 +36,7 @@ import {
   ActionIcon,
   Alert,
   Anchor,
+  Autocomplete,
   Box,
   Button,
   Group,
@@ -56,6 +57,7 @@ import {
   UnstyledButton,
   useComputedColorScheme,
   useMantineColorScheme,
+  type OptionsFilter,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { os } from '@neutralinojs/lib';
@@ -74,7 +76,12 @@ import {
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SearchableModelSelect } from '../common/SearchableModelSelect';
+import {
+  filterModelSelectOptions,
+  MODEL_SELECT_DISPLAY_LIMIT,
+  MODEL_SELECT_DROPDOWN_MAX_HEIGHT,
+  SearchableModelSelect,
+} from '../common/SearchableModelSelect';
 import classes from './SettingsModal.module.css';
 
 type SettingsSection = 'view' | 'language' | 'ai' | 'masking' | 'about';
@@ -90,29 +97,53 @@ interface AiProviderOption {
   value: string;
   label: string;
   defaultModel: string;
+  /** Settings were saved for this provider (with or without an API key). */
+  configured: boolean;
   hasToken: boolean;
+  requiresBaseUrl: boolean;
+  tokenOptional: boolean;
+  baseURL: string | null;
 }
+
+const UNCONFIGURED_PROVIDER_STATE = {
+  configured: false,
+  hasToken: false,
+  requiresBaseUrl: false,
+  tokenOptional: false,
+  baseURL: null,
+} satisfies Partial<AiProviderOption>;
 
 const FALLBACK_AI_PROVIDER_OPTIONS: AiProviderOption[] = [
   {
+    ...UNCONFIGURED_PROVIDER_STATE,
     value: 'anthropic',
     label: 'Anthropic',
     defaultModel: 'claude-3-5-sonnet-20241022',
-    hasToken: false,
   },
+  { ...UNCONFIGURED_PROVIDER_STATE, value: 'minimax', label: 'MiniMax', defaultModel: 'M2.1' },
   {
-    value: 'minimax',
-    label: 'MiniMax',
-    defaultModel: 'M2.1',
-    hasToken: false,
-  },
-  {
+    ...UNCONFIGURED_PROVIDER_STATE,
     value: 'openrouter',
     label: 'OpenRouter',
     defaultModel: 'anthropic/claude-sonnet-4',
-    hasToken: false,
+  },
+  {
+    ...UNCONFIGURED_PROVIDER_STATE,
+    value: 'custom',
+    label: 'Custom',
+    defaultModel: '',
+    requiresBaseUrl: true,
+    tokenOptional: true,
   },
 ];
+
+/** Show the full list while the input holds a listed model; filter only while typing. */
+const filterFreeTextModelOptions: OptionsFilter = input => {
+  const isListedModel = input.options.some(
+    option => 'value' in option && option.value === input.search
+  );
+  return filterModelSelectOptions(isListedModel ? { ...input, search: '' } : input);
+};
 
 export function SettingsModal() {
   const { isOpen, close } = useModal(MODAL_KEYS.SETTINGS);
@@ -129,6 +160,7 @@ export function SettingsModal() {
   const [aiProvider, setAiProvider] = useState(DEFAULT_AI_PROVIDER);
   const [aiModel, setAiModel] = useState(DEFAULT_AI_MODEL);
   const [aiTokenInput, setAiTokenInput] = useState('');
+  const [aiBaseUrlInput, setAiBaseUrlInput] = useState('');
   const [aiHasToken, setAiHasToken] = useState(false);
   const [aiEnabled, setAiEnabled] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
@@ -303,6 +335,10 @@ export function SettingsModal() {
     [aiProviderDefaultModelMap]
   );
 
+  const selectedAiProviderOption = aiProviderOptions.find(option => option.value === aiProvider);
+  const aiRequiresBaseUrl = Boolean(selectedAiProviderOption?.requiresBaseUrl);
+  const aiTokenOptional = Boolean(selectedAiProviderOption?.tokenOptional);
+
   const latestVersion = latestRelease?.version;
   const hasUpdateAvailable = hasUpdate && Boolean(latestVersion);
 
@@ -323,8 +359,17 @@ export function SettingsModal() {
     async ({
       token,
       provider,
+      baseURL,
+      customEndpoint,
       silent,
-    }: { token?: string; provider?: string; silent?: boolean } = {}) => {
+    }: {
+      token?: string;
+      provider?: string;
+      baseURL?: string;
+      /** Model is free text; never pick one on the user's behalf. */
+      customEndpoint?: boolean;
+      silent?: boolean;
+    } = {}) => {
       const providerToUse = provider ?? aiProvider;
       if (!providerToUse) return;
       setAiModelsLoading(true);
@@ -335,6 +380,7 @@ export function SettingsModal() {
         const response = await listAiModels({
           provider: providerToUse,
           token: token && token.length > 0 ? token : undefined,
+          baseURL: baseURL || undefined,
         });
         const options: AiModelOption[] = (response.models || []).map(model => ({
           value: model.id,
@@ -343,18 +389,22 @@ export function SettingsModal() {
         setAiModelOptions(options);
         setAiTokenValid(true);
         setAiTokenError(null);
-        if (options.length > 0) {
-          setAiModel(prev => {
-            const exists = options.some(opt => opt.value === prev);
-            return exists ? prev : options[0].value;
-          });
-        } else {
-          setAiModel(resolveDefaultModelForProvider(providerToUse));
+        if (!customEndpoint) {
+          if (options.length > 0) {
+            setAiModel(prev => {
+              const exists = options.some(opt => opt.value === prev);
+              return exists ? prev : options[0].value;
+            });
+          } else {
+            setAiModel(resolveDefaultModelForProvider(providerToUse));
+          }
         }
         if (!silent) {
           notifications.show({
             title: t('common:success'),
-            message: t('settings:aiValidateSuccess'),
+            message: customEndpoint
+              ? t('settings:aiConnectionSuccess')
+              : t('settings:aiValidateSuccess'),
             color: 'green',
           });
         }
@@ -385,7 +435,11 @@ export function SettingsModal() {
               value: provider.id,
               label: provider.label,
               defaultModel: provider.defaultModel,
-              hasToken: provider.hasToken,
+              configured: provider.hasToken,
+              hasToken: provider.hasApiKey,
+              requiresBaseUrl: provider.requiresBaseUrl,
+              tokenOptional: provider.tokenOptional,
+              baseURL: provider.baseURL ?? null,
             }))
           : FALLBACK_AI_PROVIDER_OPTIONS;
 
@@ -402,24 +456,24 @@ export function SettingsModal() {
           : (providerCatalog?.defaultProvider ??
             resolvedProviderOptions[0]?.value ??
             DEFAULT_AI_PROVIDER);
-      const providerDefaultModel =
-        resolvedProviderOptions.find(option => option.value === resolvedProvider)?.defaultModel ??
-        DEFAULT_AI_MODEL;
-      const providerHasToken = Boolean(
-        resolvedProviderOptions.find(option => option.value === resolvedProvider)?.hasToken
+      const resolvedProviderOption = resolvedProviderOptions.find(
+        option => option.value === resolvedProvider
       );
+      const providerDefaultModel = resolvedProviderOption?.defaultModel ?? DEFAULT_AI_MODEL;
 
       setAiProvider(resolvedProvider);
       setAiModel(response.model ?? providerDefaultModel);
-      setAiHasToken(providerHasToken);
+      setAiHasToken(Boolean(resolvedProviderOption?.hasToken));
+      setAiBaseUrlInput(resolvedProviderOption?.baseURL ?? '');
       setAiEnabled(Boolean(response.enabled));
       setAiTokenInput('');
       setAiTokenValid(false);
       setAiTokenError(null);
       setAiModelOptions([]);
-      if (providerHasToken) {
+      if (resolvedProviderOption?.configured) {
         await fetchAiModels({
           provider: resolvedProvider,
+          customEndpoint: resolvedProviderOption?.requiresBaseUrl,
           silent: true,
         });
       }
@@ -458,20 +512,29 @@ export function SettingsModal() {
     setAiSaving(true);
     try {
       const trimmedToken = aiTokenInput.trim();
+      const savedBaseUrl = aiRequiresBaseUrl ? aiBaseUrlInput.trim() : undefined;
       await saveAiSettings({
         provider: aiProvider,
-        model: aiModel,
+        model: aiModel.trim(),
         token: trimmedToken.length > 0 ? trimmedToken : undefined,
+        baseURL: savedBaseUrl,
         enabled: aiEnabled,
       });
-      if (trimmedToken.length > 0) {
-        setAiHasToken(true);
+      if (trimmedToken.length > 0 || savedBaseUrl) {
+        const hasToken = aiHasToken || trimmedToken.length > 0;
+        setAiHasToken(hasToken);
         setAiProviderOptions(prev =>
-          prev.map(option => (option.value === aiProvider ? { ...option, hasToken: true } : option))
+          prev.map(option =>
+            option.value === aiProvider
+              ? { ...option, configured: true, hasToken, baseURL: savedBaseUrl ?? option.baseURL }
+              : option
+          )
         );
         await fetchAiModels({
           provider: aiProvider,
-          token: trimmedToken,
+          token: trimmedToken || undefined,
+          baseURL: savedBaseUrl,
+          customEndpoint: aiRequiresBaseUrl,
           silent: true,
         });
       } else if (aiHasToken) {
@@ -496,7 +559,17 @@ export function SettingsModal() {
     } finally {
       setAiSaving(false);
     }
-  }, [aiProvider, aiModel, aiTokenInput, aiEnabled, aiHasToken, fetchAiModels, t]);
+  }, [
+    aiProvider,
+    aiModel,
+    aiTokenInput,
+    aiBaseUrlInput,
+    aiRequiresBaseUrl,
+    aiEnabled,
+    aiHasToken,
+    fetchAiModels,
+    t,
+  ]);
 
   // ── Masking callbacks ─────────────────────────────────────────────────────
 
@@ -611,16 +684,27 @@ export function SettingsModal() {
 
   const handleValidateToken = useCallback(async () => {
     const trimmed = aiTokenInput.trim();
-    if (!trimmed && !aiHasToken) {
+    if (!trimmed && !aiHasToken && !aiTokenOptional) {
       setAiTokenError(t('settings:aiValidateNeedToken'));
       setAiTokenValid(false);
       return;
     }
     await fetchAiModels({
       provider: aiProvider,
-      token: trimmed.length > 0 ? trimmed : undefined,
+      token: trimmed,
+      baseURL: aiBaseUrlInput.trim(),
+      customEndpoint: aiRequiresBaseUrl,
     });
-  }, [aiTokenInput, aiHasToken, aiProvider, fetchAiModels, t]);
+  }, [
+    aiTokenInput,
+    aiBaseUrlInput,
+    aiRequiresBaseUrl,
+    aiTokenOptional,
+    aiHasToken,
+    aiProvider,
+    fetchAiModels,
+    t,
+  ]);
 
   const mainMenuItems = [
     {
@@ -990,37 +1074,99 @@ export function SettingsModal() {
                               const providerOption = aiProviderOptions.find(
                                 option => option.value === value
                               );
-                              const hasStoredToken = Boolean(providerOption?.hasToken);
                               setAiProvider(value);
                               setAiModel(resolveDefaultModelForProvider(value));
-                              setAiHasToken(hasStoredToken);
+                              setAiHasToken(Boolean(providerOption?.hasToken));
+                              setAiBaseUrlInput(providerOption?.baseURL ?? '');
                               setAiTokenValid(false);
+                              setAiTokenError(null);
                               setAiModelOptions([]);
-                              if (hasStoredToken && !aiTokenInput.trim()) {
-                                void fetchAiModels({ provider: value });
+                              if (providerOption?.configured && !aiTokenInput.trim()) {
+                                void fetchAiModels({
+                                  provider: value,
+                                  customEndpoint: providerOption?.requiresBaseUrl,
+                                });
                               }
                             }}
                             disabled={aiSaving}
                           />
-                          <SearchableModelSelect
-                            label={t('settings:aiModelLabel')}
-                            data={aiModelOptions}
-                            value={aiModel}
-                            onChange={value => value && setAiModel(value)}
-                            disabled={
-                              !aiTokenValid || aiModelOptions.length === 0 || aiModelsLoading
-                            }
-                            placeholder={
-                              aiTokenValid
-                                ? t('settings:aiModelPlaceholder')
-                                : t('settings:aiModelRequiresValidation')
-                            }
-                            description={
-                              aiTokenValid && aiModelOptions.length > 0
-                                ? t('settings:aiModelSearchHint')
-                                : undefined
-                            }
-                          />
+                          {aiRequiresBaseUrl && (
+                            <TextInput
+                              label={
+                                <span
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                >
+                                  {t('settings:aiBaseUrlLabel')}
+                                  <Tooltip
+                                    label={t('settings:aiBaseUrlDescription')}
+                                    multiline
+                                    w={320}
+                                    withArrow
+                                    position="top-start"
+                                  >
+                                    <IconInfoCircle
+                                      size={16}
+                                      stroke={1.5}
+                                      color="var(--mantine-color-dimmed)"
+                                      style={{ cursor: 'help' }}
+                                      aria-label={t('settings:aiBaseUrlDescription')}
+                                    />
+                                  </Tooltip>
+                                </span>
+                              }
+                              placeholder="http://localhost:11434"
+                              value={aiBaseUrlInput}
+                              onChange={event => {
+                                setAiBaseUrlInput(event.currentTarget.value);
+                                setAiTokenValid(false);
+                                setAiTokenError(null);
+                              }}
+                              disabled={aiSaving}
+                              data-field="aiBaseUrl"
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="off"
+                              spellCheck={false}
+                            />
+                          )}
+                          {aiRequiresBaseUrl ? (
+                            <Autocomplete
+                              label={t('settings:aiModelLabel')}
+                              data={aiModelOptions.map(option => option.value)}
+                              value={aiModel}
+                              onChange={setAiModel}
+                              disabled={aiSaving}
+                              placeholder={t('settings:aiModelFreeTextPlaceholder')}
+                              description={t('settings:aiModelFreeTextHint')}
+                              filter={filterFreeTextModelOptions}
+                              limit={MODEL_SELECT_DISPLAY_LIMIT}
+                              maxDropdownHeight={MODEL_SELECT_DROPDOWN_MAX_HEIGHT}
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="off"
+                              spellCheck={false}
+                            />
+                          ) : (
+                            <SearchableModelSelect
+                              label={t('settings:aiModelLabel')}
+                              data={aiModelOptions}
+                              value={aiModel}
+                              onChange={value => value && setAiModel(value)}
+                              disabled={
+                                !aiTokenValid || aiModelOptions.length === 0 || aiModelsLoading
+                              }
+                              placeholder={
+                                aiTokenValid
+                                  ? t('settings:aiModelPlaceholder')
+                                  : t('settings:aiModelRequiresValidation')
+                              }
+                              description={
+                                aiTokenValid && aiModelOptions.length > 0
+                                  ? t('settings:aiModelSearchHint')
+                                  : undefined
+                              }
+                            />
+                          )}
                           <Group align="flex-end" gap="md">
                             <Box style={{ flex: 1 }}>
                               <PasswordInput
@@ -1041,7 +1187,9 @@ export function SettingsModal() {
                                 description={
                                   aiHasToken
                                     ? t('settings:aiTokenHelperSet')
-                                    : t('settings:aiTokenHelperUnset')
+                                    : aiTokenOptional
+                                      ? t('settings:aiTokenHelperOptional')
+                                      : t('settings:aiTokenHelperUnset')
                                 }
                                 data-field="aiToken"
                                 rightSection={
@@ -1058,10 +1206,15 @@ export function SettingsModal() {
                               onClick={handleValidateToken}
                               loading={aiModelsLoading}
                               disabled={
-                                aiModelsLoading || (!aiHasToken && aiTokenInput.trim().length === 0)
+                                aiModelsLoading ||
+                                (aiRequiresBaseUrl
+                                  ? aiBaseUrlInput.trim().length === 0
+                                  : !aiHasToken && aiTokenInput.trim().length === 0)
                               }
                             >
-                              {t('settings:aiValidate')}
+                              {aiRequiresBaseUrl
+                                ? t('settings:aiTestConnection')
+                                : t('settings:aiValidate')}
                             </Button>
                           </Group>
                           {aiTokenError && (
@@ -1076,7 +1229,11 @@ export function SettingsModal() {
                             <Button
                               onClick={handleAiSave}
                               loading={aiSaving}
-                              disabled={!aiProvider || !aiModel}
+                              disabled={
+                                !aiProvider ||
+                                !aiModel.trim() ||
+                                (aiRequiresBaseUrl && !aiBaseUrlInput.trim())
+                              }
                             >
                               {t('settings:aiSave')}
                             </Button>

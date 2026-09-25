@@ -16,7 +16,7 @@
 
 import type { AiCapability, AiListedModel } from './types.js';
 
-export type AiProviderId = 'anthropic' | 'minimax' | 'openrouter';
+export type AiProviderId = 'anthropic' | 'minimax' | 'openrouter' | 'custom';
 
 export interface AiProviderConfig {
   id: AiProviderId;
@@ -24,8 +24,18 @@ export interface AiProviderConfig {
   defaultModel: string;
   defaultTemperature?: number;
   baseURL?: string;
+  /** The base URL is supplied by the user and stored in the provider settings metadata. */
+  requiresBaseUrl?: boolean;
+  tokenOptional?: boolean;
+  /** Minimum per-call agent timeout; self-hosted models need time to load and to process the prompt. */
+  callTimeoutMs?: number;
   modelCatalogMode: 'api' | 'api_with_fallback' | 'static';
   fallbackModels: AiListedModel[];
+}
+
+export interface AiProviderEndpoint {
+  baseURL?: string;
+  authToken?: string;
 }
 
 const PROVIDERS: Record<AiProviderId, AiProviderConfig> = {
@@ -91,6 +101,18 @@ const PROVIDERS: Record<AiProviderId, AiProviderConfig> = {
       },
     ],
   },
+  // Any server exposing the Anthropic Messages API (Ollama, LiteLLM, llama.cpp, vLLM, ...).
+  custom: {
+    id: 'custom',
+    label: 'Custom',
+    defaultModel: '',
+    defaultTemperature: 0,
+    requiresBaseUrl: true,
+    tokenOptional: true,
+    callTimeoutMs: 300_000,
+    modelCatalogMode: 'api_with_fallback',
+    fallbackModels: [],
+  },
 };
 
 const DEFAULT_PROVIDER_ID: AiProviderId = 'anthropic';
@@ -110,10 +132,61 @@ export function getDefaultAiProvider(): AiProviderConfig {
 
 export function normalizeProviderId(provider: string | null | undefined): AiProviderId | null {
   const normalized = provider?.trim().toLowerCase();
-  if (normalized === 'anthropic' || normalized === 'minimax' || normalized === 'openrouter') {
-    return normalized;
+  return normalized && Object.hasOwn(PROVIDERS, normalized) ? (normalized as AiProviderId) : null;
+}
+
+/**
+ * Normalize a user-supplied base URL for an Anthropic-compatible server.
+ * The SDK appends `/v1/messages` itself, so a trailing `/v1` (as used in OpenAI-style
+ * docs) is stripped. Returns null for anything that is not an http(s) URL.
+ */
+export function normalizeCustomBaseUrl(raw: string | null | undefined): string | null {
+  const trimmed = raw?.trim();
+  if (!trimmed) {
+    return null;
   }
-  return null;
+
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return null;
+  }
+
+  url.search = '';
+  url.hash = '';
+  const path = url.pathname
+    .replace(/\/+$/, '')
+    .replace(/\/v1(\/messages)?$/i, '')
+    .replace(/\/+$/, '');
+  return `${url.origin}${path}`;
+}
+
+export function resolveProviderEndpoint(
+  provider: AiProviderConfig,
+  config: { apiKey?: string; metadata?: Record<string, unknown> | null } | null | undefined
+): AiProviderEndpoint {
+  if (!provider.requiresBaseUrl) {
+    return { baseURL: provider.baseURL };
+  }
+
+  const storedBaseUrl = config?.metadata?.baseURL;
+  const baseURL = typeof storedBaseUrl === 'string' ? normalizeCustomBaseUrl(storedBaseUrl) : null;
+  return {
+    baseURL: baseURL ?? undefined,
+    // Self-hosted gateways commonly expect the key as a Bearer token rather than x-api-key.
+    authToken: config?.apiKey || undefined,
+  };
+}
+
+export function isBaseUrlMissing(
+  provider: AiProviderConfig,
+  endpoint: AiProviderEndpoint
+): boolean {
+  return Boolean(provider.requiresBaseUrl && !endpoint.baseURL);
 }
 
 export function inferModelCapabilities(providerId: AiProviderId, modelId: string): AiCapability[] {
