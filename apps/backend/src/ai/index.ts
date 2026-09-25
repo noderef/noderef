@@ -18,7 +18,7 @@ import { Router, type Router as ExpressRouter, type Response } from 'express';
 import { log } from '../lib/logger.js';
 import { maskString } from '../services/ai/maskingEngine.js';
 import { getMaskingSettings } from '../services/ai/maskingSettings.js';
-import { resolveUserAiConfig } from '../services/ai/userSettingsService.js';
+import { resolveUserAiConfig, type UserAiConfig } from '../services/ai/userSettingsService.js';
 import { getCurrentUserId } from '../services/userBootstrap.js';
 import { getAiAssistantEnabled } from '../services/userSettings.js';
 import { callAnthropic } from './anthropic.js';
@@ -26,7 +26,12 @@ import { DslParseError, parseDslResponseWithRepair, type DslResponse } from './d
 import { buildExecutionPrompt } from './executePrompt.js';
 import { loadMergedLibs } from './loadMergedLibs.js';
 import type { RepositoryJsLibService } from '../services/repositoryJsLibService.js';
-import { getAiProvider, providerSupportsCapability } from './providers.js';
+import {
+  getAiProvider,
+  isBaseUrlMissing,
+  providerSupportsCapability,
+  resolveProviderEndpoint,
+} from './providers.js';
 import { buildRouterPrompt } from './routerPrompt.js';
 import type { AiInputImage, AiInputImageMediaType } from './types.js';
 import type { Manifest } from './types/manifest.js';
@@ -149,9 +154,7 @@ export function createAiRouter({ repositoryJsLibService }: CreateAiRouterOptions
         buildRouterPrompt(question, manifest, { suggestedLibraries: suggested })
       );
 
-      const raw = await callProvider(aiConfig.provider, {
-        apiKey: aiConfig.apiKey,
-        model: aiConfig.model,
+      const raw = await callProvider(aiConfig, {
         prompt: maskedPrompt,
         maxTokens: 400,
         images,
@@ -212,9 +215,7 @@ export function createAiRouter({ repositoryJsLibService }: CreateAiRouterOptions
       });
       const maskedPrompt = await maskPromptForUser(userId, prompt);
 
-      const raw = await callProvider(aiConfig.provider, {
-        apiKey: aiConfig.apiKey,
-        model: aiConfig.model,
+      const raw = await callProvider(aiConfig, {
         prompt: maskedPrompt,
         maxTokens: 8192,
         images,
@@ -222,9 +223,7 @@ export function createAiRouter({ repositoryJsLibService }: CreateAiRouterOptions
 
       const parsed = await parseDslResponseOrThrow(raw, async repairPrompt => {
         const repairedPrompt = await maskPromptForUser(userId, repairPrompt);
-        return callProvider(aiConfig.provider, {
-          apiKey: aiConfig.apiKey,
-          model: aiConfig.model,
+        return callProvider(aiConfig, {
           prompt: repairedPrompt,
           maxTokens: 900,
         });
@@ -285,21 +284,28 @@ export function createAiRouter({ repositoryJsLibService }: CreateAiRouterOptions
   }
 
   async function callProvider(
-    provider: string,
+    config: UserAiConfig,
     args: {
-      apiKey: string;
-      model: string;
       prompt: string;
       maxTokens?: number;
       images?: AiInputImage[];
     }
   ) {
-    const resolvedProvider = getAiProvider(provider);
+    const resolvedProvider = getAiProvider(config.provider);
     if (!resolvedProvider) {
       throw new AiError({
         code: 'AI_PROVIDER_UNSUPPORTED',
-        message: `Provider "${provider}" is not supported.`,
+        message: `Provider "${config.provider}" is not supported.`,
         status: 400,
+      });
+    }
+
+    const endpoint = resolveProviderEndpoint(resolvedProvider, config);
+    if (isBaseUrlMissing(resolvedProvider, endpoint)) {
+      throw new AiError({
+        code: 'AI_CONFIG_MISSING',
+        message: `Provider "${resolvedProvider.label}" has no base URL configured.`,
+        status: 412,
       });
     }
 
@@ -312,12 +318,12 @@ export function createAiRouter({ repositoryJsLibService }: CreateAiRouterOptions
     }
 
     return callAnthropic({
-      apiKey: args.apiKey,
-      model: args.model,
+      apiKey: config.apiKey,
+      model: config.model,
       prompt: args.prompt,
       maxTokens: args.maxTokens,
       temperature: resolvedProvider.defaultTemperature,
-      baseURL: resolvedProvider.baseURL,
+      ...endpoint,
       images: args.images,
     });
   }

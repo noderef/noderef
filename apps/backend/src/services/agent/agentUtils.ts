@@ -16,7 +16,7 @@
 
 import type { AgentMention, AgentRunEvent, AgentRunSummary } from '@app/contracts';
 import type { PrismaClient } from '@prisma/client';
-import { getAiProvider } from '../../ai/providers.js';
+import { getAiProvider, isBaseUrlMissing, resolveProviderEndpoint } from '../../ai/providers.js';
 import { AppErrors } from '../../lib/errors.js';
 import type { AgentRepository } from '../../repositories/agentRepository.js';
 import { resolveUserAiConfig, resolveUserAiConfigForProvider } from '../ai/userSettingsService.js';
@@ -147,12 +147,18 @@ export async function resolveAiRuntime(
     return null;
   }
 
+  const endpoint = resolveProviderEndpoint(provider, aiConfig);
+  if (isBaseUrlMissing(provider, endpoint)) {
+    return null;
+  }
+
   return {
     provider: provider.id,
     model: requestedModel || aiConfig.model || provider.defaultModel,
     apiKey: aiConfig.apiKey,
-    baseURL: provider.baseURL,
+    ...endpoint,
     temperature: provider.defaultTemperature ?? 0,
+    callTimeoutMs: provider.callTimeoutMs,
   };
 }
 

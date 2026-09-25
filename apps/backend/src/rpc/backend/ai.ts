@@ -26,10 +26,14 @@ import {
   getAiProvider,
   getDefaultAiProvider,
   inferModelCapabilities,
+  isBaseUrlMissing,
   listAiProviders,
+  normalizeCustomBaseUrl,
   normalizeProviderId,
   providerSupportsCapability,
+  resolveProviderEndpoint,
   type AiProviderConfig,
+  type AiProviderEndpoint,
 } from '../../ai/providers.js';
 import type { AiListedModel } from '../../ai/types.js';
 import { AppErrors } from '../../lib/errors.js';
@@ -40,6 +44,7 @@ import {
 } from '../../services/ai/maskingSettings.js';
 import {
   listUserAiSettings,
+  parseAiSettingsMetadata,
   resolveUserAiConfig,
   resolveUserAiConfigForProvider,
   upsertUserAiSettings,
@@ -49,6 +54,7 @@ import type { Routes } from './types.js';
 import { getCurrentUserId } from './withAuth.js';
 
 const DEFAULT_PROVIDER = getDefaultAiProvider();
+const INVALID_BASE_URL_MESSAGE = 'A valid http(s) base URL is required for this provider.';
 
 /**
  * Register all AI-related RPC handlers
@@ -59,16 +65,26 @@ export function registerAiHandlers(routes: Routes): void {
     handler: async () => {
       const userId = await getCurrentUserId();
       const settings = await listUserAiSettings(userId);
-      const providersWithToken = new Set(settings.map(setting => setting.provider));
-      const providers = listAiProviders().map(provider => ({
-        id: provider.id,
-        label: provider.label,
-        defaultModel: provider.defaultModel,
-        modelCatalogMode: provider.modelCatalogMode,
-        capabilities: getProviderCapabilities(provider),
-        models: provider.fallbackModels,
-        hasToken: providersWithToken.has(provider.id),
-      }));
+      const settingsByProvider = new Map(settings.map(setting => [setting.provider, setting]));
+      const providers = listAiProviders().map(provider => {
+        const stored = settingsByProvider.get(provider.id);
+        const endpoint = resolveProviderEndpoint(provider, {
+          metadata: parseAiSettingsMetadata(stored?.metadata),
+        });
+        return {
+          id: provider.id,
+          label: provider.label,
+          defaultModel: provider.defaultModel,
+          modelCatalogMode: provider.modelCatalogMode,
+          capabilities: getProviderCapabilities(provider),
+          models: provider.fallbackModels,
+          hasToken: Boolean(stored),
+          hasApiKey: Boolean(stored?.token),
+          requiresBaseUrl: Boolean(provider.requiresBaseUrl),
+          tokenOptional: Boolean(provider.tokenOptional),
+          baseURL: endpoint.baseURL ?? null,
+        };
+      });
 
       return {
         defaultProvider: DEFAULT_PROVIDER.id,
@@ -84,7 +100,9 @@ export function registerAiHandlers(routes: Routes): void {
       const config = await resolveUserAiConfig(userId);
       const configuredProvider = config?.provider ? getAiProvider(config.provider) : null;
       const selectedProvider = configuredProvider || getDefaultAiProvider();
-      const hasToken = Boolean(config?.apiKey && configuredProvider);
+      const hasToken = Boolean(
+        configuredProvider && (config?.apiKey || configuredProvider.tokenOptional)
+      );
       const model = configuredProvider
         ? (config?.model ?? selectedProvider.defaultModel)
         : selectedProvider.defaultModel;
@@ -103,14 +121,16 @@ export function registerAiHandlers(routes: Routes): void {
       provider: z.string().min(1),
       model: z.string().min(1),
       token: z.string().optional(),
+      baseURL: z.string().optional(),
       enabled: z.boolean().optional(),
     }),
     handler: async params => {
       const userId = await getCurrentUserId();
-      const { provider, model, token, enabled } = params as {
+      const { provider, model, token, baseURL, enabled } = params as {
         provider: string;
         model: string;
         token?: string;
+        baseURL?: string;
         enabled?: boolean;
       };
 
@@ -118,7 +138,8 @@ export function registerAiHandlers(routes: Routes): void {
       if (!normalizedProviderId) {
         AppErrors.invalidInput(`Provider "${provider}" is not supported.`);
       }
-      const resolvedProviderId = normalizedProviderId || DEFAULT_PROVIDER.id;
+      const resolvedProvider =
+        getAiProvider(normalizedProviderId || DEFAULT_PROVIDER.id) || DEFAULT_PROVIDER;
 
       const normalizedModel = model.trim();
       if (!normalizedModel) {
@@ -127,11 +148,22 @@ export function registerAiHandlers(routes: Routes): void {
 
       const normalizedToken = token && token.trim().length > 0 ? token.trim() : undefined;
 
+      let metadata: Record<string, unknown> | null = null;
+      if (resolvedProvider.requiresBaseUrl) {
+        const normalizedBaseUrl = normalizeCustomBaseUrl(baseURL);
+        if (!normalizedBaseUrl) {
+          AppErrors.invalidInput(INVALID_BASE_URL_MESSAGE);
+        }
+        metadata = { baseURL: normalizedBaseUrl };
+      }
+
       await upsertUserAiSettings(userId, {
-        provider: resolvedProviderId,
+        provider: resolvedProvider.id,
         model: normalizedModel,
         token: normalizedToken,
+        metadata,
         isDefault: true,
+        allowEmptyToken: resolvedProvider.tokenOptional,
       });
 
       if (typeof enabled === 'boolean') {
@@ -146,12 +178,14 @@ export function registerAiHandlers(routes: Routes): void {
     schema: z.object({
       provider: z.string().optional(),
       token: z.string().optional(),
+      baseURL: z.string().optional(),
     }),
     handler: async (params: unknown) => {
-      const typedParams = params as { provider?: string; token?: string };
+      const typedParams = params as { provider?: string; token?: string; baseURL?: string };
       const userId = await getCurrentUserId();
       const providerOverride = typedParams.provider?.trim();
       const tokenOverride = typedParams.token?.trim();
+      const baseUrlOverride = typedParams.baseURL?.trim();
 
       const defaultConfig = await resolveUserAiConfig(userId).catch(() => null);
 
@@ -171,12 +205,37 @@ export function registerAiHandlers(routes: Routes): void {
         resolvedProvider.id
       ).catch(() => null);
       const token = tokenOverride || providerConfig?.apiKey;
-      if (!token) {
+      if (!token && !resolvedProvider.tokenOptional) {
         AppErrors.invalidInput('No API token provided or stored.');
       }
       const resolvedToken = token || '';
 
-      const models = await listModelsForProvider(resolvedProvider, resolvedToken);
+      const endpoint = resolveProviderEndpoint(resolvedProvider, {
+        apiKey: resolvedToken,
+        metadata: baseUrlOverride ? { baseURL: baseUrlOverride } : providerConfig?.metadata,
+      });
+      if (isBaseUrlMissing(resolvedProvider, endpoint)) {
+        AppErrors.invalidInput(INVALID_BASE_URL_MESSAGE);
+      }
+
+      // Keep the saved model selectable even if the server does not list it.
+      const fallbackModels =
+        resolvedProvider.requiresBaseUrl && providerConfig?.model
+          ? [
+              {
+                id: providerConfig.model,
+                displayName: null,
+                createdAt: null,
+                capabilities: inferModelCapabilities(resolvedProvider.id, providerConfig.model),
+              },
+            ]
+          : resolvedProvider.fallbackModels;
+
+      const models = await listModelsForProvider(
+        { ...resolvedProvider, fallbackModels },
+        resolvedToken,
+        endpoint
+      );
       return { provider: resolvedProvider.id, models };
     },
   };
@@ -225,14 +284,15 @@ function getProviderCapabilities(provider: AiProviderConfig): Array<'text' | 'vi
 
 async function listModelsForProvider(
   provider: AiProviderConfig,
-  apiKey: string
+  apiKey: string,
+  endpoint: AiProviderEndpoint
 ): Promise<AiListedModel[]> {
   if (provider.modelCatalogMode === 'static') {
     return provider.fallbackModels;
   }
 
   try {
-    const remoteModels = await fetchRemoteModelsForProvider(provider, apiKey);
+    const remoteModels = await fetchRemoteModelsForProvider(provider, apiKey, endpoint);
     const normalizedRemote = remoteModels.map(model => ({
       ...model,
       capabilities: inferModelCapabilities(provider.id, model.id),
@@ -250,13 +310,18 @@ async function listModelsForProvider(
 
 async function fetchRemoteModelsForProvider(
   provider: AiProviderConfig,
-  apiKey: string
+  apiKey: string,
+  endpoint: AiProviderEndpoint
 ): Promise<AiListedModel[]> {
   if (provider.id === 'openrouter') {
     return listOpenRouterModels({ apiKey });
   }
 
-  return listAnthropicModels({ apiKey, baseURL: provider.baseURL });
+  const models = await listAnthropicModels({ apiKey, ...endpoint });
+  // Self-hosted catalogs mix in embedding/reranker models that cannot chat.
+  return provider.requiresBaseUrl
+    ? models.filter(model => !/embed|rerank/i.test(model.id))
+    : models;
 }
 
 function mergeUniqueModels(primary: AiListedModel[], fallback: AiListedModel[]): AiListedModel[] {

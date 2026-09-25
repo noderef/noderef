@@ -104,7 +104,9 @@ export interface ResolvedAiRuntime {
   model: string;
   apiKey: string;
   baseURL?: string;
+  authToken?: string;
   temperature: number;
+  callTimeoutMs?: number;
 }
 
 interface StructuredPrompt {

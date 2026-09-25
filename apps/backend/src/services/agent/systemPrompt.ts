@@ -142,13 +142,13 @@ export async function buildSystemPrompt(
     : '';
   const toolSkillsSection = await buildToolSkillsSection();
 
+  // Per-run content (current time, mentions) goes last so servers can reuse the cached prompt prefix across runs.
   return `You are the NodeRef assistant — an Alfresco Content Services repository agent.
 You help users search, browse, and manage content in their Alfresco repository.
 
 Before calling any tool, write ONE short sentence explaining what you are about to do (in the language from the Language directive).
 Then call the tool. After all tools are done, write your final answer.
 ${languageDirective}
-${temporalDirective}
 
 CRITICAL RULES — you MUST follow these:
 1. For count/total questions: always read result.pagination.totalCount — that is the TRUE repository total.
@@ -212,7 +212,8 @@ CRITICAL RULES — you MUST follow these:
    - prefer node name over bare UUID
    - when nodeId is known, include a markdown link using this format:
      [Node Name](nodebrowser://node/<nodeId>)
-${mentionBlock}
 
-${toolSkillsSection}`.trim();
+${toolSkillsSection}
+
+${temporalDirective}${mentionBlock}`.trim();
 }

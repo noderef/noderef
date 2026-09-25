@@ -20,7 +20,7 @@ import { createLogger } from '../../lib/logger.js';
 
 const log = createLogger('alfresco.admin-status');
 
-export const ALFRESCO_ADMINISTRATORS_GROUP_ID = 'GROUP_ALFRESCO_ADMINISTRATORS';
+const ALFRESCO_ADMINISTRATORS_GROUP_ID = 'GROUP_ALFRESCO_ADMINISTRATORS';
 
 export type AlfrescoPersonSummary = {
   id: string;
