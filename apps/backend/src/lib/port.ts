@@ -80,23 +80,33 @@ export function getPreferredPortRange(): { min: number; max: number } | null {
 }
 
 /**
+ * Bind errors that mean "this port cannot be used, try another".
+ * EADDRINUSE: another process holds the port.
+ * EACCES: Windows excluded-port ranges (WinNAT / Hyper-V / WSL) reject the bind.
+ */
+export function isRetryableBindError(code: string | undefined): boolean {
+  return code === 'EADDRINUSE' || code === 'EACCES';
+}
+
+/**
  * Try to listen on a specific port.
- * Returns { success: true, server, actualPort } on success, { success: false } on EADDRINUSE.
+ * Returns { success: true, server, actualPort } on success.
+ * Returns { success: false } when the port is busy or blocked, so the caller can try the next one.
  */
 export function tryListen(
   app: express.Express,
   port: number,
   host: string
-): Promise<{ success: boolean; server?: net.Server; actualPort?: number }> {
-  return new Promise(resolve => {
+): Promise<{ success: boolean; server?: net.Server; actualPort?: number; errorCode?: string }> {
+  return new Promise((resolve, reject) => {
     const server = app.listen(port, host);
     server.once('error', (err: NodeJS.ErrnoException) => {
       server.close();
-      if (err.code === 'EADDRINUSE') {
-        resolve({ success: false });
-      } else {
-        throw err;
+      if (isRetryableBindError(err.code)) {
+        resolve({ success: false, errorCode: err.code });
+        return;
       }
+      reject(err);
     });
     server.once('listening', () => {
       const actualPort = (server.address() as net.AddressInfo)?.port;
@@ -122,7 +132,7 @@ export async function listenWithFallback(
       log.info({ port: result.actualPort }, 'Bound to preferred port');
       return { server: result.server, port: result.actualPort };
     }
-    log.debug({ port }, 'Port in use, trying next');
+    log.debug({ port, errorCode: result.errorCode }, 'Port unavailable, trying next');
   }
 
   // Fall back to OS-assigned ephemeral port
