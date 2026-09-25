@@ -849,7 +849,7 @@ export function SettingsModal() {
                             <Text fw={700}>
                               {t('settings:updateAvailableShort', { version: latestVersion })}
                             </Text>
-                            <UpdateActionButton size="sm" />
+                            <UpdateActionButton size="sm" compact />
                           </Group>
                         </Paper>
                       )}
