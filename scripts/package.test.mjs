@@ -15,8 +15,13 @@
  */
 
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { generateWixXml } from './package.mjs';
+
+const rootDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 test('Windows MSI defaults to per-user install without elevation', () => {
   const xml = generateWixXml('/tmp/noderef-win', 'x64', '0.13.1', '', '', true);
@@ -32,4 +37,11 @@ test('Windows MSI defaults to per-user install without elevation', () => {
   );
   assert.doesNotMatch(xml, /WixPerMachineFolder" \/>/);
   assert.doesNotMatch(xml, /InstallScope="perMachine"/);
+});
+
+test('Neutralino window and Windows exe use the NodeRef PNG icon', () => {
+  const config = JSON.parse(readFileSync(join(rootDir, 'neutralino.config.json'), 'utf8'));
+
+  assert.equal(config.modes.window.icon, '/resources/icons/appIcon.png');
+  assert.equal(config.applicationIcon, 'resources/icons/appIcon.png');
 });

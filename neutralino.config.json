@@ -1,6 +1,8 @@
 {
   "applicationId": "nl.noderef.desktop",
   "version": "0.13.0",
+  "applicationName": "NodeRef",
+  "applicationIcon": "resources/icons/appIcon.png",
   "defaultMode": "window",
   "documentRoot": "/resources/",
   "url": "/",
@@ -42,6 +44,7 @@
   "modes": {
     "window": {
       "title": "NodeRef",
+      "icon": "/resources/icons/appIcon.png",
       "width": 1200,
       "height": 800,
       "minWidth": 800,
