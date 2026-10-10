@@ -23,6 +23,7 @@ import express from 'express';
 import { chmodSync, mkdirSync, unlinkSync, writeFileSync } from 'fs';
 import * as net from 'net';
 import path from 'path';
+import { getOrCreateLaunchToken, LAUNCH_TOKEN_FILE } from './launchToken.js';
 import { log } from './logger.js';
 import { getDataDirFromArgsOrEnv } from './paths.js';
 
@@ -157,12 +158,15 @@ export function publishPort(port: number): void {
     writeFileSync(portFile, String(port), 'utf-8');
     const pidFile = path.join(runtimeDir, 'backend-pid');
     writeFileSync(pidFile, String(process.pid), 'utf-8');
+    const tokenFile = path.join(runtimeDir, LAUNCH_TOKEN_FILE);
+    writeFileSync(tokenFile, getOrCreateLaunchToken(), 'utf-8');
     // Best-effort chmod on POSIX
     if (process.platform !== 'win32') {
       try {
         chmodSync(runtimeDir, 0o700);
         chmodSync(portFile, 0o600);
         chmodSync(pidFile, 0o600);
+        chmodSync(tokenFile, 0o600);
       } catch {
         // Ignore chmod errors
       }
@@ -173,14 +177,14 @@ export function publishPort(port: number): void {
 }
 
 /**
- * Remove runtime files (backend-port, backend-pid) during graceful shutdown.
+ * Remove runtime files (backend-port, backend-pid, backend-token) during graceful shutdown.
  * Prevents stale files from confusing the next app launch.
  */
 export function cleanupRuntimeFiles(): void {
   try {
     const dataDir = getDataDirFromArgsOrEnv();
     const runtimeDir = path.join(dataDir, '.runtime');
-    for (const file of ['backend-port', 'backend-pid']) {
+    for (const file of ['backend-port', 'backend-pid', LAUNCH_TOKEN_FILE]) {
       try {
         unlinkSync(path.join(runtimeDir, file));
       } catch {

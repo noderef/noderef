@@ -42,6 +42,7 @@ import {
 } from './lib/port.js';
 import { registerShutdownRoute } from './lib/shutdownRoute.js';
 import { disconnectPrisma, getPrismaClient } from './lib/prisma.js';
+import { getOrCreateLaunchToken, redactLaunchTokenInUrl } from './lib/launchToken.js';
 import { corsMiddleware } from './middleware/cors.js';
 import { applySecurityMiddleware } from './middleware/security.js';
 import { registerRoutes, type Routes } from './routes/index.js';
@@ -257,7 +258,12 @@ function setupShutdownHandlers(server: net.Server): void {
 async function main() {
   const app = express();
 
-  // CORS must run before rate limiters so 429/4xx responses still include ACAO headers.
+  // Generate the per-launch token before serving requests. publishPort writes it
+  // next to backend-port so the Neutralino renderer can read it from disk.
+  getOrCreateLaunchToken();
+
+  // Host/Origin/token gate (includes CORS). Must run before rate limiters so
+  // 429/4xx responses still include ACAO headers for allowed origins.
   app.use(corsMiddleware());
 
   // Apply security middleware (helmet, rate limiting, content-type validation)
@@ -272,7 +278,7 @@ async function main() {
   // Request logging (dev only)
   if (isDev) {
     app.use((req, _res, next) => {
-      log.info({ method: req.method, url: req.url }, 'http');
+      log.info({ method: req.method, url: redactLaunchTokenInUrl(req.url) }, 'http');
       next();
     });
   }

@@ -36,7 +36,8 @@ import type {
   ValidateOidcCredentialsReq,
   ValidateOidcCredentialsRes,
 } from '@app/contracts';
-import { backendFetch, getRpcBaseUrl, rpc, waitForBackend } from './rpc.js';
+import { appendLaunchTokenToUrl, getCachedLaunchToken } from './launchToken.js';
+import { backendFetch, getRpcBaseUrl, loadLaunchToken, rpc, waitForBackend } from './rpc.js';
 
 /**
  * Generic RPC client for Alfresco operations
@@ -154,11 +155,15 @@ export async function buildStreamUrl(
   params: Record<string, string | number>
 ): Promise<string> {
   const backendUrl = await getBackendUrl();
+  await loadLaunchToken();
   const queryParams = new URLSearchParams({
     method,
     ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])),
   });
-  return `${backendUrl}/rpc-stream?${queryParams.toString()}`;
+  return appendLaunchTokenToUrl(
+    `${backendUrl}/rpc-stream?${queryParams.toString()}`,
+    getCachedLaunchToken()
+  );
 }
 
 /**

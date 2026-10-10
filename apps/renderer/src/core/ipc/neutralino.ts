@@ -18,6 +18,7 @@
 // Shared Neutralino initialization and utilities
 import { app, events, init as neutralinoInit, os } from '@neutralinojs/lib';
 import { getBackendUrl, isBackendReady, setBackendReady } from './backendConnection';
+import { getCachedLaunchToken, LAUNCH_TOKEN_HEADER } from './launchToken';
 
 let ready = false;
 let initPromise: Promise<void> | null = null;
@@ -187,9 +188,15 @@ async function shutdownBackend(): Promise<void> {
       const url = getBackendUrl();
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 2000);
+      const shutdownHeaders: Record<string, string> = {};
+      const token = getCachedLaunchToken();
+      if (token) {
+        shutdownHeaders[LAUNCH_TOKEN_HEADER] = token;
+      }
       await fetch(`${url}/shutdown`, {
         method: 'POST',
         signal: controller.signal,
+        headers: shutdownHeaders,
       });
       clearTimeout(timeout);
       console.log('[Neutralino] Backend shutdown requested via HTTP');
