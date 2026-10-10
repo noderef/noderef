@@ -14,6 +14,13 @@
  * limitations under the License.
  */
 
+import { getBackendUrl } from '@/core/ipc/backendConnection';
+import {
+  getCachedLaunchToken,
+  headersWithLaunchToken,
+  isBackendRequestUrl,
+} from '@/core/ipc/launchToken';
+
 export interface DownloadProgress {
   /** 0–100 when Content-Length is known; null for indeterminate progress */
   percent: number | null;
@@ -41,7 +48,13 @@ export async function downloadResourcesWithProgress(
   onProgress?: (progress: DownloadProgress) => void,
   signal?: AbortSignal
 ): Promise<ArrayBuffer> {
-  const response = await fetch(url, { signal });
+  const backendUrl = getBackendUrl();
+  const response = await fetch(url, {
+    signal,
+    headers: isBackendRequestUrl(url, backendUrl)
+      ? headersWithLaunchToken(undefined, getCachedLaunchToken(), url, backendUrl)
+      : undefined,
+  });
   if (!response.ok) {
     throw new Error(`Download failed (${response.status})`);
   }

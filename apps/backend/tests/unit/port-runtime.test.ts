@@ -61,6 +61,8 @@ describe('port runtime files', () => {
     expect(readFileSync(path.join(runtimeDir, 'backend-pid'), 'utf8').trim()).toBe(
       String(process.pid)
     );
+    const token = readFileSync(path.join(runtimeDir, 'backend-token'), 'utf8').trim();
+    expect(token.length).toBeGreaterThanOrEqual(32);
   });
 
   it('cleanupRuntimeFiles removes backend-port and backend-pid', () => {
@@ -72,9 +74,11 @@ describe('port runtime files', () => {
     const runtimeDir = path.join(tmpBase, '.runtime');
     expect(existsSync(path.join(runtimeDir, 'backend-port'))).toBe(true);
     expect(existsSync(path.join(runtimeDir, 'backend-pid'))).toBe(true);
+    expect(existsSync(path.join(runtimeDir, 'backend-token'))).toBe(true);
 
     cleanupRuntimeFiles();
     expect(existsSync(path.join(runtimeDir, 'backend-port'))).toBe(false);
     expect(existsSync(path.join(runtimeDir, 'backend-pid'))).toBe(false);
+    expect(existsSync(path.join(runtimeDir, 'backend-token'))).toBe(false);
   });
 });

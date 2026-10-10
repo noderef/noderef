@@ -19,6 +19,13 @@
 import { os } from '@neutralinojs/lib';
 import { getBackendUrl, isBackendReady, setBackendReady, setBackendUrl } from './backendConnection';
 import {
+  getCachedLaunchToken,
+  headersWithLaunchToken,
+  isLaunchTokenShape,
+  requestUrlFromInput,
+  setCachedLaunchToken,
+} from './launchToken';
+import {
   ensureNeutralinoReady,
   getBundledNodePath,
   getDataDir,
@@ -295,10 +302,12 @@ async function withTimeout<T>(p: Promise<T>, ms = 5000): Promise<T> {
   ]);
 }
 
-async function readPublishedPortFromFile(): Promise<number | null> {
+async function readRuntimeTextFile(
+  fileName: 'backend-port' | 'backend-token'
+): Promise<string | null> {
   const NL = (window as any).Neutralino;
   if (!NL?.os) {
-    debugLog('[RPC] readPublishedPortFromFile: Neutralino.os not available');
+    debugLog('[RPC] readRuntimeTextFile: Neutralino.os not available');
     return null;
   }
 
@@ -307,7 +316,7 @@ async function readPublishedPortFromFile(): Promise<number | null> {
       setTimeout(() => reject(new Error('getDataDir() timed out')), 3000);
     });
     let dataDir = await Promise.race([getDataDir(), dataDirTimeout]);
-    debugLog('[RPC] readPublishedPortFromFile: dataDir:', dataDir);
+    debugLog('[RPC] readRuntimeTextFile: dataDir:', dataDir);
 
     // Ensure we're using the app-specific directory on all platforms
     const APP_ID = 'nl.noderef.desktop';
@@ -315,22 +324,20 @@ async function readPublishedPortFromFile(): Promise<number | null> {
       if (dataDir.includes('Application Support')) {
         // macOS
         dataDir = `${dataDir}/${APP_ID}`;
-        debugLog('[RPC] readPublishedPortFromFile: Adjusted dataDir (macOS):', dataDir);
+        debugLog('[RPC] readRuntimeTextFile: Adjusted dataDir (macOS):', dataDir);
       } else {
         // Windows/Linux: Append APP_ID
         const pathSep = dataDir.includes('\\') ? '\\' : '/';
         dataDir = `${dataDir}${pathSep}${APP_ID}`;
-        debugLog('[RPC] readPublishedPortFromFile: Adjusted dataDir (Windows/Linux):', dataDir);
+        debugLog('[RPC] readRuntimeTextFile: Adjusted dataDir (Windows/Linux):', dataDir);
       }
     }
 
     const nlPath = (window as any).NL_PATH || '';
     const isWindowsPlatform = windowsPathDetected(nlPath);
-    const rawPortfilePath = `${dataDir}/.runtime/backend-port`;
-    const normalizedPortfilePath = isWindowsPlatform
-      ? rawPortfilePath.replace(/\//g, '\\')
-      : rawPortfilePath;
-    debugLog('[RPC] readPublishedPortFromFile: portfilePath:', normalizedPortfilePath);
+    const rawFilePath = `${dataDir}/.runtime/${fileName}`;
+    const normalizedFilePath = isWindowsPlatform ? rawFilePath.replace(/\//g, '\\') : rawFilePath;
+    debugLog('[RPC] readRuntimeTextFile: path:', normalizedFilePath);
 
     // Try using os.execCommand with cat/type (more reliable in production)
     try {
@@ -340,7 +347,7 @@ async function readPublishedPortFromFile(): Promise<number | null> {
           ? 'darwin'
           : 'linux';
 
-      const pathForExec = platform === 'win32' ? normalizedPortfilePath : rawPortfilePath;
+      const pathForExec = platform === 'win32' ? normalizedFilePath : rawFilePath;
       const readCmd =
         platform === 'win32' ? `cmd /c type "${pathForExec}"` : `cat "${pathForExec}"`;
       const readFileTimeout = new Promise<string>((_, reject) => {
@@ -360,42 +367,96 @@ async function readPublishedPortFromFile(): Promise<number | null> {
 
       const txt = typeof result === 'string' ? result : (result as any).stdOut || '';
       const trimmed = String(txt).trim();
-      debugLog('[RPC] readPublishedPortFromFile: file content:', trimmed);
-      if (!trimmed) {
-        debugLog('[RPC] readPublishedPortFromFile: file is empty');
-        return null;
-      }
-
-      const n = Number(trimmed);
-      if (Number.isFinite(n) && n > 0) {
-        debugLog('[RPC] readPublishedPortFromFile: found port:', n);
-        return n;
-      }
-      debugLog('[RPC] readPublishedPortFromFile: invalid port number:', trimmed);
-      return null;
-    } catch (execError) {
+      debugLog('[RPC] readRuntimeTextFile:', fileName, 'content length:', trimmed.length);
+      return trimmed || null;
+    } catch {
       // Fallback to filesystem API
       if (NL?.filesystem) {
         try {
           const readFileTimeout = new Promise<string>((_, reject) => {
             setTimeout(() => reject(new Error('Timeout')), 2000);
           });
-          const fsPath = isWindowsPlatform ? normalizedPortfilePath : rawPortfilePath;
+          const fsPath = isWindowsPlatform ? normalizedFilePath : rawFilePath;
           const txt = await Promise.race([NL.filesystem.readFile(fsPath), readFileTimeout]);
-          const n = Number(String(txt).trim());
-          if (Number.isFinite(n) && n > 0) {
-            return n;
-          }
+          const trimmed = String(txt).trim();
+          return trimmed || null;
         } catch {
           // Ignore fallback errors
         }
       }
       return null;
     }
-  } catch (err) {
-    // Silently fail - portfile may not exist yet
+  } catch {
+    // Silently fail - runtime file may not exist yet
     return null;
   }
+}
+
+async function readPublishedPortFromFile(): Promise<number | null> {
+  const trimmed = await readRuntimeTextFile('backend-port');
+  if (!trimmed) {
+    return null;
+  }
+  const n = Number(trimmed);
+  if (Number.isFinite(n) && n > 0) {
+    debugLog('[RPC] readPublishedPortFromFile: found port:', n);
+    return n;
+  }
+  debugLog('[RPC] readPublishedPortFromFile: invalid port number:', trimmed);
+  return null;
+}
+
+async function readPublishedTokenFromFile(): Promise<string | null> {
+  const trimmed = await readRuntimeTextFile('backend-token');
+  if (!trimmed || !isLaunchTokenShape(trimmed)) {
+    return null;
+  }
+  return trimmed;
+}
+
+async function readTokenFromViteDev(): Promise<string | null> {
+  if (!import.meta.env.DEV || isNeutralinoMode()) {
+    return null;
+  }
+  try {
+    const res = await fetch('/.tmp/backend-token', { cache: 'no-store' });
+    if (!res.ok) {
+      return null;
+    }
+    const trimmed = (await res.text()).trim();
+    return isLaunchTokenShape(trimmed) ? trimmed : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function loadLaunchToken(): Promise<string | null> {
+  const cached = getCachedLaunchToken();
+  if (cached) {
+    return cached;
+  }
+
+  if (typeof window !== 'undefined') {
+    const injected = (window as Window).__NODEREF_LAUNCH_TOKEN__;
+    if (typeof injected === 'string' && isLaunchTokenShape(injected)) {
+      setCachedLaunchToken(injected);
+      return injected;
+    }
+  }
+
+  const fromFile = await readPublishedTokenFromFile();
+  if (fromFile) {
+    setCachedLaunchToken(fromFile);
+    return fromFile;
+  }
+
+  const fromVite = await readTokenFromViteDev();
+  if (fromVite) {
+    setCachedLaunchToken(fromVite);
+    return fromVite;
+  }
+
+  return null;
 }
 
 async function discoverPort(): Promise<number> {
@@ -541,6 +602,7 @@ async function isAlive(url = getBackendUrl()): Promise<boolean> {
 export async function waitForBackend(maxAttempts = 50, intervalMs = 200): Promise<void> {
   // If already ready, return immediately
   if (isBackendReady() && (await isAlive())) {
+    await loadLaunchToken();
     return;
   }
 
@@ -551,6 +613,7 @@ export async function waitForBackend(maxAttempts = 50, intervalMs = 200): Promis
 
     if (await isAlive(candidate)) {
       setBackendUrl(candidate);
+      await loadLaunchToken();
       setBackendReady(true);
       return;
     }
@@ -569,9 +632,15 @@ export function getRpcBaseUrl(): string {
 /**
  * Shared fetch helper for backend routes that may rely on HttpOnly session cookies.
  */
-export function backendFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+export async function backendFetch(
+  input: RequestInfo | URL,
+  init: RequestInit = {}
+): Promise<Response> {
+  const url = requestUrlFromInput(input);
+  const token = getCachedLaunchToken() ?? (await loadLaunchToken());
   return fetch(input, {
     ...init,
+    headers: headersWithLaunchToken(init.headers, token, url, getBackendUrl()),
     credentials: init.credentials ?? 'include',
   });
 }
@@ -582,6 +651,7 @@ export async function startBackend(): Promise<void> {
   // If already started, return immediately
   if (started) {
     debugLog('[RPC] Backend already started, skipping');
+    await loadLaunchToken();
     return;
   }
 
@@ -605,6 +675,7 @@ export async function startBackend(): Promise<void> {
           });
           const discoveredPort = await Promise.race([discoverPort(), discoverTimeout]);
           setBackendUrl(getBrowserBackendUrlFromLocation() ?? `http://127.0.0.1:${discoveredPort}`);
+          await loadLaunchToken();
           started = true;
           setBackendReady(true);
           debugLog('[RPC] Using existing backend on port:', discoveredPort);
@@ -902,9 +973,14 @@ async function doStartBackend(): Promise<void> {
       if (await isAlive(candidate)) {
         debugLog('[RPC] Backend is alive at:', candidate);
         setBackendUrl(candidate);
-        started = true;
-        setBackendReady(true);
-        return;
+        const token = await loadLaunchToken();
+        if (!token) {
+          debugLog('[RPC] Backend alive but launch token not readable yet');
+        } else {
+          started = true;
+          setBackendReady(true);
+          return;
+        }
       }
 
       // In prod, check portfile directly
@@ -917,9 +993,13 @@ async function doStartBackend(): Promise<void> {
             if (await isAlive(portfileCandidate)) {
               debugLog('[RPC] Backend is alive at portfile port:', portfileCandidate);
               setBackendUrl(portfileCandidate);
-              started = true;
-              setBackendReady(true);
-              return;
+              const token = await loadLaunchToken();
+              if (token) {
+                started = true;
+                setBackendReady(true);
+                return;
+              }
+              debugLog('[RPC] Portfile backend alive but launch token not readable yet');
             }
           }
         } catch (error) {

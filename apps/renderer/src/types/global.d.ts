@@ -44,6 +44,8 @@ interface Window {
   NL_PORT?: string;
   NL_TOKEN?: string;
   NL_APPVERSION?: string;
+  /** Injected by the Vite dev server from the backend runtime file. Web pages cannot read that file. */
+  __NODEREF_LAUNCH_TOKEN__?: string;
 }
 
 // Vite env types

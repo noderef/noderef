@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+import { getBackendUrl } from '@/core/ipc/backendConnection';
+import { getCachedLaunchToken, headersWithLaunchToken } from '@/core/ipc/launchToken';
 import { ensureNeutralinoReady, restartApp } from '@/core/ipc/neutralino';
 import {
   getBackendArchiveDownloadUrl,
@@ -155,7 +157,12 @@ async function postNdjsonDownload(
 ): Promise<void> {
   const response = await fetch(endpoint, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: headersWithLaunchToken(
+      { 'Content-Type': 'application/json' },
+      getCachedLaunchToken(),
+      endpoint,
+      getBackendUrl()
+    ),
     body: JSON.stringify(body),
     signal,
   });
@@ -272,7 +279,13 @@ async function fetchUpdateManifestFromNeutralino(
 }
 
 async function fetchUpdateManifestFromBackend(): Promise<UpdateManifest> {
-  const response = await fetch(getBackendManifestUrl());
+  const manifestUrl = getBackendManifestUrl();
+  const token = getCachedLaunchToken();
+  const response = token
+    ? await fetch(manifestUrl, {
+        headers: headersWithLaunchToken(undefined, token, manifestUrl, getBackendUrl()),
+      })
+    : await fetch(manifestUrl);
   if (!response.ok) {
     throw new Error(`Manifest fetch failed (${response.status})`);
   }
