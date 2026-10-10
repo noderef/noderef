@@ -74,6 +74,9 @@ import {
   IconEdit,
   IconFileSearch,
   IconFolder,
+  IconLayoutSidebarRightCollapse,
+  IconLayoutSidebarRightExpand,
+  IconListDetails,
   IconLock,
   IconPhoto,
   IconPlus,
@@ -90,6 +93,7 @@ import { fromEvent } from 'file-selector';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { DropEvent, FileWithPath } from 'react-dropzone';
 import { useTranslation } from 'react-i18next';
+import { NodeMetadataPanel } from './NodeMetadataPanel';
 
 interface FileFolderBrowserViewProps {
   serverId: number;
@@ -422,6 +426,8 @@ export function FileFolderBrowserView({
   const [contextMenuOpened, setContextMenuOpened] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
   const [selectedItem, setSelectedItem] = useState<RepositoryNode | null>(null);
+  const [metadataNode, setMetadataNode] = useState<RepositoryNode | null>(null);
+  const [metadataOpen, setMetadataOpen] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ completed: number; total: number } | null>(
     null
@@ -455,7 +461,9 @@ export function FileFolderBrowserView({
   const { open: openPermissionsModal } = useModal(MODAL_KEYS.NODE_PERMISSIONS);
   const loadRemoteTextFile = useTextEditorStore(state => state.loadRemoteFile);
   const isCompact = useMediaQuery('(max-width: 1024px)');
-  const tableColumnCount = isCompact ? 4 : 5;
+  // The metadata panel claims 30% of the row, leaving no room for the description column.
+  const showDescription = !isCompact && !metadataOpen;
+  const tableColumnCount = showDescription ? 5 : 4;
 
   // Resizable Name column - width is persisted per server in localStorage
   const {
@@ -559,6 +567,7 @@ export function FileFolderBrowserView({
       const childIds = new Set(children.map(child => child.id));
       return prev.filter(id => childIds.has(id));
     });
+    setMetadataNode(prev => (prev ? (children.find(child => child.id === prev.id) ?? null) : null));
   }, [children]);
 
   const uploadFileToFolder = useCallback(
@@ -1142,10 +1151,26 @@ export function FileFolderBrowserView({
   };
 
   const handleRowKeyDown = (event: React.KeyboardEvent, node: RepositoryNode) => {
-    if (event.key === 'Enter' || event.key === ' ') {
+    if (event.key === 'Enter') {
       event.preventDefault();
       handleOpenNode(node);
+      return;
     }
+    if (event.key === ' ') {
+      event.preventDefault();
+      handleSelectNode(node);
+    }
+  };
+
+  const handleSelectNode = (node: RepositoryNode) => {
+    setMetadataNode(node);
+    setMetadataOpen(true);
+  };
+
+  const handleShowMetadata = () => {
+    if (!selectedItem) return;
+    handleSelectNode(selectedItem);
+    setContextMenuOpened(false);
   };
 
   const handleRowContextMenu = (event: React.MouseEvent, node: RepositoryNode) => {
@@ -1698,7 +1723,7 @@ export function FileFolderBrowserView({
                   isResizing={isResizingNameColumn}
                 />
               </Table.Th>
-              {!isCompact && <Table.Th>{t('fileFolderBrowser:description')}</Table.Th>}
+              {showDescription && <Table.Th>{t('fileFolderBrowser:description')}</Table.Th>}
               <Table.Th style={{ width: 150 }}>{t('fileFolderBrowser:modified')}</Table.Th>
               <Table.Th style={{ width: 150 }}>{t('fileFolderBrowser:modifiedBy')}</Table.Th>
             </Table.Tr>
@@ -1707,11 +1732,16 @@ export function FileFolderBrowserView({
             {sortedChildren.map(child => (
               <Table.Tr
                 key={child.id}
-                onClick={() => handleOpenNode(child)}
+                onClick={() => handleSelectNode(child)}
+                onDoubleClick={() => handleOpenNode(child)}
                 onKeyDown={event => handleRowKeyDown(event, child)}
                 tabIndex={0}
                 onContextMenu={event => handleRowContextMenu(event, child)}
-                style={{ cursor: 'pointer' }}
+                style={{
+                  cursor: 'pointer',
+                  backgroundColor:
+                    metadataNode?.id === child.id ? 'var(--mantine-color-blue-light)' : undefined,
+                }}
               >
                 <Table.Td style={{ width: 32 }}>
                   <Checkbox
@@ -1745,7 +1775,7 @@ export function FileFolderBrowserView({
                     </div>
                   </div>
                 </Table.Td>
-                {!isCompact && (
+                {showDescription && (
                   <Table.Td>
                     <Text size="sm" c="dimmed" lineClamp={2}>
                       {getDescription(child)}
@@ -1879,6 +1909,17 @@ export function FileFolderBrowserView({
           >
             <IconRefresh size={18} />
           </ActionIcon>
+          <ActionIcon
+            variant={metadataOpen ? 'light' : 'subtle'}
+            onClick={() => setMetadataOpen(open => !open)}
+            aria-label={t('fileFolderBrowser:metadataToggle')}
+          >
+            {metadataOpen ? (
+              <IconLayoutSidebarRightCollapse size={18} />
+            ) : (
+              <IconLayoutSidebarRightExpand size={18} />
+            )}
+          </ActionIcon>
         </Group>
       </Group>
 
@@ -1936,13 +1977,27 @@ export function FileFolderBrowserView({
             />
           </div>
         )}
-        <Paper
-          withBorder
-          radius="md"
-          style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}
-        >
-          {renderContent()}
-        </Paper>
+        <Group align="stretch" gap="md" wrap="nowrap" style={{ flex: 1, minHeight: 0 }}>
+          <Paper
+            withBorder
+            radius="md"
+            style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0 }}
+          >
+            {renderContent()}
+          </Paper>
+          {metadataOpen && (
+            <div style={{ flex: '0 0 30%', minWidth: 0, minHeight: 0 }}>
+              {/* Without a selection the panel describes the folder currently being browsed. */}
+              <NodeMetadataPanel
+                serverId={serverId}
+                nodeId={metadataNode?.id ?? nodeId}
+                nodeName={metadataNode?.name ?? nodeName}
+                isFolder={metadataNode?.isFolder ?? true}
+                onClose={() => setMetadataOpen(false)}
+              />
+            </div>
+          )}
+        </Group>
       </Dropzone>
 
       <Menu
@@ -1999,6 +2054,9 @@ export function FileFolderBrowserView({
           {selectedItem && (
             <>
               <Menu.Divider />
+              <Menu.Item leftSection={<IconListDetails size={14} />} onClick={handleShowMetadata}>
+                {t('fileFolderBrowser:metadataAction')}
+              </Menu.Item>
               <Menu.Item leftSection={<IconLock size={14} />} onClick={handleManagePermissions}>
                 {t('submenu:managePermissionsAction')}
               </Menu.Item>
