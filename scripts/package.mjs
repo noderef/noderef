@@ -18,7 +18,7 @@ import { execSync } from 'child_process';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -275,13 +275,19 @@ function generateWixXml(buildPath, arch, version, iconPath, licensePath, useHeat
            Version="${msiVersion}"
            Manufacturer="NodeRef"
            UpgradeCode="${upgradeCode}">
-    <Package InstallerVersion="500" Compressed="yes" />
+    <Package InstallerVersion="500" Compressed="yes" InstallPrivileges="limited" />
 
-    <!-- Dual-purpose package: WixUI_Advanced lets the user pick "all users" (UAC) or "just me" (no admin).
-         No MSIINSTALLPERUSER: silent installs by an admin must stay per-machine. -->
-    <Property Id="ALLUSERS" Value="2" />
+    <!-- Dual-purpose package (Windows Installer 5 single-package authoring):
+         ALLUSERS=2 + MSIINSTALLPERUSER=1 defaults to per-user with no UAC, so a
+         locked-down PC can install into %LocalAppData%. Omitting MSIINSTALLPERUSER
+         makes Windows treat ALLUSERS=2 as per-machine and prompt for admin.
+         InstallPrivileges=limited sets the LUA summary bit so launch is not
+         auto-elevated. WixUI_Advanced still offers "all users" when the MSI is
+         already elevated (Run as administrator). -->
+    <Property Id="ALLUSERS" Secure="yes" Value="2" />
+    <Property Id="MSIINSTALLPERUSER" Secure="yes" Value="1" />
     <Property Id="ApplicationFolderName" Value="NodeRef" />
-    <Property Id="WixAppFolder" Value="WixPerMachineFolder" />
+    <Property Id="WixAppFolder" Value="WixPerUserFolder" />
     
     <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
     
@@ -316,7 +322,14 @@ ${directoryStructure}
     ${normalizedIconPath ? `<Icon Id="AppIcon" SourceFile="${normalizedIconPath}" />` : ''}
     ${normalizedIconPath ? '<Property Id="ARPPRODUCTICON" Value="AppIcon" />' : ''}
     ${normalizedLicensePath ? `<WixVariable Id="WixUILicenseRtf" Value="${normalizedLicensePath}" />` : ''}
-    
+
+    <!-- WixUI_Advanced sets ALLUSERS on InstallScopeDlg but not MSIINSTALLPERUSER.
+         Keep the two properties in sync so "just me" stays unelevated and
+         "all users" is a true per-machine install when already elevated. -->
+    <UI>
+      <Publish Dialog="InstallScopeDlg" Control="Next" Property="MSIINSTALLPERUSER" Value="1" Order="8">WixAppFolder = "WixPerUserFolder"</Publish>
+      <Publish Dialog="InstallScopeDlg" Control="Next" Property="MSIINSTALLPERUSER" Value="{}" Order="9">WixAppFolder = "WixPerMachineFolder"</Publish>
+    </UI>
     <UIRef Id="WixUI_Advanced" />
   </Product>
 </Wix>`;
@@ -905,7 +918,13 @@ async function main() {
   }
 }
 
-main().catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+const isDirectRun =
+  Boolean(process.argv[1]) && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+if (isDirectRun) {
+  main().catch(err => {
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+export { generateWixXml };
