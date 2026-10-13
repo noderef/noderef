@@ -31,21 +31,13 @@ import {
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconArrowBackUp, IconTrash } from '@tabler/icons-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { idleGatewayStatus } from './idleGatewayStatus';
 
 interface AgentGatewaySectionProps {
   serverId: number;
 }
-
-const EMPTY_TEST: AgentGatewayConnectionTestResult = {
-  status: 'not_configured',
-  serverInfo: null,
-  protocolVersion: null,
-  toolCount: 0,
-  promptCount: 0,
-  truncated: false,
-};
 
 export function AgentGatewaySection({ serverId }: AgentGatewaySectionProps) {
   const { t } = useTranslation('server');
@@ -126,20 +118,37 @@ export function AgentGatewaySection({ serverId }: AgentGatewaySectionProps) {
     }
   };
 
-  const result = testResult ?? EMPTY_TEST;
+  const status = useMemo(
+    () =>
+      testResult?.status ??
+      idleGatewayStatus({
+        enabled,
+        endpointUrl,
+        hasStoredKey: Boolean(config?.hasApiKey),
+        apiKey,
+        clearApiKey,
+      }),
+    [apiKey, clearApiKey, config?.hasApiKey, enabled, endpointUrl, testResult]
+  );
 
   return (
     <Stack gap="lg" mt={4}>
       <Switch
         label={t('agentGateway.enable')}
         checked={enabled}
-        onChange={event => setEnabled(event.currentTarget.checked)}
+        onChange={event => {
+          setEnabled(event.currentTarget.checked);
+          setTestResult(null);
+        }}
       />
       <TextInput
         label={t('agentGateway.endpointUrl')}
         placeholder="http://localhost:3100/mcp"
         value={endpointUrl}
-        onChange={event => setEndpointUrl(event.currentTarget.value)}
+        onChange={event => {
+          setEndpointUrl(event.currentTarget.value);
+          setTestResult(null);
+        }}
       />
       <Group align="flex-end" gap="xs" wrap="nowrap">
         <PasswordInput
@@ -155,6 +164,7 @@ export function AgentGatewaySection({ serverId }: AgentGatewaySectionProps) {
           onChange={event => {
             setApiKey(event.currentTarget.value);
             setClearApiKey(false);
+            setTestResult(null);
           }}
         />
         {config?.hasApiKey && !clearApiKey ? (
@@ -167,6 +177,7 @@ export function AgentGatewaySection({ serverId }: AgentGatewaySectionProps) {
               onClick={() => {
                 setClearApiKey(true);
                 setApiKey('');
+                setTestResult(null);
               }}
             >
               <IconTrash size={16} />
@@ -182,6 +193,7 @@ export function AgentGatewaySection({ serverId }: AgentGatewaySectionProps) {
               onClick={() => {
                 setClearApiKey(false);
                 setApiKey('');
+                setTestResult(null);
               }}
             >
               <IconArrowBackUp size={16} />
@@ -191,20 +203,20 @@ export function AgentGatewaySection({ serverId }: AgentGatewaySectionProps) {
       </Group>
 
       <Group gap="xs">
-        <Badge variant="light">{t(`agentGateway.status.${result.status}`)}</Badge>
+        <Badge variant="light">{t(`agentGateway.status.${status}`)}</Badge>
         {testResult ? (
           <Text size="sm" c="dimmed">
             {t('agentGateway.counts', {
-              tools: result.toolCount,
-              prompts: result.promptCount,
+              tools: testResult.toolCount,
+              prompts: testResult.promptCount,
             })}
           </Text>
         ) : null}
       </Group>
-      {result.serverInfo?.title || result.serverInfo?.name ? (
+      {testResult?.serverInfo?.title || testResult?.serverInfo?.name ? (
         <Text size="xs" c="dimmed">
-          {result.serverInfo.title || result.serverInfo.name}
-          {result.serverInfo.version ? ` ${result.serverInfo.version}` : ''}
+          {testResult.serverInfo.title || testResult.serverInfo.name}
+          {testResult.serverInfo.version ? ` ${testResult.serverInfo.version}` : ''}
         </Text>
       ) : null}
 

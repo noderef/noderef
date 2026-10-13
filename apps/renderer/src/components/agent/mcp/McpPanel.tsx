@@ -188,6 +188,10 @@ export function McpPanel({
                   size="xs"
                   style={{ flex: 1 }}
                   placeholder={t('mcp.searchTools')}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
                   value={query}
                   onChange={event => setQuery(event.currentTarget.value)}
                   rightSectionWidth={64}
@@ -389,6 +393,10 @@ export function McpPanel({
                               label={label}
                               required={arg.required}
                               description={argDescription || undefined}
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="off"
+                              spellCheck={false}
                               value={value}
                               onChange={event => setArg(arg.name, event.currentTarget.value)}
                             />

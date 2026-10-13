@@ -75,6 +75,7 @@
     "saved": "Agent Gateway Einstellungen gespeichert",
     "status": {
       "not_configured": "Nicht konfiguriert",
+      "configured": "Konfiguriert",
       "disabled": "Deaktiviert",
       "connected": "Verbunden",
       "unauthorized": "Nicht autorisiert",

@@ -98,7 +98,7 @@
   "qnameGroupAspects": "Aspects",
   "qnameGroupProperties": "Properties",
   "mcp": {
-    "button": "Agent Gateway tools",
+    "button": "Agent Gateway",
     "useInChat": "Use MCP in this chat",
     "tools": "Tools",
     "prompts": "Prompts",

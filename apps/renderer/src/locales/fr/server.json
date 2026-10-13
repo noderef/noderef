@@ -75,6 +75,7 @@
     "saved": "Paramètres Agent Gateway enregistrés",
     "status": {
       "not_configured": "Non configuré",
+      "configured": "Configuré",
       "disabled": "Désactivé",
       "connected": "Connecté",
       "unauthorized": "Non autorisé",

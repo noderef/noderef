@@ -75,6 +75,7 @@
     "saved": "Agent Gateway instellingen opgeslagen",
     "status": {
       "not_configured": "Niet geconfigureerd",
+      "configured": "Geconfigureerd",
       "disabled": "Uitgeschakeld",
       "connected": "Verbonden",
       "unauthorized": "Niet geautoriseerd",
