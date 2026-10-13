@@ -1,6 +1,6 @@
 {
   "applicationId": "nl.noderef.desktop",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "applicationName": "NodeRef",
   "applicationIcon": "resources/icons/appIcon.png",
   "defaultMode": "window",
