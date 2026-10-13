@@ -1,7 +1,5 @@
-This release brings local AI models and an easier Windows install. 🚀
+This patch fixes the Windows per user install, blocks cross origin calls to the local backend, and shows the NodeRef icon in the Windows app. 🔧
 
-You can now connect the agent to **your own AI server** with the new **Custom** provider in the AI settings. Any server that speaks the Anthropic Messages API works, such as Ollama or LiteLLM. Enter the base URL, add a token only if your server needs one, and use **Test connection** to check it and load the available models.
+**Install just for you** now finishes without an administrator prompt. In 0.13.0 that choice still asked for admin rights, so a locked down PC could not complete the install. The installer defaults to your user profile. To install for all users, start the installer with **Run as administrator** and pick that option. If you already installed NodeRef for all users, keep that option when upgrading.
 
-The **Windows installer** can now **install for the current user only**, without admin rights. Click **Advanced** in the installer and pick "Install just for you". NodeRef then installs into your user profile. If you already installed NodeRef for all users, keep that option when upgrading. Switching to a per user install creates a second, separate installation.
-
-On some Windows machines the app got stuck with **"Backend did not become healthy in time."** This happened when Docker Desktop or WSL had reserved the port the backend tries first. The backend now skips reserved ports and moves on to the next free one.
+A website could previously call the local NodeRef backend from another origin. CORS only hid the response in the browser, so the backend still ran the request. Those **cross-origin** calls are now refused before anything runs. The desktop app only accepts requests from this NodeRef session. Docker still opens in the browser on the same address, and **WEB_PASSWORD** still protects it when you set one.
