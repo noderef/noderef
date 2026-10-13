@@ -92,9 +92,10 @@ type ConversationTimelineItem =
       run: AgentRunSummary;
     };
 
-const MODEL_SELECT_MIN_WIDTH = 120;
-const MODEL_SELECT_MAX_WIDTH = 360;
-const MODEL_SELECT_CHROME_PX = 44;
+const COMPOSER_SELECT_MIN_WIDTH = 80;
+const COMPOSER_SELECT_MAX_WIDTH = 360;
+const COMPOSER_SELECT_CHROME_PX = 44;
+const COMPOSER_DROPDOWN_MAX_WIDTH = 380;
 
 let textMeasureContext: CanvasRenderingContext2D | null = null;
 
@@ -106,9 +107,18 @@ function measureComposerText(text: string): number {
   textMeasureContext.font = `500 13px ${fontFamily}`;
   return Math.ceil(textMeasureContext.measureText(text).width);
 }
-const MODEL_DROPDOWN_WIDTH = 380;
-const SERVER_SELECT_WIDTH = 160;
-const SERVER_DROPDOWN_WIDTH = 220;
+function composerSelectWidth(label: string, minWidth = COMPOSER_SELECT_MIN_WIDTH): number {
+  const width = measureComposerText(label) + COMPOSER_SELECT_CHROME_PX;
+  return Math.min(Math.max(width, minWidth), COMPOSER_SELECT_MAX_WIDTH);
+}
+
+function composerDropdownWidth(labels: string[], closedWidth: number): number {
+  const longest = labels.reduce((max, label) => {
+    const width = measureComposerText(label) + COMPOSER_SELECT_CHROME_PX;
+    return Math.max(max, width);
+  }, closedWidth);
+  return Math.min(Math.max(longest, closedWidth), COMPOSER_DROPDOWN_MAX_WIDTH);
+}
 const COMPOSER_SELECT_STYLES = {
   input: {
     border: 'none',
@@ -216,9 +226,22 @@ export function AgentPage() {
     const label =
       aiModelOptions.find(option => option.value === selectedAiModelOption)?.label ??
       t('modelPlaceholder');
-    const width = measureComposerText(label) + MODEL_SELECT_CHROME_PX;
-    return Math.min(Math.max(width, MODEL_SELECT_MIN_WIDTH), MODEL_SELECT_MAX_WIDTH);
+    return composerSelectWidth(label, 120);
   }, [aiModelOptions, selectedAiModelOption, t]);
+  const serverSelectWidth = useMemo(() => {
+    const label =
+      composerServerOptions.find(option => option.value === String(composerServerId))?.label ??
+      t('serverSelectorPlaceholder');
+    return composerSelectWidth(label);
+  }, [composerServerId, composerServerOptions, t]);
+  const serverDropdownWidth = useMemo(
+    () =>
+      composerDropdownWidth(
+        composerServerOptions.map(option => option.label),
+        serverSelectWidth
+      ),
+    [composerServerOptions, serverSelectWidth]
+  );
 
   const [qnameQuery, setQnameQuery] = useState<string | null>(null);
   const [qnamePropertiesByPrefix, setQNamePropertiesByPrefix] = useState<Record<string, string[]>>(
@@ -1316,7 +1339,10 @@ export function AgentPage() {
                         size="xs"
                         placeholder={t('modelPlaceholder')}
                         data={aiModelOptions}
-                        comboboxProps={{ width: MODEL_DROPDOWN_WIDTH, position: 'top-start' }}
+                        comboboxProps={{
+                          width: COMPOSER_DROPDOWN_MAX_WIDTH,
+                          position: 'top-start',
+                        }}
                         value={selectedAiModelOption}
                         disabled={aiModelOptions.length === 0 || aiModelsLoading}
                         variant="unstyled"
@@ -1357,7 +1383,7 @@ export function AgentPage() {
                           size="xs"
                           placeholder={t('serverSelectorPlaceholder')}
                           data={composerServerOptions}
-                          comboboxProps={{ width: SERVER_DROPDOWN_WIDTH }}
+                          comboboxProps={{ width: serverDropdownWidth, position: 'top-start' }}
                           value={composerServerId ? String(composerServerId) : null}
                           variant="unstyled"
                           onChange={value => {
@@ -1373,7 +1399,7 @@ export function AgentPage() {
                           rightSection={<IconChevronDown size={14} />}
                           rightSectionWidth={18}
                           styles={COMPOSER_SELECT_STYLES}
-                          w={SERVER_SELECT_WIDTH}
+                          w={serverSelectWidth}
                           aria-label={t('selectServer')}
                         />
                       ) : null}
