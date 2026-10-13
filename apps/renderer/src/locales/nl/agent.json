@@ -96,5 +96,50 @@
   "loadingMoreResults": "Meer resultaten laden...",
   "qnameGroupTypes": "Types",
   "qnameGroupAspects": "Aspecten",
-  "qnameGroupProperties": "Eigenschappen"
+  "qnameGroupProperties": "Eigenschappen",
+  "mcp": {
+    "button": "Agent Gateway-tools",
+    "useInChat": "MCP gebruiken in deze chat",
+    "tools": "Tools",
+    "prompts": "Prompts",
+    "resources": "Resources",
+    "searchTools": "Tools zoeken",
+    "selectReadOnly": "Alleen lezen selecteren",
+    "selectNone": "Geen",
+    "tooManyTools": "Meer dan 25 tools zijn geselecteerd. Dat kan de modelcontext vol maken.",
+    "noTools": "Geen tools beschikbaar.",
+    "noPrompts": "Geen prompts beschikbaar.",
+    "noResources": "Geen resources beschikbaar.",
+    "noDescription": "Geen beschrijving",
+    "insertPrompt": "Klaarzetten als concept",
+    "read": "Lezen",
+    "addContext": "Toevoegen als context",
+    "refresh": "Vernieuwen",
+    "serverSettings": "Serverinstellingen",
+    "saveFailed": "MCP-instellingen opslaan mislukt",
+    "promptFailed": "Prompt laden mislukt",
+    "resourceFailed": "Resource lezen mislukt",
+    "chatRequired": "Verstuur eerst een bericht om deze chat aan te maken, en probeer het daarna opnieuw.",
+    "requiredArgs": "Verplichte velden: {{names}}",
+    "replaceDraft": "Het huidige concept vervangen door deze prompt?",
+    "emptyResource": "Resource is leeg.",
+    "removeContext": "Context verwijderen",
+    "policy": {
+      "read": "alleen lezen volgens gateway",
+      "write": "schrijven volgens gateway",
+      "destructive_or_unknown": "destructief of onbekend volgens gateway"
+    },
+    "empty": {
+      "notConfigured": "Agent Gateway is niet geconfigureerd voor deze server.",
+      "disabled": "Agent Gateway is uitgeschakeld voor deze server.",
+      "unauthorized": "De gateway weigerde de API-sleutel.",
+      "forbidden": "De gateway weigerde dit verzoek.",
+      "unreachable": "De gateway is niet bereikbaar.",
+      "redirectBlocked": "De gateway stuurde een redirect, die is geblokkeerd.",
+      "protocolError": "De protocolhandshake met de gateway is mislukt.",
+      "missingCredentials": "Alfresco-inloggegevens ontbreken voor deze server.",
+      "environmentMismatch": "De gatewayomgeving komt niet overeen met deze Alfresco-server.",
+      "connected": "Verbonden met Agent Gateway."
+    }
+  }
 }

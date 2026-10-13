@@ -58,5 +58,44 @@
   "success": "Erfolgreich",
   "serverUpdated": "Server \"{{name}}\" aktualisiert",
   "updateError": "Fehler",
-  "updateErrorMessage": "Server konnte nicht aktualisiert werden"
+  "updateErrorMessage": "Server konnte nicht aktualisiert werden",
+  "agentGateway": {
+    "title": "Agent Gateway",
+    "description": "Verbinden Sie diesen Alfresco-Server mit einem NodeRef Agent Gateway für zusätzliche Tools, Prompts und Ressourcen.",
+    "enable": "Agent Gateway aktivieren",
+    "endpointUrl": "Gateway-URL",
+    "endpointHint": "In Docker zeigt localhost auf den Backend-Container selbst. Verwenden Sie host.docker.internal, um ein Gateway auf dem Host zu erreichen.",
+    "apiKey": "Gateway-API-Schlüssel",
+    "apiKeyPlaceholder": "Gateway-API-Schlüssel",
+    "apiKeySavedPlaceholder": "Schlüssel gespeichert — leer lassen, um ihn zu behalten",
+    "removeKey": "Entfernen",
+    "undoKey": "Rückgängig",
+    "aclTitle": "Das Gateway bestimmt die verfügbaren Tools",
+    "aclBody": "Das Gateway entscheidet, welche Tools verfügbar sind. SQL- und Index-Tools nutzen Backend-Konten und folgen keinen Alfresco-ACLs. Die Umgebungsprüfung deckt nur die Alfresco-Passthrough-Route ab, nicht SQL oder Index.",
+    "counts": "{{tools}} Tools · {{prompts}} Prompts · {{resources}} Ressourcen · {{templates}} Vorlagen",
+    "test": "Verbindung testen",
+    "verify": "Umgebung prüfen",
+    "testFailed": "Verbindungstest fehlgeschlagen",
+    "verifyFailed": "Umgebungsprüfung fehlgeschlagen",
+    "saved": "Agent-Gateway-Einstellungen gespeichert",
+    "verificationHint": "Die Prüfung vergleicht repository.id auf der Alfresco-Passthrough-Route. SQL- und Index-Backends sind nicht abgedeckt.",
+    "status": {
+      "not_configured": "Nicht konfiguriert",
+      "disabled": "Deaktiviert",
+      "connected": "Verbunden",
+      "unauthorized": "Nicht autorisiert",
+      "forbidden": "Verboten",
+      "unreachable": "Nicht erreichbar",
+      "redirect_blocked": "Weiterleitung blockiert",
+      "protocol_error": "Protokollfehler",
+      "missing_alfresco_credentials": "Alfresco-Anmeldedaten fehlen",
+      "environment_mismatch": "Umgebung stimmt nicht überein"
+    },
+    "verification": {
+      "verified": "Umgebung geprüft",
+      "mismatch": "Umgebung stimmt nicht überein",
+      "unverified": "Nicht geprüft",
+      "unsupported": "Prüfung nicht unterstützt"
+    }
+  }
 }

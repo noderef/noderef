@@ -58,5 +58,44 @@
   "success": "Succes",
   "serverUpdated": "Server \"{{name}}\" bijgewerkt",
   "updateError": "Fout",
-  "updateErrorMessage": "Kan server niet bijwerken"
+  "updateErrorMessage": "Kan server niet bijwerken",
+  "agentGateway": {
+    "title": "Agent Gateway",
+    "description": "Koppel deze Alfresco-server aan een NodeRef Agent Gateway voor extra tools, prompts en resources.",
+    "enable": "Agent Gateway inschakelen",
+    "endpointUrl": "Gateway-URL",
+    "endpointHint": "In Docker wijst localhost naar de backend-container zelf. Gebruik host.docker.internal om een gateway op de host te bereiken.",
+    "apiKey": "Gateway-API-sleutel",
+    "apiKeyPlaceholder": "Gateway-API-sleutel",
+    "apiKeySavedPlaceholder": "Sleutel ingesteld — laat leeg om te behouden",
+    "removeKey": "Verwijderen",
+    "undoKey": "Ongedaan maken",
+    "aclTitle": "De gateway bepaalt welke tools beschikbaar zijn",
+    "aclBody": "De gateway bepaalt welke tools beschikbaar zijn. SQL- en index-tools gebruiken backendaccounts en volgen geen Alfresco-ACL. Omgevingsverificatie dekt alleen de Alfresco-passthrough-route, niet SQL of index.",
+    "counts": "{{tools}} tools · {{prompts}} prompts · {{resources}} resources · {{templates}} templates",
+    "test": "Verbinding testen",
+    "verify": "Omgeving verifiëren",
+    "testFailed": "Verbindingstest mislukt",
+    "verifyFailed": "Omgevingsverificatie mislukt",
+    "saved": "Agent Gateway-instellingen opgeslagen",
+    "verificationHint": "Verificatie vergelijkt repository.id op de Alfresco-passthrough-route. SQL- en index-backends vallen hierbuiten.",
+    "status": {
+      "not_configured": "Niet geconfigureerd",
+      "disabled": "Uitgeschakeld",
+      "connected": "Verbonden",
+      "unauthorized": "Niet geautoriseerd",
+      "forbidden": "Geen toegang",
+      "unreachable": "Onbereikbaar",
+      "redirect_blocked": "Redirect geblokkeerd",
+      "protocol_error": "Protocolfout",
+      "missing_alfresco_credentials": "Alfresco-inloggegevens ontbreken",
+      "environment_mismatch": "Omgeving komt niet overeen"
+    },
+    "verification": {
+      "verified": "Omgeving geverifieerd",
+      "mismatch": "Omgeving komt niet overeen",
+      "unverified": "Niet geverifieerd",
+      "unsupported": "Verificatie niet ondersteund"
+    }
+  }
 }

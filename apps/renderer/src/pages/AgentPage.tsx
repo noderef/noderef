@@ -34,6 +34,7 @@ import { parseColonQuery, useQNameSuggestions } from '@/hooks/useQNameSuggestion
 import { useSearchDictionary } from '@/hooks/useSearchDictionary';
 import {
   ActionIcon,
+  Badge,
   Box,
   Button,
   Group,
@@ -55,10 +56,13 @@ import {
   IconServer2,
   IconShield,
   IconShieldCheck,
+  IconX,
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SearchableModelSelect } from '../components/common/SearchableModelSelect';
+import { McpComposerButton } from '../components/agent/mcp/McpComposerButton';
+import { mentionChipStyle } from '../components/agent/mentionChip';
 import { AgentChatInput, AgentChatInputRef } from '../components/agent/AgentChatInput';
 import { AgentEmptyState } from '../components/agent/AgentEmptyState';
 import { AgentMessageBubble, parseNodeBrowserLink } from '../components/agent/AgentMessageBubble';
@@ -137,6 +141,13 @@ export function AgentPage() {
   const upsertChat = useAgentStore(state => state.upsertChat);
   const setActiveChatId = useAgentStore(state => state.setActiveChatId);
   const setChatAutoConfirm = useAgentStore(state => state.setChatAutoConfirm);
+  const setChatMcp = useAgentStore(state => state.setChatMcp);
+  const setPendingMcp = useAgentStore(state => state.setPendingMcp);
+  const addContextResource = useAgentStore(state => state.addContextResource);
+  const removeContextResource = useAgentStore(state => state.removeContextResource);
+  const clearContextResources = useAgentStore(state => state.clearContextResources);
+  const contextResourcesByChat = useAgentStore(state => state.contextResourcesByChat);
+  const pendingContextResources = useAgentStore(state => state.pendingContextResources);
 
   const [loadingConversation, setLoadingConversation] = useState(false);
   const [sending, setSending] = useState(false);
@@ -179,6 +190,10 @@ export function AgentPage() {
     [servers]
   );
   const modelSelectionServerId = activeChat?.serverId || activeServerId || composerServerId || null;
+  const mcpServerId = activeChat?.serverId || activeServerId || composerServerId || null;
+  const composerContextResources = activeChatId
+    ? contextResourcesByChat[activeChatId] || []
+    : pendingContextResources;
   const {
     aiModelOptions,
     selectedAiModelOption,
@@ -906,10 +921,23 @@ export function AgentPage() {
           return;
         }
 
-        const chat = await backendRpc.agent.createChat({ serverId });
+        const pendingMcp = useAgentStore.getState().pendingMcp;
+        const chat = await backendRpc.agent.createChat({
+          serverId,
+          mcp: pendingMcp ?? undefined,
+        });
         upsertChat(chat);
         setActiveChatId(chat.id);
         chatId = chat.id;
+        if (pendingMcp) {
+          setChatMcp(chat.id, pendingMcp);
+          setPendingMcp(null);
+        }
+        const pendingContext = useAgentStore.getState().pendingContextResources;
+        for (const item of pendingContext) {
+          addContextResource(chat.id, item);
+        }
+        clearContextResources(null);
 
         // Preserve the currently selected model as this chat's explicit model.
         if (aiProvider && aiModel) {
@@ -927,6 +955,7 @@ export function AgentPage() {
         setChatAutoConfirm(chatId, true);
       }
 
+      const contextResources = useAgentStore.getState().contextResourcesByChat[chatId] || [];
       const response = await backendRpc.agent.sendMessage({
         chatId,
         content: text.trim(),
@@ -935,6 +964,9 @@ export function AgentPage() {
         aiModel: aiModel || undefined,
         appLanguage: appLanguage || undefined,
         autoApproveConfirmations: enableAutoConfirmForThisSend,
+        ...(contextResources.length
+          ? { contextResources: contextResources.map(item => ({ uri: item.uri })) }
+          : {}),
       });
 
       addMessage(chatId, response.message);
@@ -943,6 +975,7 @@ export function AgentPage() {
       setDraft('');
       setMentionQuery(null);
       resetMentionSuggestions();
+      clearContextResources(chatId);
       setRecentlySentMessage(true);
 
       await pollActiveChat();
@@ -1259,6 +1292,29 @@ export function AgentPage() {
             </Paper>
           ) : (
             <>
+              {composerContextResources.length > 0 ? (
+                <Group gap={6} mb="xs" wrap="wrap">
+                  {composerContextResources.map(item => (
+                    <Badge
+                      key={item.uri}
+                      style={mentionChipStyle}
+                      rightSection={
+                        <ActionIcon
+                          size={14}
+                          variant="transparent"
+                          color="gray"
+                          aria-label={t('mcp.removeContext')}
+                          onClick={() => removeContextResource(activeChatId, item.uri)}
+                        >
+                          <IconX size={10} />
+                        </ActionIcon>
+                      }
+                    >
+                      {item.name || item.uri}
+                    </Badge>
+                  ))}
+                </Group>
+              ) : null}
               <Box style={{ position: 'relative' }}>
                 <Paper withBorder p="sm" radius="md">
                   <AgentChatInput
@@ -1319,6 +1375,12 @@ export function AgentPage() {
                         rightSectionWidth={18}
                         styles={COMPOSER_SELECT_STYLES}
                         w={MODEL_SELECT_WIDTH}
+                      />
+                      <McpComposerButton
+                        serverId={mcpServerId}
+                        chatId={activeChatId}
+                        draftEmpty={!draft.trim()}
+                        onInsertDraft={setDraft}
                       />
                       {activeServerId === null && activeChatId === null ? (
                         <Select

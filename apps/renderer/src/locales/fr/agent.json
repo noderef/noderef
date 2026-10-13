@@ -95,5 +95,50 @@
   "loadingMoreResults": "Chargement de plus de resultats...",
   "qnameGroupTypes": "Types",
   "qnameGroupAspects": "Aspects",
-  "qnameGroupProperties": "Propriétés"
+  "qnameGroupProperties": "Propriétés",
+  "mcp": {
+    "button": "Outils Agent Gateway",
+    "useInChat": "Utiliser MCP dans ce chat",
+    "tools": "Outils",
+    "prompts": "Prompts",
+    "resources": "Ressources",
+    "searchTools": "Rechercher des outils",
+    "selectReadOnly": "Sélectionner lecture seule",
+    "selectNone": "Aucun",
+    "tooManyTools": "Plus de 25 outils sont sélectionnés. Cela peut encombrer le contexte du modèle.",
+    "noTools": "Aucun outil disponible.",
+    "noPrompts": "Aucun prompt disponible.",
+    "noResources": "Aucune ressource disponible.",
+    "noDescription": "Aucune description",
+    "insertPrompt": "Préparer comme brouillon",
+    "read": "Lire",
+    "addContext": "Ajouter comme contexte",
+    "refresh": "Actualiser",
+    "serverSettings": "Paramètres du serveur",
+    "saveFailed": "Impossible d’enregistrer les paramètres MCP",
+    "promptFailed": "Impossible de charger le prompt",
+    "resourceFailed": "Impossible de lire la ressource",
+    "chatRequired": "Envoyez un premier message pour créer ce chat, puis réessayez.",
+    "requiredArgs": "Champs obligatoires : {{names}}",
+    "replaceDraft": "Remplacer le brouillon actuel par ce prompt ?",
+    "emptyResource": "La ressource est vide.",
+    "removeContext": "Retirer le contexte",
+    "policy": {
+      "read": "lecture seule selon la passerelle",
+      "write": "écriture selon la passerelle",
+      "destructive_or_unknown": "destructif ou inconnu selon la passerelle"
+    },
+    "empty": {
+      "notConfigured": "Agent Gateway n’est pas configuré pour ce serveur.",
+      "disabled": "Agent Gateway est désactivé pour ce serveur.",
+      "unauthorized": "La passerelle a rejeté la clé API.",
+      "forbidden": "La passerelle a refusé cette requête.",
+      "unreachable": "La passerelle est injoignable.",
+      "redirectBlocked": "La passerelle a redirigé la requête, ce qui est bloqué.",
+      "protocolError": "La négociation de protocole avec la passerelle a échoué.",
+      "missingCredentials": "Les identifiants Alfresco manquent pour ce serveur.",
+      "environmentMismatch": "L’environnement de la passerelle ne correspond pas à ce serveur Alfresco.",
+      "connected": "Connecté à Agent Gateway."
+    }
+  }
 }

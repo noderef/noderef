@@ -38,12 +38,14 @@ import {
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { filesystem, os } from '@neutralinojs/lib';
-import { IconEdit, IconInfoCircle, IconPalette, IconSettings } from '@tabler/icons-react';
+import { IconEdit, IconInfoCircle, IconPalette, IconPlugConnected, IconSettings } from '@tabler/icons-react';
+import { AgentGatewaySection } from './serverEdit/AgentGatewaySection';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import classes from './SettingsModal.module.css';
 
-type ServerEditSection = 'general' | 'appearance' | 'info';
+type ServerEditSection = 'general' | 'appearance' | 'agentGateway' | 'info';
+export type ServerEditPayload = number | { serverId: number; section?: ServerEditSection };
 
 interface UsageData {
   lastUpdate?: number;
@@ -67,8 +69,16 @@ export function ServerEditModal() {
   const colorScheme = useComputedColorScheme('light', { getInitialValueInEffect: true });
   const isDark = colorScheme === 'dark';
 
-  // Payload should be serverId (number)
-  const serverId = typeof payload === 'number' ? payload : null;
+  const serverId =
+    typeof payload === 'number'
+      ? payload
+      : payload && typeof payload === 'object' && 'serverId' in payload
+        ? Number((payload as { serverId: number }).serverId)
+        : null;
+  const initialSection =
+    payload && typeof payload === 'object' && 'section' in payload
+      ? ((payload as { section?: ServerEditSection }).section ?? 'general')
+      : 'general';
   const server = getServerById(serverId);
 
   const [activeSection, setActiveSection] = useState<ServerEditSection>('general');
@@ -120,14 +130,14 @@ export function ServerEditModal() {
       setColor(server.color || null);
       setLabel(server.label || null);
       setThumbnail(server.thumbnail || null);
-      setActiveSection('general');
+      setActiveSection(initialSection);
       setUsageData(null);
       setUsageError(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
     }
-  }, [server, isOpen]);
+  }, [server, isOpen, initialSection]);
 
   // Fetch usage data when Info tab is active and server is Alfresco
   useEffect(() => {
@@ -338,6 +348,12 @@ export function ServerEditModal() {
       label: t('appearance'),
       icon: IconPalette,
       description: t('appearanceDescription'),
+    },
+    {
+      key: 'agentGateway' as ServerEditSection,
+      label: t('agentGateway.title'),
+      icon: IconPlugConnected,
+      description: t('agentGateway.description'),
     },
     {
       key: 'info' as ServerEditSection,
@@ -643,6 +659,10 @@ export function ServerEditModal() {
                         </Button>
                       </Group>
                     </Stack>
+                  )}
+
+                  {activeSection === 'agentGateway' && (
+                    <AgentGatewaySection serverId={server.id} />
                   )}
 
                   {activeSection === 'info' && (

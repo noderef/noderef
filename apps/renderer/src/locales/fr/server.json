@@ -58,5 +58,44 @@
   "success": "Succès",
   "serverUpdated": "Serveur « {{name}} » mis à jour",
   "updateError": "Erreur",
-  "updateErrorMessage": "Impossible de mettre à jour le serveur"
+  "updateErrorMessage": "Impossible de mettre à jour le serveur",
+  "agentGateway": {
+    "title": "Agent Gateway",
+    "description": "Connectez ce serveur Alfresco à une NodeRef Agent Gateway pour des outils, prompts et ressources supplémentaires.",
+    "enable": "Activer Agent Gateway",
+    "endpointUrl": "URL de la passerelle",
+    "endpointHint": "Dans Docker, localhost pointe vers le conteneur backend lui-même. Utilisez host.docker.internal pour joindre une passerelle sur l’hôte.",
+    "apiKey": "Clé API de la passerelle",
+    "apiKeyPlaceholder": "Clé API de la passerelle",
+    "apiKeySavedPlaceholder": "Clé enregistrée — laissez vide pour la conserver",
+    "removeKey": "Supprimer",
+    "undoKey": "Annuler",
+    "aclTitle": "La passerelle définit les outils disponibles",
+    "aclBody": "La passerelle décide des outils disponibles. Les outils SQL et d’index utilisent des comptes backend et ne suivent pas les ACL Alfresco. La vérification d’environnement ne couvre que la route de passthrough Alfresco, pas SQL ni l’index.",
+    "counts": "{{tools}} outils · {{prompts}} prompts · {{resources}} ressources · {{templates}} modèles",
+    "test": "Tester la connexion",
+    "verify": "Vérifier l’environnement",
+    "testFailed": "Échec du test de connexion",
+    "verifyFailed": "Échec de la vérification d’environnement",
+    "saved": "Paramètres Agent Gateway enregistrés",
+    "verificationHint": "La vérification compare repository.id sur la route de passthrough Alfresco. Les backends SQL et d’index ne sont pas couverts.",
+    "status": {
+      "not_configured": "Non configuré",
+      "disabled": "Désactivé",
+      "connected": "Connecté",
+      "unauthorized": "Non autorisé",
+      "forbidden": "Interdit",
+      "unreachable": "Injoignable",
+      "redirect_blocked": "Redirection bloquée",
+      "protocol_error": "Erreur de protocole",
+      "missing_alfresco_credentials": "Identifiants Alfresco manquants",
+      "environment_mismatch": "Environnement incompatible"
+    },
+    "verification": {
+      "verified": "Environnement vérifié",
+      "mismatch": "Environnement incompatible",
+      "unverified": "Non vérifié",
+      "unsupported": "Vérification non prise en charge"
+    }
+  }
 }

@@ -96,5 +96,50 @@
   "loadingMoreResults": "Loading more results...",
   "qnameGroupTypes": "Types",
   "qnameGroupAspects": "Aspects",
-  "qnameGroupProperties": "Properties"
+  "qnameGroupProperties": "Properties",
+  "mcp": {
+    "button": "Agent Gateway tools",
+    "useInChat": "Use MCP in this chat",
+    "tools": "Tools",
+    "prompts": "Prompts",
+    "resources": "Resources",
+    "searchTools": "Search tools",
+    "selectReadOnly": "Select read-only",
+    "selectNone": "None",
+    "tooManyTools": "More than 25 tools are selected. That can crowd the model context.",
+    "noTools": "No tools available.",
+    "noPrompts": "No prompts available.",
+    "noResources": "No resources available.",
+    "noDescription": "No description",
+    "insertPrompt": "Insert as draft",
+    "read": "Read",
+    "addContext": "Add as context",
+    "refresh": "Refresh",
+    "serverSettings": "Server settings",
+    "saveFailed": "Could not save MCP settings",
+    "promptFailed": "Could not load prompt",
+    "resourceFailed": "Could not read resource",
+    "chatRequired": "Send a first message to create this chat, then try again.",
+    "requiredArgs": "Required fields: {{names}}",
+    "replaceDraft": "Replace the current draft with this prompt?",
+    "emptyResource": "Resource is empty.",
+    "removeContext": "Remove context",
+    "policy": {
+      "read": "read-only according to gateway",
+      "write": "write according to gateway",
+      "destructive_or_unknown": "destructive or unknown according to gateway"
+    },
+    "empty": {
+      "notConfigured": "Agent Gateway is not configured for this server.",
+      "disabled": "Agent Gateway is disabled for this server.",
+      "unauthorized": "The gateway rejected the API key.",
+      "forbidden": "The gateway refused this request.",
+      "unreachable": "The gateway could not be reached.",
+      "redirectBlocked": "The gateway redirected the request, which is blocked.",
+      "protocolError": "The gateway protocol handshake failed.",
+      "missingCredentials": "Alfresco credentials are missing for this server.",
+      "environmentMismatch": "The gateway environment does not match this Alfresco server.",
+      "connected": "Connected to Agent Gateway."
+    }
+  }
 }

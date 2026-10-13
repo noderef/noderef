@@ -45,6 +45,7 @@ import { InsightGraphService } from '../../services/insightGraphService.js';
 // Domain handlers
 import { registerAiHandlers } from './ai.js';
 import { registerAgentHandlers } from './agent.js';
+import { registerAgentGatewayHandlers } from './agentGateway.js';
 import { registerJsConsoleHandlers } from './jsconsole.js';
 import { registerLocalFilesHandlers } from './localFiles.js';
 import { registerRepositoryHandlers } from './repository.js';
@@ -91,6 +92,7 @@ export async function registerBackendRpc(
   registerRepositoryHandlers(routes, ctx);
   registerJsConsoleHandlers(routes, ctx);
   registerAgentHandlers(routes, ctx);
+  registerAgentGatewayHandlers(routes, ctx);
   registerAiHandlers(routes);
   registerUserHandlers(routes);
   registerWorkspaceHandlers(routes, ctx);

@@ -15,11 +15,17 @@
  */
 
 import type {
+  AgentChatMcpSettings,
   AgentMention,
+  AgentMessageContextItem,
   AgentMessageRole,
   AgentRunStatus,
   AgentRunStepStatus,
 } from '@app/contracts';
+import {
+  parseMcpSettings,
+  parseMessageContext,
+} from '../services/agentGateway/mcpSettings.js';
 import type {
   AgentChat as PrismaAgentChat,
   AgentMessage as PrismaAgentMessage,
@@ -41,6 +47,7 @@ export interface AgentChatSummary {
   lastMessageAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  mcp?: AgentChatMcpSettings | null;
 }
 
 export interface AgentMessage {
@@ -51,6 +58,7 @@ export interface AgentMessage {
   content: string;
   mentions: AgentMention[];
   createdAt: Date;
+  context?: AgentMessageContextItem[] | null;
 }
 
 export interface AgentRun {
@@ -190,6 +198,7 @@ export class AgentRepository {
       lastMessageAt: chat.lastMessageAt,
       createdAt: chat.createdAt,
       updatedAt: chat.updatedAt,
+      mcp: parseMcpSettings(chat.mcpSettingsJson),
     };
   }
 
@@ -202,6 +211,7 @@ export class AgentRepository {
       content: message.content,
       mentions: safeMentionsParse(message.mentionsJson),
       createdAt: message.createdAt,
+      context: parseMessageContext(message.contextJson).map(({ text: _text, ...rest }) => rest),
     };
   }
 
@@ -382,7 +392,8 @@ export class AgentRepository {
     userId: number,
     serverId: number,
     title: string,
-    chatIcon = 'hash'
+    chatIcon = 'hash',
+    mcpSettingsJson: string | null = null
   ): Promise<AgentChatSummary> {
     const chat = await this.prisma.agentChat.create({
       data: {
@@ -390,6 +401,7 @@ export class AgentRepository {
         serverId,
         title,
         chatIcon,
+        mcpSettingsJson,
       },
     });
 
@@ -480,11 +492,28 @@ export class AgentRepository {
         role: true,
         content: true,
         mentionsJson: true,
+        contextJson: true,
         createdAt: true,
       },
     });
 
     return rows.reverse().map(row => this.toMessageDTO(row));
+  }
+
+  async updateChatMcpSettings(
+    userId: number,
+    chatId: number,
+    mcpSettingsJson: string | null
+  ): Promise<AgentChatSummary | null> {
+    const existing = await this.prisma.agentChat.findFirst({ where: { id: chatId, userId } });
+    if (!existing) {
+      return null;
+    }
+    const updated = await this.prisma.agentChat.update({
+      where: { id: chatId },
+      data: { mcpSettingsJson },
+    });
+    return this.toChatDTO(updated);
   }
 
   async createMessage(data: {
@@ -493,10 +522,12 @@ export class AgentRepository {
     role: AgentMessageRole;
     content: string;
     mentions?: AgentMention[];
+    context?: Array<AgentMessageContextItem & { text?: string }> | null;
   }): Promise<AgentMessage> {
     const now = new Date();
     const mentionsJson =
       data.mentions && data.mentions.length ? JSON.stringify(data.mentions) : null;
+    const contextJson = data.context && data.context.length ? JSON.stringify(data.context) : null;
 
     const message = await this.prisma.$transaction(async tx => {
       const created = await tx.agentMessage.create({
@@ -506,6 +537,7 @@ export class AgentRepository {
           role: data.role,
           content: data.content,
           mentionsJson,
+          contextJson,
         },
       });
 

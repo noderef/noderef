@@ -95,5 +95,50 @@
   "loadingMoreResults": "Weitere Ergebnisse laden...",
   "qnameGroupTypes": "Typen",
   "qnameGroupAspects": "Aspekte",
-  "qnameGroupProperties": "Eigenschaften"
+  "qnameGroupProperties": "Eigenschaften",
+  "mcp": {
+    "button": "Agent-Gateway-Tools",
+    "useInChat": "MCP in diesem Chat verwenden",
+    "tools": "Tools",
+    "prompts": "Prompts",
+    "resources": "Ressourcen",
+    "searchTools": "Tools suchen",
+    "selectReadOnly": "Nur Lesen auswählen",
+    "selectNone": "Keine",
+    "tooManyTools": "Mehr als 25 Tools sind ausgewählt. Das kann den Modellkontext überladen.",
+    "noTools": "Keine Tools verfügbar.",
+    "noPrompts": "Keine Prompts verfügbar.",
+    "noResources": "Keine Ressourcen verfügbar.",
+    "noDescription": "Keine Beschreibung",
+    "insertPrompt": "Als Entwurf einfügen",
+    "read": "Lesen",
+    "addContext": "Als Kontext hinzufügen",
+    "refresh": "Aktualisieren",
+    "serverSettings": "Servereinstellungen",
+    "saveFailed": "MCP-Einstellungen konnten nicht gespeichert werden",
+    "promptFailed": "Prompt konnte nicht geladen werden",
+    "resourceFailed": "Ressource konnte nicht gelesen werden",
+    "chatRequired": "Senden Sie zuerst eine Nachricht, um diesen Chat zu erstellen, und versuchen Sie es erneut.",
+    "requiredArgs": "Pflichtfelder: {{names}}",
+    "replaceDraft": "Den aktuellen Entwurf durch diesen Prompt ersetzen?",
+    "emptyResource": "Ressource ist leer.",
+    "removeContext": "Kontext entfernen",
+    "policy": {
+      "read": "nur lesen laut Gateway",
+      "write": "schreiben laut Gateway",
+      "destructive_or_unknown": "destruktiv oder unbekannt laut Gateway"
+    },
+    "empty": {
+      "notConfigured": "Agent Gateway ist für diesen Server nicht konfiguriert.",
+      "disabled": "Agent Gateway ist für diesen Server deaktiviert.",
+      "unauthorized": "Das Gateway hat den API-Schlüssel abgelehnt.",
+      "forbidden": "Das Gateway hat diese Anfrage abgelehnt.",
+      "unreachable": "Das Gateway ist nicht erreichbar.",
+      "redirectBlocked": "Das Gateway hat umgeleitet; die Weiterleitung wurde blockiert.",
+      "protocolError": "Der Protokoll-Handshake mit dem Gateway ist fehlgeschlagen.",
+      "missingCredentials": "Alfresco-Anmeldedaten fehlen für diesen Server.",
+      "environmentMismatch": "Die Gateway-Umgebung stimmt nicht mit diesem Alfresco-Server überein.",
+      "connected": "Mit Agent Gateway verbunden."
+    }
+  }
 }

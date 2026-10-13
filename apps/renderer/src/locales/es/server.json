@@ -58,5 +58,44 @@
   "success": "Éxito",
   "serverUpdated": "Servidor \"{{name}}\" actualizado",
   "updateError": "Error",
-  "updateErrorMessage": "No se pudo actualizar el servidor"
+  "updateErrorMessage": "No se pudo actualizar el servidor",
+  "agentGateway": {
+    "title": "Agent Gateway",
+    "description": "Conecta este servidor Alfresco a un NodeRef Agent Gateway para herramientas, prompts y recursos adicionales.",
+    "enable": "Activar Agent Gateway",
+    "endpointUrl": "URL del gateway",
+    "endpointHint": "En Docker, localhost apunta al propio contenedor del backend. Usa host.docker.internal para llegar a un gateway en el host.",
+    "apiKey": "Clave API del gateway",
+    "apiKeyPlaceholder": "Clave API del gateway",
+    "apiKeySavedPlaceholder": "Clave guardada: déjalo vacío para conservarla",
+    "removeKey": "Eliminar",
+    "undoKey": "Deshacer",
+    "aclTitle": "El gateway define las herramientas",
+    "aclBody": "El gateway decide qué herramientas hay disponibles. Las herramientas SQL e índice usan cuentas de backend y no siguen las ACL de Alfresco. La verificación de entorno solo cubre la ruta de passthrough de Alfresco, no SQL ni índice.",
+    "counts": "{{tools}} herramientas · {{prompts}} prompts · {{resources}} recursos · {{templates}} plantillas",
+    "test": "Probar conexión",
+    "verify": "Verificar entorno",
+    "testFailed": "La prueba de conexión ha fallado",
+    "verifyFailed": "La verificación del entorno ha fallado",
+    "saved": "Ajustes de Agent Gateway guardados",
+    "verificationHint": "La verificación compara repository.id en la ruta de passthrough de Alfresco. Los backends SQL e índice no están cubiertos.",
+    "status": {
+      "not_configured": "No configurado",
+      "disabled": "Desactivado",
+      "connected": "Conectado",
+      "unauthorized": "No autorizado",
+      "forbidden": "Prohibido",
+      "unreachable": "Inalcanzable",
+      "redirect_blocked": "Redirección bloqueada",
+      "protocol_error": "Error de protocolo",
+      "missing_alfresco_credentials": "Faltan credenciales de Alfresco",
+      "environment_mismatch": "El entorno no coincide"
+    },
+    "verification": {
+      "verified": "Entorno verificado",
+      "mismatch": "El entorno no coincide",
+      "unverified": "No verificado",
+      "unsupported": "Verificación no compatible"
+    }
+  }
 }

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import type { AgentMention, AgentRunSummary } from '@app/contracts';
+import type { AgentChatMcpSettings, AgentMention, AgentRunSummary } from '@app/contracts';
 import type { PrismaClient } from '@prisma/client';
 import { AppErrors } from '../../lib/errors.js';
 import { createLogger } from '../../lib/logger.js';
@@ -52,7 +52,10 @@ import {
 } from './agentUtils.js';
 import { buildCompletionNote, buildQueuedNote } from './progressMessages.js';
 import { searchMentions } from './searchMentions.js';
+import { getAgentGatewayRuntime } from '../agentGateway/gatewayRuntime.js';
+import { parseMcpSettings, parseMessageContext, serializeMcpSettings } from '../agentGateway/mcpSettings.js';
 import { getToolByName, resolveToolName } from './tools/registry.js';
+import { buildRunToolset } from './tools/toolset.js';
 import type { AgentExecutionContext } from './types.js';
 
 const log = createLogger('agent.service');
@@ -67,6 +70,7 @@ interface SendMessageInput {
   aiModel?: string;
   appLanguage?: string;
   autoApproveConfirmations?: boolean;
+  contextResources?: Array<{ uri: string }>;
 }
 
 interface ConfirmStepInput {
@@ -109,14 +113,33 @@ export class AgentService {
     return this.repository.searchChats(userId, params);
   }
 
-  async createChat(userId: number, serverId: number, title?: string) {
+  async createChat(
+    userId: number,
+    serverId: number,
+    title?: string,
+    mcp?: AgentChatMcpSettings | null
+  ) {
     const server = await this.serverService.findById(userId, serverId);
     if (!server) {
       return AppErrors.notFound('Server', serverId);
     }
 
     const normalizedTitle = cleanText(title || '') || 'New chat';
-    return this.repository.createChat(userId, serverId, normalizedTitle);
+    return this.repository.createChat(
+      userId,
+      serverId,
+      normalizedTitle,
+      'hash',
+      mcp ? serializeMcpSettings(mcp) : null
+    );
+  }
+
+  async setChatMcpSettings(userId: number, chatId: number, settings: AgentChatMcpSettings) {
+    const chat = await this.repository.findChatById(userId, chatId);
+    if (!chat) {
+      return AppErrors.notFound('Chat', chatId);
+    }
+    return this.repository.updateChatMcpSettings(userId, chatId, serializeMcpSettings(settings));
   }
 
   async deleteChat(userId: number, chatId: number) {
@@ -191,6 +214,37 @@ export class AgentService {
     }
 
     const mentions = (payload.mentions || []).slice(0, 30);
+    let context:
+      | Array<{
+          uri: string;
+          name?: string | null;
+          mimeType?: string | null;
+          chars: number;
+          truncated: boolean;
+          text: string;
+        }>
+      | undefined;
+    if (payload.contextResources?.length) {
+      const runtime = getAgentGatewayRuntime(this.prisma, this.serverService);
+      const { AgentGatewayService } = await import('../agentGateway/agentGatewayService.js');
+      const gateway = new AgentGatewayService(
+        this.prisma,
+        this.serverService,
+        runtime.config,
+        runtime.credentials,
+        runtime.sessions
+      );
+      const chatRow = await this.prisma.agentChat.findFirst({
+        where: { id: chat.id, userId },
+        select: { serverId: true, mcpSettingsJson: true },
+      });
+      context = await gateway.resolveContextResources(
+        userId,
+        chat.serverId,
+        chatRow?.mcpSettingsJson ?? null,
+        payload.contextResources.map(item => item.uri)
+      );
+    }
 
     const message = await this.repository.createMessage({
       chatId: chat.id,
@@ -198,6 +252,7 @@ export class AgentService {
       role: 'user',
       content,
       mentions,
+      context,
     });
 
     const run = await this.repository.createRun({
@@ -478,7 +533,26 @@ export class AgentService {
         unknown
       >;
 
-      const tool = getToolByName(canonicalOperation);
+      const chatRow = await this.prisma.agentChat.findFirst({
+        where: { id: run.chatId, userId },
+        select: { mcpSettingsJson: true },
+      });
+      const chatMcp = parseMcpSettings(chatRow?.mcpSettingsJson);
+      const planMcp = run.plan && isRecord(run.plan.mcp)
+        ? (run.plan.mcp as { enabled?: boolean; tools?: string[] })
+        : null;
+      const toolset = await buildRunToolset({
+        prisma: this.prisma,
+        serverService: this.serverService,
+        userId,
+        serverId: run.serverId,
+        chatMcp,
+        planMcp: planMcp
+          ? { enabled: Boolean(planMcp.enabled), tools: planMcp.tools ?? [] }
+          : chatMcp,
+        allowScriptExecution: true,
+      });
+      const tool = toolset.resolve(step.operation) ?? getToolByName(canonicalOperation);
       if (!tool) {
         throw new Error(`Unknown tool in confirmed step: ${canonicalOperation}`);
       }
@@ -512,14 +586,17 @@ export class AgentService {
 
       let verificationOutput: Record<string, unknown> | null = null;
       try {
-        verificationOutput = await this.runPostActionVerification(
-          userId,
-          run.id,
-          step,
-          canonicalOperation,
-          output,
-          execCtx
-        );
+        verificationOutput =
+          tool.skill.kind === 'mcp'
+            ? null
+            : await this.runPostActionVerification(
+                userId,
+                run.id,
+                step,
+                canonicalOperation,
+                output,
+                execCtx
+              );
       } catch (verificationError) {
         const verificationMessage = extractErrorMessage(verificationError);
         log.warn(
@@ -748,7 +825,7 @@ export class AgentService {
       where: { id: runId, userId },
       include: {
         triggerMessage: true,
-        chat: { select: { id: true, title: true, chatIcon: true } },
+        chat: { select: { id: true, title: true, chatIcon: true, mcpSettingsJson: true } },
       },
     });
 
@@ -769,6 +846,22 @@ export class AgentService {
           )
         : runRow.triggerMessage.content;
       const mentions = parseMentions(runRow.triggerMessage.mentionsJson);
+      const chatMcp = parseMcpSettings(runRow.chat.mcpSettingsJson);
+      const existingPlan = parseJsonRecord(runRow.planJson);
+      const planMcp = existingPlan && isRecord(existingPlan.mcp)
+        ? (existingPlan.mcp as { enabled?: boolean; tools?: string[] })
+        : null;
+      const toolset = await buildRunToolset({
+        prisma: this.prisma,
+        serverService: this.serverService,
+        userId,
+        serverId: runRow.serverId,
+        chatMcp,
+        planMcp: planMcp
+          ? { enabled: Boolean(planMcp.enabled), tools: planMcp.tools ?? [] }
+          : chatMcp,
+        allowScriptExecution: true,
+      });
 
       await this.repository.updateRun(userId, runId, {
         status: 'running',
@@ -780,6 +873,7 @@ export class AgentService {
           model: runtime.model,
           autoApproveConfirmations,
           ...(preferredLanguage ? { appLanguage: preferredLanguage } : {}),
+          ...(toolset.mcpSnapshot ? { mcp: toolset.mcpSnapshot } : {}),
         },
       });
       await this.broadcastRunStatus(userId, runId);
@@ -795,7 +889,22 @@ export class AgentService {
         }
       );
 
-      const engine = new AgentRunEngine(this.repository, runtime, execCtx, controller.signal);
+      const engine = new AgentRunEngine(
+        this.repository,
+        runtime,
+        execCtx,
+        controller.signal,
+        toolset
+      );
+
+      const contextResources = parseMessageContext(runRow.triggerMessage.contextJson)
+        .filter(item => typeof item.text === 'string' && item.text.length > 0)
+        .map(item => ({
+          uri: item.uri,
+          name: item.name,
+          mimeType: item.mimeType,
+          text: item.text as string,
+        }));
 
       await engine.execute({
         runId,
@@ -809,6 +918,7 @@ export class AgentService {
         triggerMessageId: runRow.triggerMessage.id,
         preferredLanguage,
         autoApproveConfirmations,
+        contextResources,
       });
 
       // Only mark as completed if the engine didn't pause for confirmation
