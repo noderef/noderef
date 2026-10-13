@@ -14,25 +14,14 @@
  * limitations under the License.
  */
 
-import {
-  Client,
-  SdkHttpError,
-  StreamableHTTPClientTransport,
-  UriTemplate,
-} from '@modelcontextprotocol/client';
+import { Client, SdkHttpError, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import type { AgentGatewayStatus, McpCatalog } from '@app/contracts';
 import { createLogger } from '../../lib/logger.js';
 import { ALL_TOOLS } from '../agent/tools/registry.js';
 import type { AgentGatewayConfigService } from './configService.js';
 import type { GatewayCredentialProvider } from './credentialProvider.js';
 import { createGatewayFetch, sanitizeGatewayError } from './gatewayFetch.js';
-import {
-  emptyCatalog,
-  mapPrompts,
-  mapResources,
-  mapResourceTemplates,
-  mapTools,
-} from './mcpCatalog.js';
+import { emptyCatalog, mapPrompts, mapResources, mapTools } from './mcpCatalog.js';
 import { sessionFingerprint } from './mcpNames.js';
 import { assertGatewayEndpointAllowed } from './endpointPolicy.js';
 import { serverLifecycle } from './serverLifecycle.js';
@@ -78,12 +67,10 @@ export interface SessionConnectParams {
 }
 
 async function listPaged<T>(
-  loadPage: (
-    cursor: string
-  ) => Promise<{ items: T[]; nextCursor?: string | null }>
+  loadPage: (cursor: string | undefined) => Promise<{ items: T[]; nextCursor?: string | null }>
 ): Promise<{ items: T[]; truncated: boolean }> {
   const items: T[] = [];
-  let cursor = '';
+  let cursor: string | undefined;
   let truncated = false;
 
   for (let page = 0; page < LIST_PAGE_LIMIT; page += 1) {
@@ -238,39 +225,12 @@ export class McpSessionManager {
     );
   }
 
-  async getPrompt(
-    params: SessionConnectParams,
-    name: string,
-    args?: Record<string, string>
-  ) {
-    return this.withSession(params, entry =>
-      entry.client.getPrompt({ name, arguments: args })
-    );
+  async getPrompt(params: SessionConnectParams, name: string, args?: Record<string, string>) {
+    return this.withSession(params, entry => entry.client.getPrompt({ name, arguments: args }));
   }
 
   async readResource(params: SessionConnectParams, uri: string) {
     return this.withSession(params, entry => entry.client.readResource({ uri }));
-  }
-
-  expandTemplate(uriTemplate: string, values: Record<string, string>): string {
-    return new UriTemplate(uriTemplate).expand(values);
-  }
-
-  matchTemplate(
-    uriTemplate: string,
-    uri: string
-  ): Record<string, string> | null {
-    const matched = new UriTemplate(uriTemplate).match(uri);
-    if (!matched) {
-      return null;
-    }
-    const params: Record<string, string> = {};
-    for (const [key, value] of Object.entries(matched)) {
-      if (typeof value === 'string') {
-        params[key] = value;
-      }
-    }
-    return params;
   }
 
   async connectEphemeral(params: {
@@ -322,9 +282,7 @@ export class McpSessionManager {
   }
 
   async invalidate(userId: number, serverId: number): Promise<void> {
-    const keys = [...this.sessions.keys()].filter(key =>
-      key.startsWith(`${userId}:${serverId}:`)
-    );
+    const keys = [...this.sessions.keys()].filter(key => key.startsWith(`${userId}:${serverId}:`));
     await Promise.all(keys.map(key => this.dispose(key)));
   }
 
@@ -451,7 +409,7 @@ export class McpSessionManager {
     const hasPrompts = Boolean(capabilities.prompts);
     const hasResources = Boolean(capabilities.resources);
 
-    const [toolsPage, promptsPage, resourcesPage, templatesPage] = await Promise.all([
+    const [toolsPage, promptsPage, resourcesPage] = await Promise.all([
       hasTools
         ? listPaged(async cursor => {
             const page = await entry.client.listTools({ cursor });
@@ -470,12 +428,6 @@ export class McpSessionManager {
             return { items: page.resources ?? [], nextCursor: page.nextCursor };
           })
         : Promise.resolve({ items: [], truncated: false }),
-      hasResources
-        ? listPaged(async cursor => {
-            const page = await entry.client.listResourceTemplates({ cursor });
-            return { items: page.resourceTemplates ?? [], nextCursor: page.nextCursor };
-          })
-        : Promise.resolve({ items: [], truncated: false }),
     ]);
 
     const mappedTools = mapTools(toolsPage.items, LOCAL_TOOL_NAMES);
@@ -491,13 +443,8 @@ export class McpSessionManager {
       tools: mappedTools.tools,
       prompts: mapPrompts(promptsPage.items),
       resources: mapResources(resourcesPage.items),
-      resourceTemplates: mapResourceTemplates(templatesPage.items),
       fetchedAt: new Date().toISOString(),
-      truncated:
-        toolsPage.truncated ||
-        promptsPage.truncated ||
-        resourcesPage.truncated ||
-        templatesPage.truncated,
+      truncated: toolsPage.truncated || promptsPage.truncated || resourcesPage.truncated,
     };
   }
 

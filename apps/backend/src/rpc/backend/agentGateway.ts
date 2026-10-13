@@ -103,42 +103,30 @@ export function registerAgentGatewayHandlers(routes: Routes, ctx: RpcContext): v
   };
 
   routes['backend.agentGateway.getPrompt'] = {
-    schema: z.object({
-      chatId: z.number().int().positive(),
-      name: z.string().min(1),
-      arguments: z.record(z.unknown()).optional(),
-    }),
-    handler: async params => {
-      const userId = await getCurrentUserId();
-      const typed = params as {
-        chatId: number;
-        name: string;
-        arguments?: Record<string, unknown>;
-      };
-      return service.getPrompt(userId, typed.chatId, typed.name, typed.arguments);
-    },
-  };
-
-  routes['backend.agentGateway.readResource'] = {
     schema: z
       .object({
-        chatId: z.number().int().positive(),
-        uri: z.string().min(1).optional(),
-        uriTemplate: z.string().min(1).optional(),
-        params: z.record(z.string()).optional(),
+        chatId: z.number().int().positive().optional(),
+        serverId: z.number().int().positive().optional(),
+        name: z.string().min(1),
+        arguments: z.record(z.unknown()).optional(),
       })
-      .refine(value => Boolean(value.uri || value.uriTemplate), {
-        message: 'uri or uriTemplate is required',
+      .refine(value => Boolean(value.chatId || value.serverId), {
+        message: 'chatId or serverId is required',
       }),
     handler: async params => {
       const userId = await getCurrentUserId();
       const typed = params as {
-        chatId: number;
-        uri?: string;
-        uriTemplate?: string;
-        params?: Record<string, string>;
+        chatId?: number;
+        serverId?: number;
+        name: string;
+        arguments?: Record<string, unknown>;
       };
-      return service.readResourcePreview(userId, typed.chatId, typed);
+      return service.getPrompt(
+        userId,
+        { chatId: typed.chatId, serverId: typed.serverId },
+        typed.name,
+        typed.arguments
+      );
     },
   };
 }

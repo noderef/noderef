@@ -101,32 +101,26 @@
     "useInChat": "Usar MCP en este chat",
     "tools": "Herramientas",
     "prompts": "Prompts",
-    "resources": "Recursos",
     "searchTools": "Buscar herramientas",
-    "selectReadOnly": "Seleccionar solo lectura",
+    "selectTools": "Seleccionar herramientas",
+    "selectReadOnly": "Solo lectura",
+    "groupsByPrefix": "Grupos",
     "selectNone": "Ninguna",
-    "tooManyTools": "Hay más de 25 herramientas seleccionadas. Eso puede saturar el contexto del modelo.",
+    "selectedCount": "{{selected}} de {{total}} herramientas seleccionadas",
     "noTools": "No hay herramientas disponibles.",
     "noPrompts": "No hay prompts disponibles.",
-    "noResources": "No hay recursos disponibles.",
     "noDescription": "Sin descripción",
     "insertPrompt": "Insertar como borrador",
-    "read": "Leer",
-    "addContext": "Añadir como contexto",
     "refresh": "Actualizar",
     "serverSettings": "Ajustes del servidor",
     "saveFailed": "No se pudieron guardar los ajustes de MCP",
     "promptFailed": "No se pudo cargar el prompt",
-    "resourceFailed": "No se pudo leer el recurso",
-    "chatRequired": "Envía un primer mensaje para crear este chat y vuelve a intentarlo.",
     "requiredArgs": "Campos obligatorios: {{names}}",
     "replaceDraft": "¿Reemplazar el borrador actual con este prompt?",
-    "emptyResource": "El recurso está vacío.",
-    "removeContext": "Quitar contexto",
     "policy": {
-      "read": "solo lectura según el gateway",
-      "write": "escritura según el gateway",
-      "destructive_or_unknown": "destructivo o desconocido según el gateway"
+      "read": "solo lectura",
+      "write": "escritura",
+      "destructive_or_unknown": "destructivo o desconocido"
     },
     "empty": {
       "notConfigured": "Agent Gateway no está configurado para este servidor.",
@@ -139,6 +133,28 @@
       "missingCredentials": "Faltan credenciales de Alfresco para este servidor.",
       "environmentMismatch": "El entorno del gateway no coincide con este servidor Alfresco.",
       "connected": "Conectado a Agent Gateway."
+    },
+    "promptCatalog": {
+      "alfresco_search_and_analyze": {
+        "title": "Buscar y analizar",
+        "description": "Busca documentos en Alfresco y redacta un análisis fundamentado de los resultados.",
+        "args": {
+          "query": {
+            "label": "Consulta de búsqueda",
+            "description": "Consulta AFTS, por ejemplo TYPE:\"cm:content\" AND cm:name:\"informe*\""
+          },
+          "analysisType": {
+            "label": "Tipo de análisis",
+            "description": "Predeterminado: resumen",
+            "options": {
+              "summary": "Resumen",
+              "detailed": "Detallado",
+              "trends": "Tendencias",
+              "compliance": "Cumplimiento"
+            }
+          }
+        }
+      }
     }
   }
 }

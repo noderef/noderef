@@ -61,24 +61,18 @@
   "updateErrorMessage": "Failed to update server",
   "agentGateway": {
     "title": "Agent Gateway",
-    "description": "Connect this Alfresco server to a NodeRef Agent Gateway for extra tools, prompts, and resources.",
+    "description": "Connect this Alfresco server to a NodeRef Agent Gateway for extra tools and prompts.",
     "enable": "Enable Agent Gateway",
     "endpointUrl": "Gateway URL",
-    "endpointHint": "In Docker, localhost points at the backend container itself. Use host.docker.internal to reach a gateway on the host.",
     "apiKey": "Gateway API key",
     "apiKeyPlaceholder": "Gateway API key",
     "apiKeySavedPlaceholder": "Key saved — leave empty to keep it",
     "removeKey": "Remove",
     "undoKey": "Undo",
-    "aclTitle": "Tools are defined by the gateway",
-    "aclBody": "The gateway decides which tools are available. SQL and index tools use backend accounts and do not follow Alfresco ACLs. Environment verification only covers the Alfresco passthrough route, not SQL or index backends.",
-    "counts": "{{tools}} tools · {{prompts}} prompts · {{resources}} resources · {{templates}} templates",
+    "counts": "{{tools}} tools · {{prompts}} prompts",
     "test": "Test connection",
-    "verify": "Verify environment",
     "testFailed": "Connection test failed",
-    "verifyFailed": "Environment verification failed",
     "saved": "Agent Gateway settings saved",
-    "verificationHint": "Verification compares repository.id on the Alfresco passthrough route. SQL and index backends are not covered.",
     "status": {
       "not_configured": "Not configured",
       "disabled": "Disabled",
@@ -90,12 +84,6 @@
       "protocol_error": "Protocol error",
       "missing_alfresco_credentials": "Missing Alfresco credentials",
       "environment_mismatch": "Environment mismatch"
-    },
-    "verification": {
-      "verified": "Environment verified",
-      "mismatch": "Environment mismatch",
-      "unverified": "Not verified",
-      "unsupported": "Verification unsupported"
     }
   }
 }

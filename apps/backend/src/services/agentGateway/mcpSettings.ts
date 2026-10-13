@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import type { AgentChatMcpSettings, AgentMessageContextItem } from '@app/contracts';
+import type { AgentChatMcpSettings } from '@app/contracts';
 
 export function parseMcpSettings(raw: string | null | undefined): AgentChatMcpSettings | null {
   if (!raw) return null;
@@ -38,31 +38,4 @@ export function serializeMcpSettings(settings: AgentChatMcpSettings): string {
     enabled: Boolean(settings.enabled),
     tools: [...new Set(settings.tools.filter(Boolean))],
   });
-}
-
-export function parseMessageContext(
-  raw: string | null | undefined
-): Array<AgentMessageContextItem & { text?: string }> {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    const items: Array<AgentMessageContextItem & { text?: string }> = [];
-    for (const item of parsed) {
-      if (!item || typeof item !== 'object') continue;
-      const record = item as Record<string, unknown>;
-      if (typeof record.uri !== 'string' || !record.uri) continue;
-      items.push({
-        uri: record.uri,
-        name: typeof record.name === 'string' ? record.name : null,
-        mimeType: typeof record.mimeType === 'string' ? record.mimeType : null,
-        chars: typeof record.chars === 'number' ? record.chars : 0,
-        truncated: Boolean(record.truncated),
-        text: typeof record.text === 'string' ? record.text : undefined,
-      });
-    }
-    return items;
-  } catch {
-    return [];
-  }
 }

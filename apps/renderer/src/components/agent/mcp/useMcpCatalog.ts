@@ -19,6 +19,12 @@ import type { McpCatalog } from '@app/contracts';
 import { useCallback, useEffect, useState } from 'react';
 
 const cache = new Map<number, McpCatalog>();
+const invalidationListeners = new Set<(serverId: number) => void>();
+
+export function invalidateMcpCatalog(serverId: number): void {
+  cache.delete(serverId);
+  invalidationListeners.forEach(listener => listener(serverId));
+}
 
 export function useMcpCatalog(serverId: number | null) {
   const [catalog, setCatalog] = useState<McpCatalog | null>(
@@ -51,6 +57,16 @@ export function useMcpCatalog(serverId: number | null) {
   useEffect(() => {
     void load(false);
   }, [load]);
+
+  useEffect(() => {
+    const listener = (changedId: number) => {
+      if (changedId === serverId) void load(true);
+    };
+    invalidationListeners.add(listener);
+    return () => {
+      invalidationListeners.delete(listener);
+    };
+  }, [load, serverId]);
 
   return { catalog, loading, error, refresh: () => load(true) };
 }

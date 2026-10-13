@@ -98,36 +98,30 @@
   "qnameGroupAspects": "Aspecten",
   "qnameGroupProperties": "Eigenschappen",
   "mcp": {
-    "button": "Agent Gateway-tools",
+    "button": "Agent Gateway tools",
     "useInChat": "MCP gebruiken in deze chat",
     "tools": "Tools",
     "prompts": "Prompts",
-    "resources": "Resources",
     "searchTools": "Tools zoeken",
-    "selectReadOnly": "Alleen lezen selecteren",
+    "selectTools": "Tools selecteren",
+    "selectReadOnly": "Alleen lezen",
+    "groupsByPrefix": "Groepen",
     "selectNone": "Geen",
-    "tooManyTools": "Meer dan 25 tools zijn geselecteerd. Dat kan de modelcontext vol maken.",
+    "selectedCount": "{{selected}} van {{total}} tools geselecteerd",
     "noTools": "Geen tools beschikbaar.",
     "noPrompts": "Geen prompts beschikbaar.",
-    "noResources": "Geen resources beschikbaar.",
     "noDescription": "Geen beschrijving",
     "insertPrompt": "Klaarzetten als concept",
-    "read": "Lezen",
-    "addContext": "Toevoegen als context",
     "refresh": "Vernieuwen",
     "serverSettings": "Serverinstellingen",
     "saveFailed": "MCP-instellingen opslaan mislukt",
     "promptFailed": "Prompt laden mislukt",
-    "resourceFailed": "Resource lezen mislukt",
-    "chatRequired": "Verstuur eerst een bericht om deze chat aan te maken, en probeer het daarna opnieuw.",
     "requiredArgs": "Verplichte velden: {{names}}",
     "replaceDraft": "Het huidige concept vervangen door deze prompt?",
-    "emptyResource": "Resource is leeg.",
-    "removeContext": "Context verwijderen",
     "policy": {
-      "read": "alleen lezen volgens gateway",
-      "write": "schrijven volgens gateway",
-      "destructive_or_unknown": "destructief of onbekend volgens gateway"
+      "read": "alleen lezen",
+      "write": "schrijven",
+      "destructive_or_unknown": "destructief of onbekend"
     },
     "empty": {
       "notConfigured": "Agent Gateway is niet geconfigureerd voor deze server.",
@@ -140,6 +134,28 @@
       "missingCredentials": "Alfresco-inloggegevens ontbreken voor deze server.",
       "environmentMismatch": "De gatewayomgeving komt niet overeen met deze Alfresco-server.",
       "connected": "Verbonden met Agent Gateway."
+    },
+    "promptCatalog": {
+      "alfresco_search_and_analyze": {
+        "title": "Zoeken en analyseren",
+        "description": "Zoekt documenten in Alfresco en maakt een onderbouwde analyse van wat er gevonden is.",
+        "args": {
+          "query": {
+            "label": "Zoekopdracht",
+            "description": "AFTS-query, bijvoorbeeld TYPE:\"cm:content\" AND cm:name:\"rapport*\""
+          },
+          "analysisType": {
+            "label": "Soort analyse",
+            "description": "Standaard: samenvatting",
+            "options": {
+              "summary": "Samenvatting",
+              "detailed": "Gedetailleerd",
+              "trends": "Trends",
+              "compliance": "Compliance"
+            }
+          }
+        }
+      }
     }
   }
 }

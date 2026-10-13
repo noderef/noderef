@@ -17,25 +17,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   parseMcpSettings,
-  parseMessageContext,
   serializeMcpSettings,
 } from '../../../src/services/agentGateway/mcpSettings.js';
 
 describe('mcpSettings', () => {
   it('round-trips chat MCP settings and drops invalid tools', () => {
-    const serialized = serializeMcpSettings({ enabled: true, tools: ['echo_read', 'echo_read', ''] });
+    const serialized = serializeMcpSettings({
+      enabled: true,
+      tools: ['echo_read', 'echo_read', ''],
+    });
     expect(parseMcpSettings(serialized)).toEqual({ enabled: true, tools: ['echo_read'] });
     expect(parseMcpSettings('not-json')).toBeNull();
-  });
-
-  it('parses message context snapshots', () => {
-    const parsed = parseMessageContext(
-      JSON.stringify([
-        { uri: 'alfresco://repository/info', name: 'info', chars: 4, truncated: false, text: 'body' },
-        { nope: true },
-      ])
-    );
-    expect(parsed).toHaveLength(1);
-    expect(parsed[0]).toMatchObject({ uri: 'alfresco://repository/info', text: 'body' });
   });
 });

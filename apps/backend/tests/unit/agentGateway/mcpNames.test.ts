@@ -15,7 +15,10 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { assignMcpModelNames, sanitizeMcpModelName } from '../../../src/services/agentGateway/mcpNames.js';
+import {
+  assignMcpModelNames,
+  sanitizeMcpModelName,
+} from '../../../src/services/agentGateway/mcpNames.js';
 
 describe('mcpNames', () => {
   it('prefixes sanitized names with mcp_', () => {

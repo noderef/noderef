@@ -102,32 +102,26 @@
     "useInChat": "Use MCP in this chat",
     "tools": "Tools",
     "prompts": "Prompts",
-    "resources": "Resources",
     "searchTools": "Search tools",
-    "selectReadOnly": "Select read-only",
+    "selectTools": "Select tools",
+    "selectReadOnly": "Read-only",
+    "groupsByPrefix": "Groups",
     "selectNone": "None",
-    "tooManyTools": "More than 25 tools are selected. That can crowd the model context.",
+    "selectedCount": "{{selected}} of {{total}} tools selected",
     "noTools": "No tools available.",
     "noPrompts": "No prompts available.",
-    "noResources": "No resources available.",
     "noDescription": "No description",
     "insertPrompt": "Insert as draft",
-    "read": "Read",
-    "addContext": "Add as context",
     "refresh": "Refresh",
     "serverSettings": "Server settings",
     "saveFailed": "Could not save MCP settings",
     "promptFailed": "Could not load prompt",
-    "resourceFailed": "Could not read resource",
-    "chatRequired": "Send a first message to create this chat, then try again.",
     "requiredArgs": "Required fields: {{names}}",
     "replaceDraft": "Replace the current draft with this prompt?",
-    "emptyResource": "Resource is empty.",
-    "removeContext": "Remove context",
     "policy": {
-      "read": "read-only according to gateway",
-      "write": "write according to gateway",
-      "destructive_or_unknown": "destructive or unknown according to gateway"
+      "read": "read-only",
+      "write": "write",
+      "destructive_or_unknown": "destructive or unknown"
     },
     "empty": {
       "notConfigured": "Agent Gateway is not configured for this server.",
@@ -140,6 +134,28 @@
       "missingCredentials": "Alfresco credentials are missing for this server.",
       "environmentMismatch": "The gateway environment does not match this Alfresco server.",
       "connected": "Connected to Agent Gateway."
+    },
+    "promptCatalog": {
+      "alfresco_search_and_analyze": {
+        "title": "Search and analyze",
+        "description": "Searches Alfresco for documents and writes an evidence-based analysis of what it finds.",
+        "args": {
+          "query": {
+            "label": "Search query",
+            "description": "AFTS query, for example TYPE:\"cm:content\" AND cm:name:\"report*\""
+          },
+          "analysisType": {
+            "label": "Analysis type",
+            "description": "Default: summary",
+            "options": {
+              "summary": "Summary",
+              "detailed": "Detailed",
+              "trends": "Trends",
+              "compliance": "Compliance"
+            }
+          }
+        }
+      }
     }
   }
 }

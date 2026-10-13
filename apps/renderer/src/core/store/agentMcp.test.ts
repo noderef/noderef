@@ -29,21 +29,6 @@ describe('agent store MCP state', () => {
     expect(useAgentStore.getState().pendingMcp).toBeNull();
   });
 
-  it('stores context chips per chat and pending composer, without duplicates', () => {
-    useAgentStore.getState().addContextResource(null, { uri: 'alfresco://node/1', name: 'One' });
-    useAgentStore.getState().addContextResource(null, { uri: 'alfresco://node/1', name: 'One' });
-    expect(useAgentStore.getState().pendingContextResources).toHaveLength(1);
-
-    useAgentStore.getState().addContextResource(9, { uri: 'alfresco://node/2', name: 'Two' });
-    useAgentStore.getState().addContextResource(9, { uri: 'alfresco://node/2', name: 'Two' });
-    expect(useAgentStore.getState().contextResourcesByChat[9]).toHaveLength(1);
-
-    useAgentStore.getState().removeContextResource(9, 'alfresco://node/2');
-    expect(useAgentStore.getState().contextResourcesByChat[9]).toEqual([]);
-    useAgentStore.getState().clearContextResources(null);
-    expect(useAgentStore.getState().pendingContextResources).toEqual([]);
-  });
-
   it('copies MCP settings from upserted chats', () => {
     useAgentStore.getState().upsertChat({
       id: 3,

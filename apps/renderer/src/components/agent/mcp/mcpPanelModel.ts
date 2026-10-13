@@ -34,12 +34,44 @@ export function defaultMcpSelection(catalog: McpCatalog | null): AgentChatMcpSet
 export function filterTools(tools: McpToolSummary[], query: string): McpToolSummary[] {
   const trimmed = query.trim().toLowerCase();
   if (!trimmed) return tools;
-  return tools.filter(tool =>
-    [tool.name, tool.modelName, tool.title ?? '', tool.description]
-      .join(' ')
-      .toLowerCase()
-      .includes(trimmed)
-  );
+  const nameMatches: McpToolSummary[] = [];
+  const descriptionMatches: McpToolSummary[] = [];
+  for (const tool of tools) {
+    const name = [tool.name, tool.modelName, tool.title ?? ''].join(' ').toLowerCase();
+    if (name.includes(trimmed)) nameMatches.push(tool);
+    else if (tool.description.toLowerCase().includes(trimmed)) descriptionMatches.push(tool);
+  }
+  return [...nameMatches, ...descriptionMatches];
+}
+
+// MCP prompt arguments carry no enum, so fixed choices for known prompts live here.
+const KNOWN_PROMPT_ARG_OPTIONS: Record<string, Record<string, string[]>> = {
+  alfresco_search_and_analyze: {
+    analysisType: ['summary', 'detailed', 'trends', 'compliance'],
+  },
+};
+
+export function promptArgOptions(promptName: string, argName: string): string[] | null {
+  return KNOWN_PROMPT_ARG_OPTIONS[promptName]?.[argName] ?? null;
+}
+
+export interface McpToolGroup {
+  prefix: string;
+  toolNames: string[];
+}
+
+export function groupToolsByPrefix(tools: McpToolSummary[]): McpToolGroup[] {
+  const groups = new Map<string, string[]>();
+  for (const tool of tools) {
+    const separator = tool.name.indexOf('_');
+    const prefix = separator > 0 ? tool.name.slice(0, separator) : tool.name;
+    const names = groups.get(prefix) ?? [];
+    names.push(tool.name);
+    groups.set(prefix, names);
+  }
+  return [...groups.entries()]
+    .map(([prefix, toolNames]) => ({ prefix, toolNames }))
+    .sort((a, b) => a.prefix.localeCompare(b.prefix));
 }
 
 export function emptyStateForStatus(status: AgentGatewayStatus | null): string {

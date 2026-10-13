@@ -18,11 +18,6 @@ import type { AgentChatSummary, AgentMessage, AgentRunEvent } from '@/core/ipc/b
 import type { AgentChatMcpSettings, AgentRunSummary } from '@app/contracts';
 import { create } from 'zustand';
 
-export interface AgentContextResource {
-  uri: string;
-  name?: string | null;
-}
-
 interface AgentState {
   chats: AgentChatSummary[];
   activeChatId: number | null;
@@ -34,8 +29,6 @@ interface AgentState {
   streamHealthyByRun: Record<number, boolean>;
   mcpByChat: Record<number, AgentChatMcpSettings>;
   pendingMcp: AgentChatMcpSettings | null;
-  contextResourcesByChat: Record<number, AgentContextResource[]>;
-  pendingContextResources: AgentContextResource[];
   setChats: (items: AgentChatSummary[]) => void;
   upsertChat: (chat: AgentChatSummary) => void;
   removeChat: (chatId: number) => void;
@@ -53,9 +46,6 @@ interface AgentState {
   appendRunEvents: (runId: number, events: AgentRunEvent[]) => void;
   setChatMcp: (chatId: number, settings: AgentChatMcpSettings) => void;
   setPendingMcp: (settings: AgentChatMcpSettings | null) => void;
-  addContextResource: (chatId: number | null, item: AgentContextResource) => void;
-  removeContextResource: (chatId: number | null, uri: string) => void;
-  clearContextResources: (chatId: number | null) => void;
   reset: () => void;
 }
 
@@ -81,8 +71,6 @@ export const useAgentStore = create<AgentState>(set => ({
   streamHealthyByRun: {},
   mcpByChat: {},
   pendingMcp: null,
-  contextResourcesByChat: {},
-  pendingContextResources: [],
 
   setChats: items => {
     set(state => {
@@ -111,9 +99,7 @@ export const useAgentStore = create<AgentState>(set => ({
   upsertChat: chat => {
     set(state => {
       const existingIndex = state.chats.findIndex(item => item.id === chat.id);
-      const mcpByChat = chat.mcp
-        ? { ...state.mcpByChat, [chat.id]: chat.mcp }
-        : state.mcpByChat;
+      const mcpByChat = chat.mcp ? { ...state.mcpByChat, [chat.id]: chat.mcp } : state.mcpByChat;
       if (existingIndex >= 0) {
         const next = [...state.chats];
         next[existingIndex] = chat;
@@ -130,7 +116,6 @@ export const useAgentStore = create<AgentState>(set => ({
       const { [chatId]: _runsToRemove, ...runsByChat } = state.runsByChat;
       const { [chatId]: _autoConfirmToRemove, ...autoConfirmByChat } = state.autoConfirmByChat;
       const { [chatId]: _mcpToRemove, ...mcpByChat } = state.mcpByChat;
-      const { [chatId]: _contextToRemove, ...contextResourcesByChat } = state.contextResourcesByChat;
 
       const runIdsToRemove = new Set((state.runsByChat[chatId] || []).map(run => run.id));
       const eventsByRun = Object.fromEntries(
@@ -152,7 +137,6 @@ export const useAgentStore = create<AgentState>(set => ({
         activeChatId: state.activeChatId === chatId ? (chats[0]?.id ?? null) : state.activeChatId,
         autoConfirmByChat,
         mcpByChat,
-        contextResourcesByChat,
         messagesByChat,
         runsByChat,
         eventsByRun,
@@ -307,53 +291,6 @@ export const useAgentStore = create<AgentState>(set => ({
 
   setPendingMcp: settings => set({ pendingMcp: settings }),
 
-  addContextResource: (chatId, item) => {
-    set(state => {
-      if (chatId === null) {
-        if (state.pendingContextResources.some(entry => entry.uri === item.uri)) {
-          return {};
-        }
-        return { pendingContextResources: [...state.pendingContextResources, item] };
-      }
-      const current = state.contextResourcesByChat[chatId] || [];
-      if (current.some(entry => entry.uri === item.uri)) {
-        return {};
-      }
-      return {
-        contextResourcesByChat: {
-          ...state.contextResourcesByChat,
-          [chatId]: [...current, item],
-        },
-      };
-    });
-  },
-
-  removeContextResource: (chatId, uri) => {
-    set(state => {
-      if (chatId === null) {
-        return {
-          pendingContextResources: state.pendingContextResources.filter(item => item.uri !== uri),
-        };
-      }
-      return {
-        contextResourcesByChat: {
-          ...state.contextResourcesByChat,
-          [chatId]: (state.contextResourcesByChat[chatId] || []).filter(item => item.uri !== uri),
-        },
-      };
-    });
-  },
-
-  clearContextResources: chatId => {
-    set(state => {
-      if (chatId === null) {
-        return { pendingContextResources: [] };
-      }
-      const { [chatId]: _removed, ...contextResourcesByChat } = state.contextResourcesByChat;
-      return { contextResourcesByChat };
-    });
-  },
-
   reset: () =>
     set({
       chats: [],
@@ -366,7 +303,5 @@ export const useAgentStore = create<AgentState>(set => ({
       streamHealthyByRun: {},
       mcpByChat: {},
       pendingMcp: null,
-      contextResourcesByChat: {},
-      pendingContextResources: [],
     }),
 }));

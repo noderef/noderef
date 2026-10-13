@@ -18,10 +18,8 @@ import type {
   AgentChatMcpSettings,
   AgentGatewayConnectionTestResult,
   AgentGatewayVerifyResult,
-  AgentMessageContextItem,
   McpCatalog,
   McpPromptPreview,
-  McpResourcePreview,
 } from '@app/contracts';
 import type { PrismaClient } from '@prisma/client';
 import { AppErrors } from '../../lib/errors.js';
@@ -31,18 +29,14 @@ import { GatewayCredentialProvider } from './credentialProvider.js';
 import { assertGatewayEndpointAllowed, EndpointPolicyError } from './endpointPolicy.js';
 import { probeGatewayEnvironment } from './identityProbe.js';
 import { McpSessionManager, type SessionConnectParams } from './McpSessionManager.js';
-import { promptMessagesToText, resourceContentsToText } from './mcpResultNormalizer.js';
+import { promptMessagesToText } from './mcpResultNormalizer.js';
 import { emptyCatalog } from './mcpCatalog.js';
 import { parseMcpSettings } from './mcpSettings.js';
-import {
-  GatewayStatusError,
-  MAX_CONTEXT_RESOURCES,
-  MAX_RESOURCE_CONTEXT_TOTAL_CHARS,
-  MAX_RESOURCE_TEXT_CHARS,
-  RESOURCE_PREVIEW_CHARS,
-} from './types.js';
+import { GatewayStatusError } from './types.js';
 
-function asStringRecord(value: Record<string, unknown> | undefined): Record<string, string> | undefined {
+function asStringRecord(
+  value: Record<string, unknown> | undefined
+): Record<string, string> | undefined {
   if (!value) return undefined;
   const next: Record<string, string> = {};
   for (const [key, item] of Object.entries(value)) {
@@ -98,8 +92,6 @@ export class AgentGatewayService {
         protocolVersion: null,
         toolCount: 0,
         promptCount: 0,
-        resourceCount: 0,
-        resourceTemplateCount: 0,
         truncated: false,
       };
     }
@@ -110,8 +102,6 @@ export class AgentGatewayService {
         protocolVersion: null,
         toolCount: 0,
         promptCount: 0,
-        resourceCount: 0,
-        resourceTemplateCount: 0,
         truncated: false,
       };
     }
@@ -129,8 +119,6 @@ export class AgentGatewayService {
         protocolVersion: result.protocolVersion,
         toolCount: result.catalog.tools.length,
         promptCount: result.catalog.prompts.length,
-        resourceCount: result.catalog.resources.length,
-        resourceTemplateCount: result.catalog.resourceTemplates.length,
         truncated: result.catalog.truncated,
       };
     } catch (error) {
@@ -144,8 +132,6 @@ export class AgentGatewayService {
         protocolVersion: null,
         toolCount: 0,
         promptCount: 0,
-        resourceCount: 0,
-        resourceTemplateCount: 0,
         truncated: false,
       };
     }
@@ -196,21 +182,30 @@ export class AgentGatewayService {
       status: result.status,
       repositoryId: result.gatewayRepositoryId,
       alfrescoRepositoryId: result.alfrescoRepositoryId,
-      verifiedAt: view.verification.verifiedAt ? new Date(view.verification.verifiedAt).toISOString() : null,
+      verifiedAt: view.verification.verifiedAt
+        ? new Date(view.verification.verifiedAt).toISOString()
+        : null,
     };
   }
 
   async getPrompt(
     userId: number,
-    chatId: number,
+    target: { chatId?: number; serverId?: number },
     name: string,
     args?: Record<string, unknown>
   ): Promise<McpPromptPreview> {
-    const chat = await this.prisma.agentChat.findFirst({ where: { id: chatId, userId } });
-    if (!chat) {
-      return AppErrors.notFound('Chat', chatId);
+    let serverId = target.serverId;
+    if (target.chatId) {
+      const chat = await this.prisma.agentChat.findFirst({ where: { id: target.chatId, userId } });
+      if (!chat) {
+        return AppErrors.notFound('Chat', target.chatId);
+      }
+      serverId = chat.serverId;
     }
-    const connect = await this.requireConnectParams(userId, chat.serverId, 'withAlfresco');
+    if (!serverId) {
+      return AppErrors.validationError('chatId or serverId is required');
+    }
+    const connect = await this.requireConnectParams(userId, serverId, 'withAlfresco');
     if ('catalog' in connect) {
       return AppErrors.validationError('Agent Gateway is not connected for this chat');
     }
@@ -220,105 +215,6 @@ export class AgentGatewayService {
       name,
       description: typeof result.description === 'string' ? result.description : null,
       text: rendered.text,
-      truncated: rendered.truncated,
-    };
-  }
-
-  async readResourcePreview(
-    userId: number,
-    chatId: number,
-    input: { uri?: string; uriTemplate?: string; params?: Record<string, string> }
-  ): Promise<McpResourcePreview> {
-    const chat = await this.prisma.agentChat.findFirst({ where: { id: chatId, userId } });
-    if (!chat) {
-      return AppErrors.notFound('Chat', chatId);
-    }
-    const snapshot = await this.readResourceForChat(userId, chat.serverId, chat.mcpSettingsJson, input, {
-      preview: true,
-    });
-    return {
-      uri: snapshot.uri,
-      name: snapshot.name ?? null,
-      mimeType: snapshot.mimeType ?? null,
-      text: snapshot.text.slice(0, RESOURCE_PREVIEW_CHARS),
-      chars: snapshot.chars,
-      truncated: snapshot.truncated || snapshot.text.length > RESOURCE_PREVIEW_CHARS,
-    };
-  }
-
-  async resolveContextResources(
-    userId: number,
-    serverId: number,
-    mcpSettingsJson: string | null,
-    uris: string[]
-  ): Promise<Array<AgentMessageContextItem & { text: string }>> {
-    if (uris.length > MAX_CONTEXT_RESOURCES) {
-      return AppErrors.validationError(`At most ${MAX_CONTEXT_RESOURCES} resources can be added as context`);
-    }
-    const settings = parseMcpSettings(mcpSettingsJson);
-    if (!settings?.enabled) {
-      return AppErrors.validationError('MCP must be enabled for this chat before adding resource context');
-    }
-
-    const items: Array<AgentMessageContextItem & { text: string }> = [];
-    let total = 0;
-    for (const uri of uris) {
-      const snapshot = await this.readResourceForChat(userId, serverId, mcpSettingsJson, { uri });
-      const remaining = MAX_RESOURCE_CONTEXT_TOTAL_CHARS - total;
-      const text = snapshot.text.slice(0, Math.max(0, remaining));
-      items.push({
-        uri: snapshot.uri,
-        name: snapshot.name,
-        mimeType: snapshot.mimeType,
-        chars: text.length,
-        truncated: snapshot.truncated || text.length < snapshot.text.length,
-        text,
-      });
-      total += text.length;
-      if (total >= MAX_RESOURCE_CONTEXT_TOTAL_CHARS) {
-        break;
-      }
-    }
-    return items;
-  }
-
-  private async readResourceForChat(
-    userId: number,
-    serverId: number,
-    mcpSettingsJson: string | null,
-    input: { uri?: string; uriTemplate?: string; params?: Record<string, string> },
-    options?: { preview?: boolean }
-  ): Promise<{ uri: string; name?: string | null; mimeType: string | null; text: string; chars: number; truncated: boolean }> {
-    const connect = await this.requireConnectParams(userId, serverId, 'withAlfresco');
-    if ('catalog' in connect) {
-      return AppErrors.validationError('Agent Gateway is not connected');
-    }
-    const catalog = await this.sessions.getCatalog(connect);
-    let uri = input.uri?.trim() ?? '';
-    if (input.uriTemplate) {
-      uri = this.sessions.expandTemplate(input.uriTemplate, input.params ?? {});
-    }
-    if (!uri) {
-      return AppErrors.validationError('Resource URI is required');
-    }
-
-    const allowed =
-      catalog.resources.some(resource => resource.uri === uri) ||
-      catalog.resourceTemplates.some(template => this.sessions.matchTemplate(template.uriTemplate, uri));
-    if (!allowed) {
-      return AppErrors.forbidden('Resource is not in the Agent Gateway catalog');
-    }
-
-    const result = await this.sessions.readResource(connect, uri);
-    const rendered = resourceContentsToText(result.contents ?? []);
-    const resource = catalog.resources.find(item => item.uri === uri);
-    const text = options?.preview ? rendered.text : rendered.text.slice(0, MAX_RESOURCE_TEXT_CHARS);
-    return {
-      uri,
-      name: resource?.name ?? resource?.title ?? null,
-      mimeType: rendered.mimeType,
-      text,
-      chars: text.length,
       truncated: rendered.truncated,
     };
   }

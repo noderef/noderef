@@ -14,11 +14,7 @@
  * limitations under the License.
  */
 
-export type AgentGatewayVerificationStatus =
-  | 'verified'
-  | 'mismatch'
-  | 'unverified'
-  | 'unsupported';
+export type AgentGatewayVerificationStatus = 'verified' | 'mismatch' | 'unverified' | 'unsupported';
 
 export type AgentGatewayStatus =
   | 'not_configured'
@@ -86,16 +82,9 @@ export interface McpResourceSummary {
   mimeType?: string | null;
 }
 
-export interface McpResourceTemplateSummary {
-  uriTemplate: string;
-  name?: string | null;
-  title?: string | null;
-  description?: string | null;
-  mimeType?: string | null;
-}
-
 export interface McpServerInfo {
   name?: string | null;
+  title?: string | null;
   version?: string | null;
 }
 
@@ -113,7 +102,6 @@ export interface McpCatalog {
   tools: McpToolSummary[];
   prompts: McpPromptSummary[];
   resources: McpResourceSummary[];
-  resourceTemplates: McpResourceTemplateSummary[];
   fetchedAt: string | null;
   truncated: boolean;
 }
@@ -123,22 +111,12 @@ export interface AgentChatMcpSettings {
   tools: string[];
 }
 
-export interface AgentMessageContextItem {
-  uri: string;
-  name?: string | null;
-  mimeType?: string | null;
-  chars: number;
-  truncated: boolean;
-}
-
 export interface AgentGatewayConnectionTestResult {
   status: AgentGatewayStatus;
   serverInfo: McpServerInfo | null;
   protocolVersion: string | null;
   toolCount: number;
   promptCount: number;
-  resourceCount: number;
-  resourceTemplateCount: number;
   truncated: boolean;
 }
 
@@ -153,14 +131,5 @@ export interface McpPromptPreview {
   name: string;
   description?: string | null;
   text: string;
-  truncated: boolean;
-}
-
-export interface McpResourcePreview {
-  uri: string;
-  name?: string | null;
-  mimeType?: string | null;
-  text: string;
-  chars: number;
   truncated: boolean;
 }

@@ -18,7 +18,6 @@ import type {
   McpCatalog,
   McpPromptSummary,
   McpResourceSummary,
-  McpResourceTemplateSummary,
   McpToolAnnotations,
   McpToolSummary,
 } from '@app/contracts';
@@ -49,7 +48,8 @@ export function mapToolAnnotations(raw: unknown): McpToolAnnotations | null {
   if (typeof record.readOnlyHint === 'boolean') annotations.readOnlyHint = record.readOnlyHint;
   if (typeof record.destructiveHint === 'boolean')
     annotations.destructiveHint = record.destructiveHint;
-  if (typeof record.idempotentHint === 'boolean') annotations.idempotentHint = record.idempotentHint;
+  if (typeof record.idempotentHint === 'boolean')
+    annotations.idempotentHint = record.idempotentHint;
   if (typeof record.openWorldHint === 'boolean') annotations.openWorldHint = record.openWorldHint;
   return Object.keys(annotations).length ? annotations : null;
 }
@@ -116,6 +116,13 @@ export function mapPrompts(
   }));
 }
 
+/** MCP Apps UI templates (`ui://`) render tool output; they are not readable data. */
+function isMcpAppUiResource(resource: { uri: string; mimeType?: string }): boolean {
+  return (
+    resource.uri.startsWith('ui://') || Boolean(resource.mimeType?.includes('profile=mcp-app'))
+  );
+}
+
 export function mapResources(
   resources: Array<{
     uri: string;
@@ -125,31 +132,15 @@ export function mapResources(
     mimeType?: string;
   }>
 ): McpResourceSummary[] {
-  return resources.map(resource => ({
-    uri: resource.uri,
-    name: resource.name ?? null,
-    title: resource.title ?? null,
-    description: resource.description ?? null,
-    mimeType: resource.mimeType ?? null,
-  }));
-}
-
-export function mapResourceTemplates(
-  templates: Array<{
-    uriTemplate: string;
-    name?: string;
-    title?: string;
-    description?: string;
-    mimeType?: string;
-  }>
-): McpResourceTemplateSummary[] {
-  return templates.map(template => ({
-    uriTemplate: template.uriTemplate,
-    name: template.name ?? null,
-    title: template.title ?? null,
-    description: template.description ?? null,
-    mimeType: template.mimeType ?? null,
-  }));
+  return resources
+    .filter(resource => !isMcpAppUiResource(resource))
+    .map(resource => ({
+      uri: resource.uri,
+      name: resource.name ?? null,
+      title: resource.title ?? null,
+      description: resource.description ?? null,
+      mimeType: resource.mimeType ?? null,
+    }));
 }
 
 export function emptyCatalog(status: McpCatalog['status']): McpCatalog {
@@ -161,7 +152,6 @@ export function emptyCatalog(status: McpCatalog['status']): McpCatalog {
     tools: [],
     prompts: [],
     resources: [],
-    resourceTemplates: [],
     fetchedAt: null,
     truncated: false,
   };

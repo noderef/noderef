@@ -67,7 +67,10 @@ export class GatewayCredentialProvider {
     });
   }
 
-  async getIdentity(userId: number, serverId: number): Promise<{
+  async getIdentity(
+    userId: number,
+    serverId: number
+  ): Promise<{
     authType: string | null;
     identity: string;
   }> {

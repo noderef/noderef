@@ -23,7 +23,10 @@ import { policyLabel, resolveMcpToolPolicy } from './mcpPolicy.js';
 import { normalizeMcpToolResult } from './mcpResultNormalizer.js';
 import { MAX_TOOL_DESCRIPTION_CHARS } from './types.js';
 
-function withTimeoutSignal(parent: AbortSignal | undefined, ms: number): {
+function withTimeoutSignal(
+  parent: AbortSignal | undefined,
+  ms: number
+): {
   signal: AbortSignal;
   cancel: () => void;
 } {

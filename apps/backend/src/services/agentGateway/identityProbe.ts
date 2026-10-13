@@ -52,7 +52,10 @@ export async function readAlfrescoRepositoryId(
   serverBaseUrl: string
 ): Promise<string | null> {
   const authorization = await credentials.getAlfrescoAuthorization(userId, serverId);
-  const url = new URL('/alfresco/api/discovery', serverBaseUrl.endsWith('/') ? serverBaseUrl : `${serverBaseUrl}/`);
+  const url = new URL(
+    '/alfresco/api/discovery',
+    serverBaseUrl.endsWith('/') ? serverBaseUrl : `${serverBaseUrl}/`
+  );
   const response = await fetch(url, {
     headers: { Authorization: authorization, Accept: 'application/json' },
     redirect: 'error',

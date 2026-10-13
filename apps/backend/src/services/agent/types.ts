@@ -97,12 +97,6 @@ export interface RunInput {
   triggerMessageId: number;
   preferredLanguage?: string;
   autoApproveConfirmations?: boolean;
-  contextResources?: Array<{
-    uri: string;
-    name?: string | null;
-    mimeType?: string | null;
-    text: string;
-  }>;
 }
 
 export interface ResolvedAiRuntime {

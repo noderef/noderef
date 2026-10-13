@@ -21,7 +21,6 @@ import { AgentRunEngine } from '../../src/services/agent/AgentRunEngine.js';
 import { AgentService } from '../../src/services/agent/AgentService.js';
 import { getAllToolSchemas } from '../../src/services/agent/tools/registry.js';
 import { buildRunToolset } from '../../src/services/agent/tools/toolset.js';
-import { AgentGatewayService } from '../../src/services/agentGateway/agentGatewayService.js';
 import {
   getAgentGatewayRuntime,
   resetAgentGatewayRuntimeForTests,
@@ -175,7 +174,10 @@ describe('agent gateway enforcement', () => {
     });
     expect(gateway!.toolCalls.some(call => call.name === 'echo_write')).toBe(false);
     const events = await prisma.agentRunEvent.findMany({ where: { runId: run.id } });
-    const serialized = JSON.stringify({ events, steps: await prisma.agentRunStep.findMany({ where: { runId: run.id } }) });
+    const serialized = JSON.stringify({
+      events,
+      steps: await prisma.agentRunStep.findMany({ where: { runId: run.id } }),
+    });
     expect(serialized).not.toContain('gw-secret');
     expect(serialized).not.toContain('admin-secret');
   });
@@ -231,27 +233,6 @@ describe('agent gateway enforcement', () => {
     expect(gateway!.toolCalls.some(call => call.name === 'echo_destroy')).toBe(false);
     const failed = await prisma.agentRunStep.findFirst({ where: { id: step!.id } });
     expect(failed?.status).toBe('failed');
-  });
-
-  it('rejects context resources when MCP is disabled for the chat', async () => {
-    const { user, chat, serverService } = await setup(['echo_read']);
-    await prisma.agentChat.update({
-      where: { id: chat.id },
-      data: { mcpSettingsJson: serializeMcpSettings({ enabled: false, tools: [] }) },
-    });
-    const runtime = getAgentGatewayRuntime(prisma, serverService);
-    const gatewayService = new AgentGatewayService(
-      prisma,
-      serverService,
-      runtime.config,
-      runtime.credentials,
-      runtime.sessions
-    );
-    await expect(
-      gatewayService.resolveContextResources(user.id, chat.serverId, serializeMcpSettings({ enabled: false, tools: [] }), [
-        'alfresco://repository/info',
-      ])
-    ).rejects.toThrow(/MCP must be enabled/);
   });
 
   it('applies the confirmation policy matrix', async () => {
@@ -337,7 +318,10 @@ describe('agent gateway enforcement', () => {
   });
 
   it('continues the run after a mid-call connection loss and cancels in-flight tools', async () => {
-    const { user, run, chat, message, toolset, repository } = await setup(['slow_tool', 'echo_read']);
+    const { user, run, chat, message, toolset, repository } = await setup([
+      'slow_tool',
+      'echo_read',
+    ]);
     streamMock
       .mockResolvedValueOnce(toolCall('mcp_echo_read', { message: 'before-close' }))
       .mockResolvedValueOnce(textResult('recovered'));

@@ -33,7 +33,6 @@ import type {
   CreateServer,
   McpCatalog,
   McpPromptPreview,
-  McpResourcePreview,
   NodeHistoryActivitySummary,
   PublicServer,
   UpdateServer,
@@ -209,19 +208,12 @@ export const backendRpc = {
       return rpc('backend.agentGateway.getCatalog', { serverId, refresh });
     },
     async getPrompt(data: {
-      chatId: number;
+      chatId?: number;
+      serverId?: number;
       name: string;
       arguments?: Record<string, unknown>;
     }): Promise<McpPromptPreview> {
       return rpc('backend.agentGateway.getPrompt', data);
-    },
-    async readResource(data: {
-      chatId: number;
-      uri?: string;
-      uriTemplate?: string;
-      params?: Record<string, string>;
-    }): Promise<McpResourcePreview> {
-      return rpc('backend.agentGateway.readResource', data);
     },
   },
 
@@ -436,7 +428,6 @@ export const backendRpc = {
       aiModel?: string;
       appLanguage?: string;
       autoApproveConfirmations?: boolean;
-      contextResources?: Array<{ uri: string }>;
     }): Promise<{ message: AgentMessage; run: AgentRunSummary }> {
       return rpc('backend.agent.sendMessage', data);
     },

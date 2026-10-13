@@ -20,7 +20,9 @@ import {
   defaultMcpSelection,
   emptyStateForStatus,
   filterTools,
+  groupToolsByPrefix,
   indicatorColor,
+  promptArgOptions,
   schemaPropertyNames,
 } from './mcpPanelModel';
 
@@ -43,7 +45,6 @@ const catalog = (tools: McpToolSummary[]): McpCatalog => ({
   tools,
   prompts: [],
   resources: [],
-  resourceTemplates: [],
   fetchedAt: new Date().toISOString(),
   truncated: false,
 });
@@ -62,10 +63,62 @@ describe('mcpPanelModel', () => {
   it('filters tools by name, title, and description', () => {
     const tools = [
       tool({ name: 'echo_read', modelName: 'mcp_echo_read', title: 'Echo' }),
-      tool({ name: 'fail_tool', modelName: 'mcp_fail_tool', title: 'Fail', description: 'Always errors' }),
+      tool({
+        name: 'fail_tool',
+        modelName: 'mcp_fail_tool',
+        title: 'Fail',
+        description: 'Always errors',
+      }),
     ];
     expect(filterTools(tools, 'fail')).toHaveLength(1);
     expect(filterTools(tools, 'echo')).toHaveLength(1);
+    expect(filterTools(tools, 'errors')).toHaveLength(1);
+  });
+
+  it('offers fixed choices only for known prompt arguments', () => {
+    expect(promptArgOptions('alfresco_search_and_analyze', 'analysisType')).toEqual([
+      'summary',
+      'detailed',
+      'trends',
+      'compliance',
+    ]);
+    expect(promptArgOptions('alfresco_search_and_analyze', 'query')).toBeNull();
+    expect(promptArgOptions('other_prompt', 'analysisType')).toBeNull();
+  });
+
+  it('groups tools by name prefix', () => {
+    const groups = groupToolsByPrefix([
+      tool({ name: 'postgres_sql' }),
+      tool({ name: 'alfresco_get_node' }),
+      tool({ name: 'alfresco_search' }),
+      tool({ name: 'standalone' }),
+    ]);
+    expect(groups).toEqual([
+      { prefix: 'alfresco', toolNames: ['alfresco_get_node', 'alfresco_search'] },
+      { prefix: 'postgres', toolNames: ['postgres_sql'] },
+      { prefix: 'standalone', toolNames: ['standalone'] },
+    ]);
+  });
+
+  it('lists name matches before description-only matches', () => {
+    const tools = [
+      tool({
+        name: 'sql_query',
+        modelName: 'mcp_sql_query',
+        title: null,
+        description: 'Alfresco tables',
+      }),
+      tool({
+        name: 'alfresco_get_node',
+        modelName: 'mcp_alfresco_get_node',
+        title: null,
+        description: 'Node',
+      }),
+    ];
+    expect(filterTools(tools, 'alfresco').map(item => item.name)).toEqual([
+      'alfresco_get_node',
+      'sql_query',
+    ]);
   });
 
   it('maps gateway status to empty-state keys and indicator colors', () => {

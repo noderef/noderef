@@ -17,15 +17,11 @@
 import type {
   AgentChatMcpSettings,
   AgentMention,
-  AgentMessageContextItem,
   AgentMessageRole,
   AgentRunStatus,
   AgentRunStepStatus,
 } from '@app/contracts';
-import {
-  parseMcpSettings,
-  parseMessageContext,
-} from '../services/agentGateway/mcpSettings.js';
+import { parseMcpSettings } from '../services/agentGateway/mcpSettings.js';
 import type {
   AgentChat as PrismaAgentChat,
   AgentMessage as PrismaAgentMessage,
@@ -58,7 +54,6 @@ export interface AgentMessage {
   content: string;
   mentions: AgentMention[];
   createdAt: Date;
-  context?: AgentMessageContextItem[] | null;
 }
 
 export interface AgentRun {
@@ -202,7 +197,7 @@ export class AgentRepository {
     };
   }
 
-  private toMessageDTO(message: PrismaAgentMessage): AgentMessage {
+  private toMessageDTO(message: Omit<PrismaAgentMessage, 'contextJson'>): AgentMessage {
     return {
       id: message.id,
       chatId: message.chatId,
@@ -211,7 +206,6 @@ export class AgentRepository {
       content: message.content,
       mentions: safeMentionsParse(message.mentionsJson),
       createdAt: message.createdAt,
-      context: parseMessageContext(message.contextJson).map(({ text: _text, ...rest }) => rest),
     };
   }
 
@@ -492,7 +486,6 @@ export class AgentRepository {
         role: true,
         content: true,
         mentionsJson: true,
-        contextJson: true,
         createdAt: true,
       },
     });
@@ -522,12 +515,10 @@ export class AgentRepository {
     role: AgentMessageRole;
     content: string;
     mentions?: AgentMention[];
-    context?: Array<AgentMessageContextItem & { text?: string }> | null;
   }): Promise<AgentMessage> {
     const now = new Date();
     const mentionsJson =
       data.mentions && data.mentions.length ? JSON.stringify(data.mentions) : null;
-    const contextJson = data.context && data.context.length ? JSON.stringify(data.context) : null;
 
     const message = await this.prisma.$transaction(async tx => {
       const created = await tx.agentMessage.create({
@@ -537,7 +528,6 @@ export class AgentRepository {
           role: data.role,
           content: data.content,
           mentionsJson,
-          contextJson,
         },
       });
 

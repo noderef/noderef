@@ -256,20 +256,6 @@ const isExplicitScriptExecutionRequested = (content: string): boolean => {
 
 const toPercent = (value: number): number => Math.max(0, Math.round(value * 10) / 10);
 
-const formatUntrustedContext = (
-  items: RunInput['contextResources']
-): string => {
-  if (!items?.length) {
-    return '';
-  }
-  return items
-    .map(
-      item =>
-        `<untrusted_context source="agent_gateway" uri="${item.uri}">\n${item.text}\n</untrusted_context>`
-    )
-    .join('\n\n');
-};
-
 export class AgentRunEngine {
   constructor(
     private repository: AgentRepository,
@@ -310,11 +296,7 @@ export class AgentRunEngine {
       messages.push({ role: 'user', content: '<conversation_history>' });
       messages.push({ role: 'assistant', content: historyText });
     }
-    const untrustedContext = formatUntrustedContext(input.contextResources);
-    messages.push({
-      role: 'user',
-      content: untrustedContext ? `${input.content}\n\n${untrustedContext}` : input.content,
-    });
+    messages.push({ role: 'user', content: input.content });
 
     for (const warning of this.toolset?.warnings ?? []) {
       await this.emitNote(input.runId, {

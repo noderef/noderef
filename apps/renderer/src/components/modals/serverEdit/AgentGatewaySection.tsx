@@ -14,14 +14,11 @@
  * limitations under the License.
  */
 
+import { invalidateMcpCatalog } from '@/components/agent/mcp/useMcpCatalog';
 import { backendRpc } from '@/core/ipc/backend';
-import type {
-  AgentGatewayConfigView,
-  AgentGatewayConnectionTestResult,
-  AgentGatewayVerifyResult,
-} from '@app/contracts';
+import type { AgentGatewayConfigView, AgentGatewayConnectionTestResult } from '@app/contracts';
 import {
-  Alert,
+  ActionIcon,
   Badge,
   Button,
   Group,
@@ -30,9 +27,11 @@ import {
   Switch,
   Text,
   TextInput,
+  Tooltip,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { useEffect, useMemo, useState } from 'react';
+import { IconArrowBackUp, IconTrash } from '@tabler/icons-react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface AgentGatewaySectionProps {
@@ -45,8 +44,6 @@ const EMPTY_TEST: AgentGatewayConnectionTestResult = {
   protocolVersion: null,
   toolCount: 0,
   promptCount: 0,
-  resourceCount: 0,
-  resourceTemplateCount: 0,
   truncated: false,
 };
 
@@ -59,9 +56,7 @@ export function AgentGatewaySection({ serverId }: AgentGatewaySectionProps) {
   const [clearApiKey, setClearApiKey] = useState(false);
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [verifying, setVerifying] = useState(false);
   const [testResult, setTestResult] = useState<AgentGatewayConnectionTestResult | null>(null);
-  const [verifyResult, setVerifyResult] = useState<AgentGatewayVerifyResult | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,22 +68,11 @@ export function AgentGatewaySection({ serverId }: AgentGatewaySectionProps) {
       setApiKey('');
       setClearApiKey(false);
       setTestResult(null);
-      setVerifyResult(null);
     });
     return () => {
       cancelled = true;
     };
   }, [serverId]);
-
-  const dirty = useMemo(() => {
-    if (!config) return false;
-    return (
-      enabled !== config.enabled ||
-      (endpointUrl.trim() || null) !== (config.endpointUrl ?? null) ||
-      Boolean(apiKey.trim()) ||
-      clearApiKey
-    );
-  }, [apiKey, clearApiKey, config, enabled, endpointUrl]);
 
   const handleSave = async () => {
     setLoading(true);
@@ -101,6 +85,7 @@ export function AgentGatewaySection({ serverId }: AgentGatewaySectionProps) {
         clearApiKey: clearApiKey || undefined,
       });
       setConfig(view);
+      invalidateMcpCatalog(serverId);
       setApiKey('');
       setClearApiKey(false);
       notifications.show({
@@ -141,26 +126,7 @@ export function AgentGatewaySection({ serverId }: AgentGatewaySectionProps) {
     }
   };
 
-  const handleVerify = async () => {
-    setVerifying(true);
-    try {
-      const result = await backendRpc.agentGateway.verifyEnvironment(serverId);
-      setVerifyResult(result);
-      const view = await backendRpc.agentGateway.getConfig(serverId);
-      setConfig(view);
-    } catch (error) {
-      notifications.show({
-        title: t('agentGateway.verifyFailed'),
-        message: error instanceof Error ? error.message : t('updateErrorMessage'),
-        color: 'red',
-      });
-    } finally {
-      setVerifying(false);
-    }
-  };
-
   const result = testResult ?? EMPTY_TEST;
-  const verification = verifyResult?.status ?? config?.verification.status ?? 'unverified';
 
   return (
     <Stack gap="lg" mt={4}>
@@ -174,10 +140,10 @@ export function AgentGatewaySection({ serverId }: AgentGatewaySectionProps) {
         placeholder="http://localhost:3100/mcp"
         value={endpointUrl}
         onChange={event => setEndpointUrl(event.currentTarget.value)}
-        description={t('agentGateway.endpointHint')}
       />
-      <div>
+      <Group align="flex-end" gap="xs" wrap="nowrap">
         <PasswordInput
+          style={{ flex: 1 }}
           label={t('agentGateway.apiKey')}
           placeholder={
             config?.hasApiKey && !clearApiKey
@@ -191,38 +157,38 @@ export function AgentGatewaySection({ serverId }: AgentGatewaySectionProps) {
             setClearApiKey(false);
           }}
         />
-        <Group gap="xs" mt="xs">
-          {config?.hasApiKey && !clearApiKey ? (
-            <Button
-              size="xs"
+        {config?.hasApiKey && !clearApiKey ? (
+          <Tooltip label={t('agentGateway.removeKey')} withArrow>
+            <ActionIcon
               variant="subtle"
               color="red"
+              size="lg"
+              aria-label={t('agentGateway.removeKey')}
               onClick={() => {
                 setClearApiKey(true);
                 setApiKey('');
               }}
             >
-              {t('agentGateway.removeKey')}
-            </Button>
-          ) : null}
-          {clearApiKey || apiKey ? (
-            <Button
-              size="xs"
+              <IconTrash size={16} />
+            </ActionIcon>
+          </Tooltip>
+        ) : null}
+        {clearApiKey || apiKey ? (
+          <Tooltip label={t('agentGateway.undoKey')} withArrow>
+            <ActionIcon
               variant="subtle"
+              size="lg"
+              aria-label={t('agentGateway.undoKey')}
               onClick={() => {
                 setClearApiKey(false);
                 setApiKey('');
               }}
             >
-              {t('agentGateway.undoKey')}
-            </Button>
-          ) : null}
-        </Group>
-      </div>
-
-      <Alert color="yellow" title={t('agentGateway.aclTitle')}>
-        {t('agentGateway.aclBody')}
-      </Alert>
+              <IconArrowBackUp size={16} />
+            </ActionIcon>
+          </Tooltip>
+        ) : null}
+      </Group>
 
       <Group gap="xs">
         <Badge variant="light">{t(`agentGateway.status.${result.status}`)}</Badge>
@@ -231,36 +197,20 @@ export function AgentGatewaySection({ serverId }: AgentGatewaySectionProps) {
             {t('agentGateway.counts', {
               tools: result.toolCount,
               prompts: result.promptCount,
-              resources: result.resourceCount,
-              templates: result.resourceTemplateCount,
             })}
           </Text>
         ) : null}
       </Group>
-      {result.serverInfo?.name ? (
+      {result.serverInfo?.title || result.serverInfo?.name ? (
         <Text size="xs" c="dimmed">
-          {result.serverInfo.name}
+          {result.serverInfo.title || result.serverInfo.name}
           {result.serverInfo.version ? ` ${result.serverInfo.version}` : ''}
         </Text>
       ) : null}
-      <Group gap="xs">
-        <Badge variant="outline">{t(`agentGateway.verification.${verification}`)}</Badge>
-      </Group>
-      <Text size="xs" c="dimmed">
-        {t('agentGateway.verificationHint')}
-      </Text>
 
       <Group justify="flex-end" mt="md">
         <Button variant="default" onClick={() => void handleTest()} loading={testing}>
           {t('agentGateway.test')}
-        </Button>
-        <Button
-          variant="default"
-          onClick={() => void handleVerify()}
-          loading={verifying}
-          disabled={dirty}
-        >
-          {t('agentGateway.verify')}
         </Button>
         <Button onClick={() => void handleSave()} loading={loading}>
           {t('save')}

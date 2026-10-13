@@ -34,7 +34,6 @@ import { parseColonQuery, useQNameSuggestions } from '@/hooks/useQNameSuggestion
 import { useSearchDictionary } from '@/hooks/useSearchDictionary';
 import {
   ActionIcon,
-  Badge,
   Box,
   Button,
   Group,
@@ -56,13 +55,11 @@ import {
   IconServer2,
   IconShield,
   IconShieldCheck,
-  IconX,
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SearchableModelSelect } from '../components/common/SearchableModelSelect';
 import { McpComposerButton } from '../components/agent/mcp/McpComposerButton';
-import { mentionChipStyle } from '../components/agent/mentionChip';
 import { AgentChatInput, AgentChatInputRef } from '../components/agent/AgentChatInput';
 import { AgentEmptyState } from '../components/agent/AgentEmptyState';
 import { AgentMessageBubble, parseNodeBrowserLink } from '../components/agent/AgentMessageBubble';
@@ -95,8 +92,21 @@ type ConversationTimelineItem =
       run: AgentRunSummary;
     };
 
-const MODEL_SELECT_WIDTH = 260;
-const MODEL_DROPDOWN_WIDTH = 300;
+const MODEL_SELECT_MIN_WIDTH = 120;
+const MODEL_SELECT_MAX_WIDTH = 360;
+const MODEL_SELECT_CHROME_PX = 44;
+
+let textMeasureContext: CanvasRenderingContext2D | null = null;
+
+function measureComposerText(text: string): number {
+  if (typeof document === 'undefined') return text.length * 7;
+  textMeasureContext ??= document.createElement('canvas').getContext('2d');
+  if (!textMeasureContext) return text.length * 7;
+  const fontFamily = getComputedStyle(document.body).fontFamily || 'sans-serif';
+  textMeasureContext.font = `500 13px ${fontFamily}`;
+  return Math.ceil(textMeasureContext.measureText(text).width);
+}
+const MODEL_DROPDOWN_WIDTH = 380;
 const SERVER_SELECT_WIDTH = 160;
 const SERVER_DROPDOWN_WIDTH = 220;
 const COMPOSER_SELECT_STYLES = {
@@ -143,11 +153,6 @@ export function AgentPage() {
   const setChatAutoConfirm = useAgentStore(state => state.setChatAutoConfirm);
   const setChatMcp = useAgentStore(state => state.setChatMcp);
   const setPendingMcp = useAgentStore(state => state.setPendingMcp);
-  const addContextResource = useAgentStore(state => state.addContextResource);
-  const removeContextResource = useAgentStore(state => state.removeContextResource);
-  const clearContextResources = useAgentStore(state => state.clearContextResources);
-  const contextResourcesByChat = useAgentStore(state => state.contextResourcesByChat);
-  const pendingContextResources = useAgentStore(state => state.pendingContextResources);
 
   const [loadingConversation, setLoadingConversation] = useState(false);
   const [sending, setSending] = useState(false);
@@ -191,9 +196,6 @@ export function AgentPage() {
   );
   const modelSelectionServerId = activeChat?.serverId || activeServerId || composerServerId || null;
   const mcpServerId = activeChat?.serverId || activeServerId || composerServerId || null;
-  const composerContextResources = activeChatId
-    ? contextResourcesByChat[activeChatId] || []
-    : pendingContextResources;
   const {
     aiModelOptions,
     selectedAiModelOption,
@@ -210,6 +212,13 @@ export function AgentPage() {
     activeChatId,
     isSettingsOpen,
   });
+  const modelSelectWidth = useMemo(() => {
+    const label =
+      aiModelOptions.find(option => option.value === selectedAiModelOption)?.label ??
+      t('modelPlaceholder');
+    const width = measureComposerText(label) + MODEL_SELECT_CHROME_PX;
+    return Math.min(Math.max(width, MODEL_SELECT_MIN_WIDTH), MODEL_SELECT_MAX_WIDTH);
+  }, [aiModelOptions, selectedAiModelOption, t]);
 
   const [qnameQuery, setQnameQuery] = useState<string | null>(null);
   const [qnamePropertiesByPrefix, setQNamePropertiesByPrefix] = useState<Record<string, string[]>>(
@@ -933,11 +942,6 @@ export function AgentPage() {
           setChatMcp(chat.id, pendingMcp);
           setPendingMcp(null);
         }
-        const pendingContext = useAgentStore.getState().pendingContextResources;
-        for (const item of pendingContext) {
-          addContextResource(chat.id, item);
-        }
-        clearContextResources(null);
 
         // Preserve the currently selected model as this chat's explicit model.
         if (aiProvider && aiModel) {
@@ -955,7 +959,6 @@ export function AgentPage() {
         setChatAutoConfirm(chatId, true);
       }
 
-      const contextResources = useAgentStore.getState().contextResourcesByChat[chatId] || [];
       const response = await backendRpc.agent.sendMessage({
         chatId,
         content: text.trim(),
@@ -964,9 +967,6 @@ export function AgentPage() {
         aiModel: aiModel || undefined,
         appLanguage: appLanguage || undefined,
         autoApproveConfirmations: enableAutoConfirmForThisSend,
-        ...(contextResources.length
-          ? { contextResources: contextResources.map(item => ({ uri: item.uri })) }
-          : {}),
       });
 
       addMessage(chatId, response.message);
@@ -975,7 +975,6 @@ export function AgentPage() {
       setDraft('');
       setMentionQuery(null);
       resetMentionSuggestions();
-      clearContextResources(chatId);
       setRecentlySentMessage(true);
 
       await pollActiveChat();
@@ -1292,29 +1291,6 @@ export function AgentPage() {
             </Paper>
           ) : (
             <>
-              {composerContextResources.length > 0 ? (
-                <Group gap={6} mb="xs" wrap="wrap">
-                  {composerContextResources.map(item => (
-                    <Badge
-                      key={item.uri}
-                      style={mentionChipStyle}
-                      rightSection={
-                        <ActionIcon
-                          size={14}
-                          variant="transparent"
-                          color="gray"
-                          aria-label={t('mcp.removeContext')}
-                          onClick={() => removeContextResource(activeChatId, item.uri)}
-                        >
-                          <IconX size={10} />
-                        </ActionIcon>
-                      }
-                    >
-                      {item.name || item.uri}
-                    </Badge>
-                  ))}
-                </Group>
-              ) : null}
               <Box style={{ position: 'relative' }}>
                 <Paper withBorder p="sm" radius="md">
                   <AgentChatInput
@@ -1340,7 +1316,7 @@ export function AgentPage() {
                         size="xs"
                         placeholder={t('modelPlaceholder')}
                         data={aiModelOptions}
-                        comboboxProps={{ width: MODEL_DROPDOWN_WIDTH }}
+                        comboboxProps={{ width: MODEL_DROPDOWN_WIDTH, position: 'top-start' }}
                         value={selectedAiModelOption}
                         disabled={aiModelOptions.length === 0 || aiModelsLoading}
                         variant="unstyled"
@@ -1374,13 +1350,7 @@ export function AgentPage() {
                         leftSectionWidth={18}
                         rightSectionWidth={18}
                         styles={COMPOSER_SELECT_STYLES}
-                        w={MODEL_SELECT_WIDTH}
-                      />
-                      <McpComposerButton
-                        serverId={mcpServerId}
-                        chatId={activeChatId}
-                        draftEmpty={!draft.trim()}
-                        onInsertDraft={setDraft}
+                        w={modelSelectWidth}
                       />
                       {activeServerId === null && activeChatId === null ? (
                         <Select
@@ -1433,6 +1403,12 @@ export function AgentPage() {
                           </ActionIcon>
                         </Tooltip>
                       ) : null}
+                      <McpComposerButton
+                        serverId={mcpServerId}
+                        chatId={activeChatId}
+                        draftEmpty={!draft.trim()}
+                        onInsertDraft={setDraft}
+                      />
                     </Group>
 
                     {hasActiveRuns ? (

@@ -102,7 +102,10 @@ export function normalizeMcpToolResult(toolName: string, result: CallToolResult)
           .filter(Boolean)
           .join('\n')
       : 'Agent Gateway tool returned an error';
-    return { ok: false, error: truncate(text || 'Agent Gateway tool returned an error', MAX_ERROR_TEXT_CHARS).text };
+    return {
+      ok: false,
+      error: truncate(text || 'Agent Gateway tool returned an error', MAX_ERROR_TEXT_CHARS).text,
+    };
   }
 
   let data: Record<string, unknown>;
@@ -157,27 +160,4 @@ export function promptMessagesToText(messages: unknown[]): { text: string; trunc
     lines.push(messages.length > 1 ? `${role}:\n${body}` : body);
   }
   return truncate(lines.join('\n\n'), MAX_PROMPT_TEXT_CHARS);
-}
-
-export function resourceContentsToText(contents: unknown[]): {
-  text: string;
-  mimeType: string | null;
-  truncated: boolean;
-} {
-  const texts: string[] = [];
-  let mimeType: string | null = null;
-  for (const raw of contents) {
-    const block = asRecord(raw);
-    if (!block) continue;
-    if (typeof block.mimeType === 'string' && !mimeType) {
-      mimeType = block.mimeType;
-    }
-    if (typeof block.text === 'string') {
-      texts.push(block.text);
-    } else if (block.blob) {
-      texts.push('[binary resource omitted]');
-    }
-  }
-  const clipped = truncate(texts.join('\n'), MAX_RESOURCE_TEXT_CHARS);
-  return { ...clipped, mimeType };
 }

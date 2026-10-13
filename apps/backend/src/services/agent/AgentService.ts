@@ -53,7 +53,7 @@ import {
 import { buildCompletionNote, buildQueuedNote } from './progressMessages.js';
 import { searchMentions } from './searchMentions.js';
 import { getAgentGatewayRuntime } from '../agentGateway/gatewayRuntime.js';
-import { parseMcpSettings, parseMessageContext, serializeMcpSettings } from '../agentGateway/mcpSettings.js';
+import { parseMcpSettings, serializeMcpSettings } from '../agentGateway/mcpSettings.js';
 import { getToolByName, resolveToolName } from './tools/registry.js';
 import { buildRunToolset } from './tools/toolset.js';
 import type { AgentExecutionContext } from './types.js';
@@ -70,7 +70,6 @@ interface SendMessageInput {
   aiModel?: string;
   appLanguage?: string;
   autoApproveConfirmations?: boolean;
-  contextResources?: Array<{ uri: string }>;
 }
 
 interface ConfirmStepInput {
@@ -214,45 +213,12 @@ export class AgentService {
     }
 
     const mentions = (payload.mentions || []).slice(0, 30);
-    let context:
-      | Array<{
-          uri: string;
-          name?: string | null;
-          mimeType?: string | null;
-          chars: number;
-          truncated: boolean;
-          text: string;
-        }>
-      | undefined;
-    if (payload.contextResources?.length) {
-      const runtime = getAgentGatewayRuntime(this.prisma, this.serverService);
-      const { AgentGatewayService } = await import('../agentGateway/agentGatewayService.js');
-      const gateway = new AgentGatewayService(
-        this.prisma,
-        this.serverService,
-        runtime.config,
-        runtime.credentials,
-        runtime.sessions
-      );
-      const chatRow = await this.prisma.agentChat.findFirst({
-        where: { id: chat.id, userId },
-        select: { serverId: true, mcpSettingsJson: true },
-      });
-      context = await gateway.resolveContextResources(
-        userId,
-        chat.serverId,
-        chatRow?.mcpSettingsJson ?? null,
-        payload.contextResources.map(item => item.uri)
-      );
-    }
-
     const message = await this.repository.createMessage({
       chatId: chat.id,
       userId,
       role: 'user',
       content,
       mentions,
-      context,
     });
 
     const run = await this.repository.createRun({
@@ -538,9 +504,10 @@ export class AgentService {
         select: { mcpSettingsJson: true },
       });
       const chatMcp = parseMcpSettings(chatRow?.mcpSettingsJson);
-      const planMcp = run.plan && isRecord(run.plan.mcp)
-        ? (run.plan.mcp as { enabled?: boolean; tools?: string[] })
-        : null;
+      const planMcp =
+        run.plan && isRecord(run.plan.mcp)
+          ? (run.plan.mcp as { enabled?: boolean; tools?: string[] })
+          : null;
       const toolset = await buildRunToolset({
         prisma: this.prisma,
         serverService: this.serverService,
@@ -848,9 +815,10 @@ export class AgentService {
       const mentions = parseMentions(runRow.triggerMessage.mentionsJson);
       const chatMcp = parseMcpSettings(runRow.chat.mcpSettingsJson);
       const existingPlan = parseJsonRecord(runRow.planJson);
-      const planMcp = existingPlan && isRecord(existingPlan.mcp)
-        ? (existingPlan.mcp as { enabled?: boolean; tools?: string[] })
-        : null;
+      const planMcp =
+        existingPlan && isRecord(existingPlan.mcp)
+          ? (existingPlan.mcp as { enabled?: boolean; tools?: string[] })
+          : null;
       const toolset = await buildRunToolset({
         prisma: this.prisma,
         serverService: this.serverService,
@@ -897,15 +865,6 @@ export class AgentService {
         toolset
       );
 
-      const contextResources = parseMessageContext(runRow.triggerMessage.contextJson)
-        .filter(item => typeof item.text === 'string' && item.text.length > 0)
-        .map(item => ({
-          uri: item.uri,
-          name: item.name,
-          mimeType: item.mimeType,
-          text: item.text as string,
-        }));
-
       await engine.execute({
         runId,
         chatId: runRow.chatId,
@@ -918,7 +877,6 @@ export class AgentService {
         triggerMessageId: runRow.triggerMessage.id,
         preferredLanguage,
         autoApproveConfirmations,
-        contextResources,
       });
 
       // Only mark as completed if the engine didn't pause for confirmation

@@ -101,32 +101,26 @@
     "useInChat": "Utiliser MCP dans ce chat",
     "tools": "Outils",
     "prompts": "Prompts",
-    "resources": "Ressources",
     "searchTools": "Rechercher des outils",
-    "selectReadOnly": "Sélectionner lecture seule",
+    "selectTools": "Sélectionner des outils",
+    "selectReadOnly": "Lecture seule",
+    "groupsByPrefix": "Groupes",
     "selectNone": "Aucun",
-    "tooManyTools": "Plus de 25 outils sont sélectionnés. Cela peut encombrer le contexte du modèle.",
+    "selectedCount": "{{selected}} sur {{total}} outils sélectionnés",
     "noTools": "Aucun outil disponible.",
     "noPrompts": "Aucun prompt disponible.",
-    "noResources": "Aucune ressource disponible.",
     "noDescription": "Aucune description",
     "insertPrompt": "Préparer comme brouillon",
-    "read": "Lire",
-    "addContext": "Ajouter comme contexte",
     "refresh": "Actualiser",
     "serverSettings": "Paramètres du serveur",
     "saveFailed": "Impossible d’enregistrer les paramètres MCP",
     "promptFailed": "Impossible de charger le prompt",
-    "resourceFailed": "Impossible de lire la ressource",
-    "chatRequired": "Envoyez un premier message pour créer ce chat, puis réessayez.",
     "requiredArgs": "Champs obligatoires : {{names}}",
     "replaceDraft": "Remplacer le brouillon actuel par ce prompt ?",
-    "emptyResource": "La ressource est vide.",
-    "removeContext": "Retirer le contexte",
     "policy": {
-      "read": "lecture seule selon la passerelle",
-      "write": "écriture selon la passerelle",
-      "destructive_or_unknown": "destructif ou inconnu selon la passerelle"
+      "read": "lecture seule",
+      "write": "écriture",
+      "destructive_or_unknown": "destructif ou inconnu"
     },
     "empty": {
       "notConfigured": "Agent Gateway n’est pas configuré pour ce serveur.",
@@ -139,6 +133,28 @@
       "missingCredentials": "Les identifiants Alfresco manquent pour ce serveur.",
       "environmentMismatch": "L’environnement de la passerelle ne correspond pas à ce serveur Alfresco.",
       "connected": "Connecté à Agent Gateway."
+    },
+    "promptCatalog": {
+      "alfresco_search_and_analyze": {
+        "title": "Rechercher et analyser",
+        "description": "Recherche des documents dans Alfresco et rédige une analyse étayée des résultats.",
+        "args": {
+          "query": {
+            "label": "Requête de recherche",
+            "description": "Requête AFTS, par exemple TYPE:\"cm:content\" AND cm:name:\"rapport*\""
+          },
+          "analysisType": {
+            "label": "Type d'analyse",
+            "description": "Par défaut : synthèse",
+            "options": {
+              "summary": "Synthèse",
+              "detailed": "Détaillée",
+              "trends": "Tendances",
+              "compliance": "Conformité"
+            }
+          }
+        }
+      }
     }
   }
 }

@@ -20,22 +20,40 @@ import { useUIStore } from '@/core/store/ui';
 import type { AgentChatMcpSettings, McpCatalog, McpPromptSummary } from '@app/contracts';
 import {
   Accordion,
+  ActionIcon,
   Alert,
   Badge,
   Button,
   Checkbox,
   Group,
+  Menu,
   ScrollArea,
   SegmentedControl,
+  Select,
   Stack,
   Switch,
   Text,
   TextInput,
+  Tooltip,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
+import {
+  IconCheck,
+  IconChecks,
+  IconRefresh,
+  IconSettings,
+  IconSquareOff,
+} from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { defaultMcpSelection, emptyStateForStatus, filterTools, schemaPropertyNames } from './mcpPanelModel';
+import {
+  defaultMcpSelection,
+  emptyStateForStatus,
+  filterTools,
+  groupToolsByPrefix,
+  promptArgOptions,
+  schemaPropertyNames,
+} from './mcpPanelModel';
 
 interface McpPanelProps {
   serverId: number;
@@ -46,8 +64,8 @@ interface McpPanelProps {
   onSettingsChange: (settings: AgentChatMcpSettings) => void;
   onRefresh: () => void;
   onInsertDraft: (text: string) => void;
-  onAddContext: (item: { uri: string; name?: string | null }) => void;
   draftEmpty: boolean;
+  onClose: () => void;
 }
 
 export function McpPanel({
@@ -59,8 +77,8 @@ export function McpPanel({
   onSettingsChange,
   onRefresh,
   onInsertDraft,
-  onAddContext,
   draftEmpty,
+  onClose,
 }: McpPanelProps) {
   const { t } = useTranslation('agent');
   const openModal = useUIStore(state => state.openModal);
@@ -68,13 +86,10 @@ export function McpPanel({
   const [query, setQuery] = useState('');
   const [promptName, setPromptName] = useState<string | null>(null);
   const [promptArgs, setPromptArgs] = useState<Record<string, string>>({});
-  const [templateParams, setTemplateParams] = useState<Record<string, Record<string, string>>>({});
 
   const emptyKey = emptyStateForStatus(catalog?.status ?? null);
-  const tools = useMemo(
-    () => filterTools(catalog?.tools ?? [], query),
-    [catalog?.tools, query]
-  );
+  const tools = useMemo(() => filterTools(catalog?.tools ?? [], query), [catalog?.tools, query]);
+  const toolGroups = useMemo(() => groupToolsByPrefix(catalog?.tools ?? []), [catalog?.tools]);
   const selected = new Set(settings.tools);
 
   const persist = async (next: AgentChatMcpSettings) => {
@@ -97,17 +112,16 @@ export function McpPanel({
   };
 
   const applyPrompt = async (item: McpPromptSummary) => {
-    if (!chatId) {
-      notifications.show({
-        title: t('mcp.promptFailed'),
-        message: t('mcp.chatRequired'),
-        color: 'red',
-      });
-      return;
-    }
+    const args = Object.fromEntries(
+      Object.entries(promptName === item.name ? promptArgs : {})
+        .map(([name, value]) => [name, value.trim()])
+        .filter(([, value]) => value)
+    );
     const missing = (item.arguments ?? [])
-      .filter(arg => arg.required && !promptArgs[arg.name]?.trim())
-      .map(arg => arg.name);
+      .filter(arg => arg.required && !args[arg.name])
+      .map(arg =>
+        t(`mcp.promptCatalog.${item.name}.args.${arg.name}.label`, { defaultValue: arg.name })
+      );
     if (missing.length) {
       notifications.show({
         title: t('mcp.promptFailed'),
@@ -121,9 +135,9 @@ export function McpPanel({
     }
     try {
       const preview = await backendRpc.agentGateway.getPrompt({
-        chatId,
+        ...(chatId ? { chatId } : { serverId }),
         name: item.name,
-        arguments: promptArgs,
+        arguments: args,
       });
       onInsertDraft(preview.text);
     } catch (error) {
@@ -135,47 +149,8 @@ export function McpPanel({
     }
   };
 
-  const readResource = async (input: {
-    uri?: string;
-    uriTemplate?: string;
-    params?: Record<string, string>;
-    add?: boolean;
-  }) => {
-    if (!chatId) {
-      notifications.show({
-        title: t('mcp.resourceFailed'),
-        message: t('mcp.chatRequired'),
-        color: 'red',
-      });
-      return;
-    }
-    try {
-      const preview = await backendRpc.agentGateway.readResource({
-        chatId,
-        uri: input.uri,
-        uriTemplate: input.uriTemplate,
-        params: input.params,
-      });
-      if (input.add) {
-        onAddContext({ uri: preview.uri, name: preview.name });
-      } else {
-        notifications.show({
-          title: preview.name || preview.uri,
-          message: preview.text.slice(0, 400) || t('mcp.emptyResource'),
-          color: 'blue',
-        });
-      }
-    } catch (error) {
-      notifications.show({
-        title: t('mcp.resourceFailed'),
-        message: error instanceof Error ? error.message : t('errors.generic'),
-        color: 'red',
-      });
-    }
-  };
-
   return (
-    <Stack gap="sm" p="sm" w={420}>
+    <Stack gap="sm" p="sm">
       <Switch
         label={t('mcp.useInChat')}
         checked={settings.enabled}
@@ -194,9 +169,7 @@ export function McpPanel({
       />
 
       {catalog?.status !== 'connected' ? (
-        <Alert color="yellow">
-          {t(`mcp.empty.${emptyKey}`)}
-        </Alert>
+        <Alert color="yellow">{t(`mcp.empty.${emptyKey}`)}</Alert>
       ) : (
         <>
           <SegmentedControl
@@ -206,46 +179,103 @@ export function McpPanel({
             data={[
               { label: t('mcp.tools'), value: 'tools' },
               { label: t('mcp.prompts'), value: 'prompts' },
-              { label: t('mcp.resources'), value: 'resources' },
             ]}
           />
           {tab === 'tools' ? (
             <Stack gap="xs">
-              <TextInput
-                size="xs"
-                placeholder={t('mcp.searchTools')}
-                value={query}
-                onChange={event => setQuery(event.currentTarget.value)}
-              />
-              <Group gap="xs">
-                <Button
-                  size="compact-xs"
-                  variant="subtle"
-                  onClick={() =>
-                    void persist({
-                      ...settings,
-                      enabled: true,
-                      tools: (catalog?.tools ?? [])
-                        .filter(tool => tool.policy === 'read')
-                        .map(tool => tool.name),
-                    })
+              <Group gap="xs" wrap="nowrap">
+                <TextInput
+                  size="xs"
+                  style={{ flex: 1 }}
+                  placeholder={t('mcp.searchTools')}
+                  value={query}
+                  onChange={event => setQuery(event.currentTarget.value)}
+                  rightSectionWidth={64}
+                  rightSection={
+                    query.trim() ? (
+                      <Text size="xs" c="dimmed">
+                        {tools.length}/{catalog?.tools.length ?? 0}
+                      </Text>
+                    ) : null
                   }
-                >
-                  {t('mcp.selectReadOnly')}
-                </Button>
-                <Button
-                  size="compact-xs"
-                  variant="subtle"
-                  onClick={() => void persist({ ...settings, tools: [] })}
-                >
-                  {t('mcp.selectNone')}
-                </Button>
+                />
+                <Menu position="bottom-end" withinPortal={false} shadow="md">
+                  <Menu.Target>
+                    <Tooltip label={t('mcp.selectTools')} withArrow>
+                      <ActionIcon variant="subtle" color="gray" aria-label={t('mcp.selectTools')}>
+                        <IconChecks size={16} />
+                      </ActionIcon>
+                    </Tooltip>
+                  </Menu.Target>
+                  <Menu.Dropdown>
+                    <Menu.Item
+                      onClick={() =>
+                        void persist({
+                          ...settings,
+                          enabled: true,
+                          tools: (catalog?.tools ?? [])
+                            .filter(tool => tool.policy === 'read')
+                            .map(tool => tool.name),
+                        })
+                      }
+                    >
+                      {t('mcp.selectReadOnly')}
+                    </Menu.Item>
+                    {toolGroups.length > 1 ? (
+                      <>
+                        <Menu.Divider />
+                        <Menu.Label>{t('mcp.groupsByPrefix')}</Menu.Label>
+                        {toolGroups.map(group => {
+                          const allSelected = group.toolNames.every(name => selected.has(name));
+                          return (
+                            <Menu.Item
+                              key={group.prefix}
+                              closeMenuOnClick={false}
+                              leftSection={
+                                <IconCheck
+                                  size={14}
+                                  style={{ visibility: allSelected ? 'visible' : 'hidden' }}
+                                />
+                              }
+                              rightSection={
+                                <Text size="xs" c="dimmed">
+                                  {group.toolNames.length}
+                                </Text>
+                              }
+                              onClick={() => {
+                                const next = new Set(selected);
+                                for (const name of group.toolNames) {
+                                  if (allSelected) next.delete(name);
+                                  else next.add(name);
+                                }
+                                void persist({ ...settings, enabled: true, tools: [...next] });
+                              }}
+                            >
+                              {group.prefix}
+                            </Menu.Item>
+                          );
+                        })}
+                      </>
+                    ) : null}
+                  </Menu.Dropdown>
+                </Menu>
+                <Tooltip label={t('mcp.selectNone')} withArrow>
+                  <ActionIcon
+                    variant="subtle"
+                    color="gray"
+                    aria-label={t('mcp.selectNone')}
+                    onClick={() => void persist({ ...settings, tools: [] })}
+                  >
+                    <IconSquareOff size={16} />
+                  </ActionIcon>
+                </Tooltip>
               </Group>
-              {settings.tools.length > 25 ? (
-                <Text size="xs" c="orange">
-                  {t('mcp.tooManyTools')}
-                </Text>
-              ) : null}
+              <Text size="xs" c="dimmed">
+                {t('mcp.selectedCount', {
+                  selected: settings.tools.length,
+                  total: catalog?.tools.length ?? 0,
+                })}
+              </Text>
               <ScrollArea h={240}>
                 {tools.length === 0 ? (
                   <Text size="sm" c="dimmed">
@@ -300,123 +330,77 @@ export function McpPanel({
                     {t('mcp.noPrompts')}
                   </Text>
                 ) : (
-                  (catalog?.prompts ?? []).map(item => (
-                    <Stack key={item.name} gap={6} p="xs" style={{ border: '1px solid var(--mantine-color-default-border)', borderRadius: 8 }}>
-                      <Text size="sm" fw={500}>
-                        {item.title || item.name}
-                      </Text>
-                      {item.description ? (
-                        <Text size="xs" c="dimmed">
-                          {item.description}
-                        </Text>
-                      ) : null}
-                      {(item.arguments ?? []).map(arg => (
-                        <TextInput
-                          key={arg.name}
-                          size="xs"
-                          label={arg.name}
-                          required={arg.required}
-                          description={arg.description}
-                          value={promptName === item.name ? (promptArgs[arg.name] ?? '') : ''}
-                          onChange={event => {
-                            setPromptName(item.name);
-                            setPromptArgs(current => ({
-                              ...current,
-                              [arg.name]: event.currentTarget.value,
-                            }));
-                          }}
-                        />
-                      ))}
-                      <Button size="xs" onClick={() => void applyPrompt(item)}>
-                        {t('mcp.insertPrompt')}
-                      </Button>
-                    </Stack>
-                  ))
-                )}
-              </Stack>
-            </ScrollArea>
-          ) : null}
-
-          {tab === 'resources' ? (
-            <ScrollArea h={280}>
-              <Stack gap="xs">
-                {(catalog?.resources ?? []).map(resource => (
-                  <Group key={resource.uri} justify="space-between" wrap="nowrap">
-                    <Text size="sm" lineClamp={1}>
-                      {resource.name || resource.uri}
-                    </Text>
-                    <Group gap={4} wrap="nowrap">
-                      <Button size="compact-xs" variant="subtle" onClick={() => void readResource({ uri: resource.uri })}>
-                        {t('mcp.read')}
-                      </Button>
-                      <Button
-                        size="compact-xs"
-                        onClick={() => void readResource({ uri: resource.uri, add: true })}
+                  (catalog?.prompts ?? []).map(item => {
+                    const promptKey = `mcp.promptCatalog.${item.name}`;
+                    const description = t(`${promptKey}.description`, {
+                      defaultValue: item.description ?? '',
+                    });
+                    const setArg = (name: string, value: string) => {
+                      const base = promptName === item.name ? promptArgs : {};
+                      setPromptName(item.name);
+                      setPromptArgs({ ...base, [name]: value });
+                    };
+                    return (
+                      <Stack
+                        key={item.name}
+                        gap={6}
+                        p="xs"
+                        style={{
+                          border: '1px solid var(--mantine-color-default-border)',
+                          borderRadius: 8,
+                        }}
                       >
-                        {t('mcp.addContext')}
-                      </Button>
-                    </Group>
-                  </Group>
-                ))}
-                {(catalog?.resourceTemplates ?? []).map(template => {
-                  const params = templateParams[template.uriTemplate] ?? {};
-                  const names = Array.from(template.uriTemplate.matchAll(/\{([^}]+)\}/g)).map(
-                    match => match[1]
-                  );
-                  return (
-                    <Stack key={template.uriTemplate} gap={6}>
-                      <Text size="sm">{template.name || template.uriTemplate}</Text>
-                      {names.map(name => (
-                        <TextInput
-                          key={name}
-                          size="xs"
-                          label={name}
-                          value={params[name] ?? ''}
-                          onChange={event =>
-                            setTemplateParams(current => ({
-                              ...current,
-                              [template.uriTemplate]: {
-                                ...(current[template.uriTemplate] ?? {}),
-                                [name]: event.currentTarget.value,
-                              },
-                            }))
-                          }
-                        />
-                      ))}
-                      <Group gap={4}>
-                        <Button
-                          size="compact-xs"
-                          variant="subtle"
-                          onClick={() =>
-                            void readResource({
-                              uriTemplate: template.uriTemplate,
-                              params,
-                            })
-                          }
-                        >
-                          {t('mcp.read')}
+                        <Text size="sm" fw={500}>
+                          {t(`${promptKey}.title`, { defaultValue: item.title || item.name })}
+                        </Text>
+                        {description ? (
+                          <Text size="xs" c="dimmed">
+                            {description}
+                          </Text>
+                        ) : null}
+                        {(item.arguments ?? []).map(arg => {
+                          const argKey = `${promptKey}.args.${arg.name}`;
+                          const label = t(`${argKey}.label`, { defaultValue: arg.name });
+                          const argDescription = t(`${argKey}.description`, {
+                            defaultValue: arg.description ?? '',
+                          });
+                          const value =
+                            promptName === item.name ? (promptArgs[arg.name] ?? '') : '';
+                          const options = promptArgOptions(item.name, arg.name);
+                          return options ? (
+                            <Select
+                              key={arg.name}
+                              size="xs"
+                              label={label}
+                              required={arg.required}
+                              description={argDescription || undefined}
+                              data={options.map(option => ({
+                                value: option,
+                                label: t(`${argKey}.options.${option}`, { defaultValue: option }),
+                              }))}
+                              value={value || null}
+                              onChange={next => setArg(arg.name, next ?? '')}
+                              comboboxProps={{ withinPortal: false }}
+                            />
+                          ) : (
+                            <TextInput
+                              key={arg.name}
+                              size="xs"
+                              label={label}
+                              required={arg.required}
+                              description={argDescription || undefined}
+                              value={value}
+                              onChange={event => setArg(arg.name, event.currentTarget.value)}
+                            />
+                          );
+                        })}
+                        <Button size="xs" onClick={() => void applyPrompt(item)}>
+                          {t('mcp.insertPrompt')}
                         </Button>
-                        <Button
-                          size="compact-xs"
-                          onClick={() =>
-                            void readResource({
-                              uriTemplate: template.uriTemplate,
-                              params,
-                              add: true,
-                            })
-                          }
-                        >
-                          {t('mcp.addContext')}
-                        </Button>
-                      </Group>
-                    </Stack>
-                  );
-                })}
-                {!catalog?.resources.length && !catalog?.resourceTemplates.length ? (
-                  <Text size="sm" c="dimmed">
-                    {t('mcp.noResources')}
-                  </Text>
-                ) : null}
+                      </Stack>
+                    );
+                  })
+                )}
               </Stack>
             </ScrollArea>
           ) : null}
@@ -424,16 +408,30 @@ export function McpPanel({
       )}
 
       <Group justify="space-between">
-        <Button size="xs" variant="subtle" loading={loading} onClick={onRefresh}>
-          {t('mcp.refresh')}
-        </Button>
-        <Button
-          size="xs"
-          variant="subtle"
-          onClick={() => openModal(MODAL_KEYS.SERVER_EDIT, { serverId, section: 'agentGateway' })}
-        >
-          {t('mcp.serverSettings')}
-        </Button>
+        <Tooltip label={t('mcp.refresh')} withArrow>
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            loading={loading}
+            aria-label={t('mcp.refresh')}
+            onClick={onRefresh}
+          >
+            <IconRefresh size={16} />
+          </ActionIcon>
+        </Tooltip>
+        <Tooltip label={t('mcp.serverSettings')} withArrow>
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            aria-label={t('mcp.serverSettings')}
+            onClick={() => {
+              onClose();
+              openModal(MODAL_KEYS.SERVER_EDIT, { serverId, section: 'agentGateway' });
+            }}
+          >
+            <IconSettings size={16} />
+          </ActionIcon>
+        </Tooltip>
       </Group>
     </Stack>
   );

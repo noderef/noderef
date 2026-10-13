@@ -14,10 +14,7 @@
  * limitations under the License.
  */
 
-import type {
-  AgentGatewayConfigView,
-  AgentGatewayVerificationStatus,
-} from '@app/contracts';
+import type { AgentGatewayConfigView, AgentGatewayVerificationStatus } from '@app/contracts';
 import type { AgentGatewayConfig, PrismaClient } from '@prisma/client';
 import { decryptSecret, encryptSecret } from '../../lib/encryption.js';
 import { AppErrors } from '../../lib/errors.js';
@@ -49,9 +46,7 @@ function persistRepositoryId(
   return null;
 }
 
-function toVerification(
-  row: AgentGatewayConfig | null
-): AgentGatewayConfigView['verification'] {
+function toVerification(row: AgentGatewayConfig | null): AgentGatewayConfigView['verification'] {
   if (!row?.verifiedAt || !row.verifiedEndpointUrl) {
     return { status: 'unverified', repositoryId: null, verifiedAt: null };
   }
@@ -152,7 +147,9 @@ export class AgentGatewayConfigService {
     }
 
     const endpointUrl =
-      typeof input.endpointUrl === 'string' ? input.endpointUrl.trim() || null : (input.endpointUrl ?? existing?.endpointUrl ?? null);
+      typeof input.endpointUrl === 'string'
+        ? input.endpointUrl.trim() || null
+        : (input.endpointUrl ?? existing?.endpointUrl ?? null);
 
     if (input.enabled || endpointUrl) {
       if (!endpointUrl) {
@@ -173,7 +170,9 @@ export class AgentGatewayConfigService {
 
     const urlChanged = (endpointUrl ?? null) !== (existing?.endpointUrl ?? null);
     const configVersion =
-      existing && (urlChanged || keyChanged) ? existing.configVersion + 1 : (existing?.configVersion ?? 1);
+      existing && (urlChanged || keyChanged)
+        ? existing.configVersion + 1
+        : (existing?.configVersion ?? 1);
 
     const verificationReset = urlChanged
       ? {

@@ -229,9 +229,9 @@ describe('agent gateway client', () => {
 
   it('does not send Alfresco credentials on an unsaved test connection', async () => {
     await bootGateway();
-    const { user, server, gatewayService } = await seedServer('tester', { token: 'keep-secret' }).then(
-      async seeded => ({ ...seeded, ...services() })
-    );
+    const { user, server, gatewayService } = await seedServer('tester', {
+      token: 'keep-secret',
+    }).then(async seeded => ({ ...seeded, ...services() }));
     const result = await gatewayService.testConnection(user.id, server.id, {
       enabled: true,
       endpointUrl: gateway!.url,
@@ -286,7 +286,7 @@ describe('agent gateway client', () => {
     expect(empty.requests.some(req => req.jsonRpcMethod === 'tools/list')).toBe(false);
   });
 
-  it('refetches after list_changed and supports tools, prompts, resources, and templates', async () => {
+  it('refetches after list_changed and supports tools and prompts', async () => {
     await bootGateway();
     const { user, server, runtime, gatewayService } = await seedServer('catalog', {
       token: 'pass',
@@ -320,18 +320,17 @@ describe('agent gateway client', () => {
     };
     const tool = await runtime.sessions.callTool(connect, 'echo_read', { message: 'hi' });
     expect(tool.isError).toBeFalsy();
-    const prompt = await gatewayService.getPrompt(user.id, chat.id, 'summarize', { topic: 'ACS' });
-    expect(prompt.text).toContain('Summarize: ACS');
-    const resource = await gatewayService.readResourcePreview(user.id, chat.id, {
-      uri: 'alfresco://repository/info',
+    const prompt = await gatewayService.getPrompt(user.id, { chatId: chat.id }, 'summarize', {
+      topic: 'ACS',
     });
-    expect(resource.text).toContain('repo-test-1');
-    const expanded = runtime.sessions.expandTemplate('alfresco://node/{id}', { id: 'abc' });
-    expect(expanded).toBe('alfresco://node/abc');
-    expect(runtime.sessions.matchTemplate('alfresco://node/{id}', expanded)).toEqual({ id: 'abc' });
-    await expect(
-      gatewayService.readResourcePreview(user.id, chat.id, { uri: 'alfresco://unknown' })
-    ).rejects.toThrow(/not in the Agent Gateway catalog/);
+    const withoutChat = await gatewayService.getPrompt(
+      user.id,
+      { serverId: server.id },
+      'summarize',
+      { topic: 'ACS' }
+    );
+    expect(withoutChat.text).toBe(prompt.text);
+    expect(prompt.text).toContain('Summarize: ACS');
   });
 
   it('retries once after a session 404 and blocks redirects', async () => {

@@ -15,16 +15,41 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { emptyCatalog, mapTools } from '../../../src/services/agentGateway/mcpCatalog.js';
+import {
+  emptyCatalog,
+  mapResources,
+  mapTools,
+} from '../../../src/services/agentGateway/mcpCatalog.js';
 
 describe('mcpCatalog', () => {
+  it('hides MCP Apps UI templates from resources', () => {
+    const mapped = mapResources([
+      {
+        uri: 'alfresco+alfresco://repository/info',
+        name: 'repository_info',
+        mimeType: 'application/json',
+      },
+      {
+        uri: 'ui://loki+grafana/trace.html',
+        name: 'Grafana trace',
+        mimeType: 'text/html;profile=mcp-app',
+      },
+      { uri: 'https://example.test/app', name: 'App', mimeType: 'text/html;profile=mcp-app' },
+    ]);
+    expect(mapped.map(resource => resource.name)).toEqual(['repository_info']);
+  });
+
   it('drops non-object schemas and strips $schema', () => {
     const mapped = mapTools(
       [
         {
           name: 'good',
           description: 'ok',
-          inputSchema: { type: 'object', $schema: 'https://json-schema.org/draft-07/schema', properties: {} },
+          inputSchema: {
+            type: 'object',
+            $schema: 'https://json-schema.org/draft-07/schema',
+            properties: {},
+          },
           annotations: { readOnlyHint: true, destructiveHint: false },
         },
         {

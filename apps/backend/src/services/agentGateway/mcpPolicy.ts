@@ -22,7 +22,9 @@ export interface McpConfirmationPolicy {
   allowAutoApprove: boolean;
 }
 
-export function resolveMcpToolPolicy(annotations: McpToolAnnotations | null | undefined): McpConfirmationPolicy {
+export function resolveMcpToolPolicy(
+  annotations: McpToolAnnotations | null | undefined
+): McpConfirmationPolicy {
   const readOnly = annotations?.readOnlyHint === true;
   const destructive = annotations?.destructiveHint;
 

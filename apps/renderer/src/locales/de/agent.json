@@ -97,36 +97,30 @@
   "qnameGroupAspects": "Aspekte",
   "qnameGroupProperties": "Eigenschaften",
   "mcp": {
-    "button": "Agent-Gateway-Tools",
+    "button": "Agent Gateway Tools",
     "useInChat": "MCP in diesem Chat verwenden",
     "tools": "Tools",
     "prompts": "Prompts",
-    "resources": "Ressourcen",
     "searchTools": "Tools suchen",
-    "selectReadOnly": "Nur Lesen auswählen",
+    "selectTools": "Tools auswählen",
+    "selectReadOnly": "Nur lesen",
+    "groupsByPrefix": "Gruppen",
     "selectNone": "Keine",
-    "tooManyTools": "Mehr als 25 Tools sind ausgewählt. Das kann den Modellkontext überladen.",
+    "selectedCount": "{{selected}} von {{total}} Tools ausgewählt",
     "noTools": "Keine Tools verfügbar.",
     "noPrompts": "Keine Prompts verfügbar.",
-    "noResources": "Keine Ressourcen verfügbar.",
     "noDescription": "Keine Beschreibung",
     "insertPrompt": "Als Entwurf einfügen",
-    "read": "Lesen",
-    "addContext": "Als Kontext hinzufügen",
     "refresh": "Aktualisieren",
     "serverSettings": "Servereinstellungen",
     "saveFailed": "MCP-Einstellungen konnten nicht gespeichert werden",
     "promptFailed": "Prompt konnte nicht geladen werden",
-    "resourceFailed": "Ressource konnte nicht gelesen werden",
-    "chatRequired": "Senden Sie zuerst eine Nachricht, um diesen Chat zu erstellen, und versuchen Sie es erneut.",
     "requiredArgs": "Pflichtfelder: {{names}}",
     "replaceDraft": "Den aktuellen Entwurf durch diesen Prompt ersetzen?",
-    "emptyResource": "Ressource ist leer.",
-    "removeContext": "Kontext entfernen",
     "policy": {
-      "read": "nur lesen laut Gateway",
-      "write": "schreiben laut Gateway",
-      "destructive_or_unknown": "destruktiv oder unbekannt laut Gateway"
+      "read": "nur lesen",
+      "write": "schreiben",
+      "destructive_or_unknown": "destruktiv oder unbekannt"
     },
     "empty": {
       "notConfigured": "Agent Gateway ist für diesen Server nicht konfiguriert.",
@@ -139,6 +133,28 @@
       "missingCredentials": "Alfresco-Anmeldedaten fehlen für diesen Server.",
       "environmentMismatch": "Die Gateway-Umgebung stimmt nicht mit diesem Alfresco-Server überein.",
       "connected": "Mit Agent Gateway verbunden."
+    },
+    "promptCatalog": {
+      "alfresco_search_and_analyze": {
+        "title": "Suchen und analysieren",
+        "description": "Sucht Dokumente in Alfresco und erstellt eine belegte Analyse der Ergebnisse.",
+        "args": {
+          "query": {
+            "label": "Suchanfrage",
+            "description": "AFTS-Abfrage, z. B. TYPE:\"cm:content\" AND cm:name:\"bericht*\""
+          },
+          "analysisType": {
+            "label": "Analyseart",
+            "description": "Standard: Zusammenfassung",
+            "options": {
+              "summary": "Zusammenfassung",
+              "detailed": "Detailliert",
+              "trends": "Trends",
+              "compliance": "Compliance"
+            }
+          }
+        }
+      }
     }
   }
 }

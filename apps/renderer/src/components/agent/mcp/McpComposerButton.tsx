@@ -44,7 +44,6 @@ export function McpComposerButton({
   const pendingMcp = useAgentStore(state => state.pendingMcp);
   const setChatMcp = useAgentStore(state => state.setChatMcp);
   const setPendingMcp = useAgentStore(state => state.setPendingMcp);
-  const addContextResource = useAgentStore(state => state.addContextResource);
 
   const settings: AgentChatMcpSettings = useMemo(() => {
     if (chatId && mcpByChat[chatId]) return mcpByChat[chatId];
@@ -52,12 +51,17 @@ export function McpComposerButton({
     return { enabled: false, tools: [] };
   }, [chatId, mcpByChat, pendingMcp]);
 
-  if (!serverId) {
+  if (
+    !serverId ||
+    !catalog ||
+    catalog.status === 'disabled' ||
+    catalog.status === 'not_configured'
+  ) {
     return null;
   }
 
   return (
-    <Popover opened={opened} onChange={setOpened} position="top-start" shadow="md" width={420}>
+    <Popover opened={opened} onChange={setOpened} position="top-start" shadow="md" width={460}>
       <Popover.Target>
         <Tooltip label={t('mcp.button')} withArrow>
           <Indicator
@@ -95,8 +99,8 @@ export function McpComposerButton({
             onInsertDraft(text);
             setOpened(false);
           }}
-          onAddContext={item => addContextResource(chatId, item)}
           draftEmpty={draftEmpty}
+          onClose={() => setOpened(false)}
         />
       </Popover.Dropdown>
     </Popover>

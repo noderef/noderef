@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import type { AgentChatMcpSettings, AgentMessageContextItem } from './agentGateway.js';
+import type { AgentChatMcpSettings } from './agentGateway.js';
 
 export type AgentMessageRole = 'user' | 'assistant' | 'system';
 
@@ -63,7 +63,6 @@ export interface AgentMessage {
   content: string;
   mentions: AgentMention[];
   createdAt: Date;
-  context?: AgentMessageContextItem[] | null;
 }
 
 export interface AgentRun {

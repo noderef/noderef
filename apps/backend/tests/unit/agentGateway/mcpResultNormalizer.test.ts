@@ -18,7 +18,6 @@ import { describe, expect, it } from 'vitest';
 import {
   normalizeMcpToolResult,
   promptMessagesToText,
-  resourceContentsToText,
 } from '../../../src/services/agentGateway/mcpResultNormalizer.js';
 
 describe('mcpResultNormalizer', () => {
@@ -71,12 +70,5 @@ describe('mcpResultNormalizer', () => {
     ]);
     expect(prompt.text).toContain('user:');
     expect(prompt.text).toContain('[image omitted]');
-
-    const resource = resourceContentsToText([
-      { mimeType: 'text/plain', text: 'node 1' },
-      { blob: 'abc' },
-    ]);
-    expect(resource.text).toContain('node 1');
-    expect(resource.text).toContain('[binary resource omitted]');
   });
 });
