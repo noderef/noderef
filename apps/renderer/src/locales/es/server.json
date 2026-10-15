@@ -58,5 +58,11 @@
   "success": "Éxito",
   "serverUpdated": "Servidor \"{{name}}\" actualizado",
   "updateError": "Error",
-  "updateErrorMessage": "No se pudo actualizar el servidor"
+  "updateErrorMessage": "No se pudo actualizar el servidor",
+  "adminAccess": "Acceso",
+  "adminBadge": "Admin",
+  "restrictedBadge": "Restringido",
+  "refreshCapabilities": "Volver a comprobar permisos",
+  "refreshCapabilitiesSuccess": "Los permisos se han actualizado",
+  "refreshCapabilitiesError": "No se pudieron actualizar los permisos"
 }

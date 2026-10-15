@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import { FeatureUnavailablePage } from '@/components/capabilities/FeatureUnavailablePage';
 import { ConsoleOutput } from '@/components/js-console/ConsoleOutput';
 import { ExecuteBar } from '@/components/js-console/ExecuteBar';
 import { JsConsoleEditor } from '@/components/js-console/JsConsoleEditor';
@@ -27,8 +28,9 @@ import {
 import { rpc } from '@/core/ipc/rpc';
 import { dslManager } from '@/core/monaco/dsl-manager';
 import { useJsConsoleStore } from '@/core/store/jsConsole';
-import { useServersStore } from '@/core/store/servers';
+import { useServerCapabilities, useServersStore } from '@/core/store/servers';
 import { useActiveServerId } from '@/hooks/useNavigation';
+import { Feature, isFeatureAvailable } from '@app/contracts';
 import { notifications } from '@mantine/notifications';
 import type * as monaco from 'monaco-editor';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -83,6 +85,9 @@ function JsConsolePage() {
     [activeServerId, getServerById]
   );
   const isNodeRefSpace = !activeServer || !activeServer.serverType;
+  const capabilities = useServerCapabilities(activeServerId);
+  const jsConsoleAvailable =
+    isNodeRefSpace || isFeatureAvailable(capabilities, Feature.JsConsole);
 
   // Focus editor when page loads or editor instance becomes available
   useEffect(() => {
@@ -812,6 +817,10 @@ function JsConsolePage() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleExecute]);
+
+  if (!jsConsoleAvailable) {
+    return <FeatureUnavailablePage feature={Feature.JsConsole} />;
+  }
 
   return (
     <div style={{ height: '100%', overflow: 'hidden' }}>

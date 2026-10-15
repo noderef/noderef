@@ -25,6 +25,7 @@
 import type {
   AgentRunEvent,
   AgentRunSummary,
+  CapabilityProfile,
   LocalFile as ContractsLocalFile,
   CreateServer,
   NodeHistoryActivitySummary,
@@ -149,10 +150,18 @@ export const backendRpc = {
     },
 
     /**
-     * Re-check Alfresco admin status for a server and persist it
+     * Re-check Alfresco capability profile for a server and persist it
+     */
+    async refreshCapabilities(id: number): Promise<CapabilityProfile> {
+      return rpc<CapabilityProfile>('backend.servers.refreshCapabilities', { id });
+    },
+
+    /**
+     * Alias of refreshCapabilities that only returns isAdmin.
      */
     async refreshAdminStatus(id: number): Promise<{ isAdmin: boolean }> {
-      return rpc<{ isAdmin: boolean }>('backend.servers.refreshAdminStatus', { id });
+      const profile = await rpc<CapabilityProfile>('backend.servers.refreshCapabilities', { id });
+      return { isAdmin: profile.isAdmin };
     },
 
     /**

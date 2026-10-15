@@ -18,6 +18,7 @@ import { backendRpc } from '@/core/ipc/backend';
 import { useServersStore } from '@/core/store/servers';
 import { useActivePage, useNavigation } from '@/hooks/useNavigation';
 import type { PublicServer } from '@app/contracts';
+import { Feature, isFeatureAvailable } from '@app/contracts';
 import { ScrollArea, Stack } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useRef, useState } from 'react';
@@ -54,7 +55,9 @@ export function ServerIconColumn({
 
     if (isAlreadySelected && server?.serverType === 'alfresco') {
       // Server already selected - keep behavior deterministic and avoid saved-search auto-redirect.
-      navigate('jsconsole');
+      navigate(
+        isFeatureAvailable(server.capabilities, Feature.JsConsole) ? 'jsconsole' : 'repo'
+      );
     } else if (GLOBAL_PAGES.includes(activePage as any)) {
       // Stay on current global page when switching servers to prevent flickering
       // No navigation needed - just update the server

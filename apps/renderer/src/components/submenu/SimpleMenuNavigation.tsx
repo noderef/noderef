@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
+import { useFeatureUnavailableLabel } from '@/components/capabilities/FeatureGate';
 import { backendRpc } from '@/core/ipc/backend';
 import { useAgentStore } from '@/core/store/agent';
 import type { PageKey } from '@/core/store/keys';
 import { useSavedSearchesStore } from '@/core/store/savedSearches';
-import { useServersStore } from '@/core/store/servers';
+import { useServerCapabilities, useServersStore } from '@/core/store/servers';
+import { Feature, isFeatureAvailable } from '@app/contracts';
 import { useNavigation } from '@/hooks/useNavigation';
 import type { MenuItem as MenuItemType, MenuSection as MenuSectionType } from '@/types/menu';
 import { ScrollArea, Stack, Text } from '@mantine/core';
@@ -140,6 +142,16 @@ export function SimpleMenuNavigation() {
 
   const server = getServerById(activeServerId);
   const isNodeRefSpace = !server || !server.serverType;
+  const profile = useServerCapabilities(activeServerId);
+  const jsConsoleAvailable =
+    isNodeRefSpace || isFeatureAvailable(profile, Feature.JsConsole);
+  const systemTreeAvailable =
+    !isNodeRefSpace &&
+    server?.serverType === 'alfresco' &&
+    isFeatureAvailable(profile, Feature.SystemTree);
+  const capabilitiesReady =
+    isNodeRefSpace || server?.serverType !== 'alfresco' || profile !== null;
+  const jsConsoleUnavailableLabel = useFeatureUnavailableLabel(Feature.JsConsole);
 
   // Load saved searches when component mounts or when activeServerId changes
   useEffect(() => {
@@ -165,6 +177,9 @@ export function SimpleMenuNavigation() {
           }
 
           if (serverInitializationRef.current !== activeServerId) {
+            if (!capabilitiesReady) {
+              return;
+            }
             serverInitializationRef.current = activeServerId;
             const shouldPreservePage =
               activePage === 'jsconsole' ||
@@ -173,7 +188,7 @@ export function SimpleMenuNavigation() {
               activePage === 'insights';
 
             if (!shouldPreservePage) {
-              navigate('jsconsole');
+              navigate(jsConsoleAvailable ? 'jsconsole' : 'repo');
             }
           }
         } else {
@@ -196,6 +211,8 @@ export function SimpleMenuNavigation() {
     activeSavedSearchId,
     activePage,
     navigate,
+    jsConsoleAvailable,
+    capabilitiesReady,
   ]);
 
   // Load agent chats for active server or all servers in NodeRef space.
@@ -530,6 +547,8 @@ export function SimpleMenuNavigation() {
       label: t('submenu:jsConsole'),
       icon: 'code',
       viewMode: 'monaco',
+      disabled: !jsConsoleAvailable,
+      disabledReason: jsConsoleUnavailableLabel,
     },
   ];
 
@@ -721,7 +740,7 @@ export function SimpleMenuNavigation() {
             />
           )}
           {/* System Section for Alfresco servers */}
-          {!isNodeRefSpace && server?.serverType === 'alfresco' && (
+          {!isNodeRefSpace && server?.serverType === 'alfresco' && systemTreeAvailable && (
             <SystemTreeSection
               key={`system-${server?.id ?? 'none'}`}
               label={t('submenu:system')}
