@@ -145,6 +145,9 @@ export const ALL_TOOLS: ToolDefinition[] = [
 
 const assertToolSkills = (tools: ToolDefinition[]): void => {
   for (const tool of tools) {
+    if (tool.skill?.kind === 'mcp') {
+      continue;
+    }
     if (!tool.skill || tool.skill.kind !== 'local_md') {
       throw new Error(`Tool "${tool.name}" is missing a valid local_md skill definition`);
     }

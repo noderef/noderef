@@ -17,19 +17,31 @@
 import { AppErrors } from '../../../../lib/errors.js';
 import type { AgentExecutionContext } from '../../types.js';
 
-export function buildAuthHeader(ctx: AgentExecutionContext): Record<string, string> {
-  if (ctx.authType === 'openid_connect') {
-    if (!ctx.token) {
+export function buildAlfrescoAuthorization(input: {
+  authType: string | null;
+  username: string | null;
+  token: string | null;
+}): string {
+  if (input.authType === 'openid_connect') {
+    if (!input.token) {
       throw AppErrors.unauthorized('No OAuth2 access token');
     }
-    return { Authorization: `Bearer ${ctx.token}` };
+    return `Bearer ${input.token}`;
   }
 
-  if (!ctx.username || !ctx.token) {
+  if (!input.username || !input.token) {
     throw AppErrors.unauthorized('No credentials available');
   }
 
+  return `Basic ${Buffer.from(`${input.username}:${input.token}`).toString('base64')}`;
+}
+
+export function buildAuthHeader(ctx: AgentExecutionContext): Record<string, string> {
   return {
-    Authorization: `Basic ${Buffer.from(`${ctx.username}:${ctx.token}`).toString('base64')}`,
+    Authorization: buildAlfrescoAuthorization({
+      authType: ctx.authType,
+      username: ctx.username,
+      token: ctx.token,
+    }),
   };
 }

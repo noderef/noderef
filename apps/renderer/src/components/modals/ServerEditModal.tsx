@@ -19,6 +19,7 @@ import { backendRpc, refreshWorkspace } from '@/core/ipc/backend';
 import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
 import { MODAL_KEYS } from '@/core/store/keys';
 import { useServersStore } from '@/core/store/servers';
+import { useDesktopClipboardHandlers } from '@/hooks/useDesktopClipboardHandlers';
 import { useModal } from '@/hooks/useModal';
 import {
   Alert,
@@ -38,12 +39,20 @@ import {
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { filesystem, os } from '@neutralinojs/lib';
-import { IconEdit, IconInfoCircle, IconPalette, IconSettings } from '@tabler/icons-react';
-import { useEffect, useRef, useState } from 'react';
+import {
+  IconEdit,
+  IconInfoCircle,
+  IconPalette,
+  IconPlugConnected,
+  IconSettings,
+} from '@tabler/icons-react';
+import { AgentGatewaySection } from './serverEdit/AgentGatewaySection';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import classes from './SettingsModal.module.css';
 
-type ServerEditSection = 'general' | 'appearance' | 'info';
+type ServerEditSection = 'general' | 'appearance' | 'agentGateway' | 'info';
+export type ServerEditPayload = number | { serverId: number; section?: ServerEditSection };
 
 interface UsageData {
   lastUpdate?: number;
@@ -67,8 +76,16 @@ export function ServerEditModal() {
   const colorScheme = useComputedColorScheme('light', { getInitialValueInEffect: true });
   const isDark = colorScheme === 'dark';
 
-  // Payload should be serverId (number)
-  const serverId = typeof payload === 'number' ? payload : null;
+  const serverId =
+    typeof payload === 'number'
+      ? payload
+      : payload && typeof payload === 'object' && 'serverId' in payload
+        ? Number((payload as { serverId: number }).serverId)
+        : null;
+  const initialSection =
+    payload && typeof payload === 'object' && 'section' in payload
+      ? ((payload as { section?: ServerEditSection }).section ?? 'general')
+      : 'general';
   const server = getServerById(serverId);
 
   const [activeSection, setActiveSection] = useState<ServerEditSection>('general');
@@ -85,6 +102,45 @@ export function ServerEditModal() {
   const [usageError, setUsageError] = useState<string | null>(null);
   const isDesktop = isNeutralinoMode();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const modalContentRef = useRef<HTMLDivElement | null>(null);
+  const isDesktopMode = useMemo(
+    () => typeof window !== 'undefined' && isDesktop && !!(window as any).Neutralino,
+    [isDesktop]
+  );
+  const handleInsertText = useCallback(
+    (editableTarget: HTMLInputElement | HTMLTextAreaElement | HTMLElement, text: string) => {
+      if (
+        editableTarget instanceof HTMLInputElement ||
+        editableTarget instanceof HTMLTextAreaElement
+      ) {
+        if (editableTarget.readOnly || editableTarget.disabled) return;
+
+        const { selectionStart, selectionEnd, value } = editableTarget;
+        const start = selectionStart ?? value.length;
+        const end = selectionEnd ?? value.length;
+        const cursorPos = start + text.length;
+
+        editableTarget.setRangeText(text, start, end, 'end');
+        editableTarget.dispatchEvent(new Event('input', { bubbles: true }));
+
+        setTimeout(() => {
+          if (document.activeElement === editableTarget) {
+            editableTarget.setSelectionRange(cursorPos, cursorPos);
+          }
+        }, 0);
+      } else if (editableTarget.isContentEditable) {
+        document.execCommand('insertText', false, text);
+      }
+    },
+    []
+  );
+
+  useDesktopClipboardHandlers({
+    isEnabled: isOpen && isDesktopMode,
+    containerRef: modalContentRef,
+    onInsertText: handleInsertText,
+    enableCopyCut: true,
+  });
 
   const MAX_THUMBNAIL_BYTES = 256 * 1024;
   const ALLOWED_THUMBNAIL_MIMES = new Set(['image/jpeg', 'image/jpg', 'image/png']);
@@ -120,14 +176,14 @@ export function ServerEditModal() {
       setColor(server.color || null);
       setLabel(server.label || null);
       setThumbnail(server.thumbnail || null);
-      setActiveSection('general');
+      setActiveSection(initialSection);
       setUsageData(null);
       setUsageError(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
     }
-  }, [server, isOpen]);
+  }, [server, isOpen, initialSection]);
 
   // Fetch usage data when Info tab is active and server is Alfresco
   useEffect(() => {
@@ -340,6 +396,12 @@ export function ServerEditModal() {
       description: t('appearanceDescription'),
     },
     {
+      key: 'agentGateway' as ServerEditSection,
+      label: t('agentGateway.title'),
+      icon: IconPlugConnected,
+      description: t('agentGateway.description'),
+    },
+    {
       key: 'info' as ServerEditSection,
       label: t('info'),
       icon: IconInfoCircle,
@@ -368,457 +430,465 @@ export function ServerEditModal() {
       transitionProps={{ duration: 300, transition: 'fade' }}
       withCloseButton={true}
     >
-      {server ? (
-        <Group align="stretch" gap={0} style={{ height: '600px' }}>
-          {/* Navbar on the left */}
-          <nav className={classes.navbar}>
-            <div className={classes.navbarMain}>
-              {menuItems.map(item => {
-                const Icon = item.icon;
+      <div ref={modalContentRef} style={{ display: 'contents' }}>
+        {server ? (
+          <Group align="stretch" gap={0} style={{ height: '600px' }}>
+            {/* Navbar on the left */}
+            <nav className={classes.navbar}>
+              <div className={classes.navbarMain}>
+                {menuItems.map(item => {
+                  const Icon = item.icon;
+                  return (
+                    <a
+                      key={item.key}
+                      className={classes.link}
+                      data-active={activeSection === item.key || undefined}
+                      href="#"
+                      onClick={e => {
+                        e.preventDefault();
+                        setActiveSection(item.key);
+                      }}
+                    >
+                      <Icon className={classes.linkIcon} stroke={1.5} />
+                      <span>{item.label}</span>
+                    </a>
+                  );
+                })}
+              </div>
+            </nav>
+
+            {/* Content area on the right */}
+            <Box className={classes.contentArea}>
+              {(() => {
+                const activeItem = menuItems.find(item => item.key === activeSection);
+                if (!activeItem) return null;
+
+                const ActiveIcon = activeItem.icon;
+
                 return (
-                  <a
-                    key={item.key}
-                    className={classes.link}
-                    data-active={activeSection === item.key || undefined}
-                    href="#"
-                    onClick={e => {
-                      e.preventDefault();
-                      setActiveSection(item.key);
-                    }}
-                  >
-                    <Icon className={classes.linkIcon} stroke={1.5} />
-                    <span>{item.label}</span>
-                  </a>
-                );
-              })}
-            </div>
-          </nav>
+                  <Stack gap="lg">
+                    {/* Title with icon */}
+                    <Group gap="sm">
+                      <ActiveIcon size={24} stroke={1.5} />
+                      <Text size="xl" fw={600}>
+                        {activeItem.label}
+                      </Text>
+                    </Group>
 
-          {/* Content area on the right */}
-          <Box className={classes.contentArea}>
-            {(() => {
-              const activeItem = menuItems.find(item => item.key === activeSection);
-              if (!activeItem) return null;
-
-              const ActiveIcon = activeItem.icon;
-
-              return (
-                <Stack gap="lg">
-                  {/* Title with icon */}
-                  <Group gap="sm">
-                    <ActiveIcon size={24} stroke={1.5} />
-                    <Text size="xl" fw={600}>
-                      {activeItem.label}
+                    {/* Intro text */}
+                    <Text size="sm" c="dimmed" mb={0}>
+                      {activeItem.description}
                     </Text>
-                  </Group>
 
-                  {/* Intro text */}
-                  <Text size="sm" c="dimmed" mb={0}>
-                    {activeItem.description}
-                  </Text>
-
-                  {/* Content */}
-                  {activeSection === 'general' && (
-                    <Stack gap="lg" mt={4}>
-                      <div>
-                        <Text size="sm" fw={500} mb="xs">
-                          {t('label')}
-                        </Text>
-                        <Text size="xs" c="dimmed" mb="sm">
-                          {t('labelDescription')}
-                        </Text>
-                        <Group gap="md" align="center">
-                          <div
-                            style={{
-                              flex: '0 0 auto',
-                              display: 'flex',
-                              alignItems: 'center',
-                            }}
-                          >
-                            <div style={{ position: 'relative', width: 56, height: 56 }}>
-                              {thumbnail ? (
-                                <Avatar
-                                  src={`data:image/png;base64,${thumbnail}`}
-                                  alt={name}
-                                  size={56}
-                                  radius="xl"
-                                />
-                              ) : (
-                                <div
-                                  style={{
-                                    width: 56,
-                                    height: 56,
-                                    borderRadius: 'var(--mantine-radius-xl)',
-                                    backgroundColor: color || 'var(--mantine-color-gray-3)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    color: 'white',
-                                    fontWeight: 600,
-                                    fontSize: '1rem',
-                                  }}
-                                >
-                                  {name.slice(0, 2).toUpperCase()}
-                                </div>
-                              )}
-                              {label && (
-                                <Badge
-                                  size="xs"
-                                  variant="filled"
-                                  style={{
-                                    position: 'absolute',
-                                    bottom: -2,
-                                    right: -2,
-                                    minWidth: 'auto',
-                                    height: 18,
-                                    padding: '0 5px',
-                                    fontSize: 10,
-                                    fontWeight: 600,
-                                    lineHeight: 1,
-                                    pointerEvents: 'none',
-                                    backgroundColor: 'var(--mantine-color-gray-7)',
-                                    color: 'var(--mantine-color-gray-0)',
-                                  }}
-                                >
-                                  {label}
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                          <div style={{ flex: 1 }}>
-                            <TextInput
-                              placeholder={t('labelPlaceholder')}
-                              value={label || ''}
-                              onChange={e =>
-                                setLabel(e.currentTarget.value.trim().toUpperCase() || null)
-                              }
-                              maxLength={4}
-                              styles={{
-                                input: {
-                                  textTransform: 'uppercase',
-                                },
-                              }}
-                            />
-                          </div>
-                        </Group>
-                      </div>
-                      <TextInput
-                        label={t('serverName')}
-                        value={name}
-                        onChange={e => setName(e.currentTarget.value)}
-                        required
-                        autoComplete="off"
-                        autoCorrect="off"
-                        autoCapitalize="off"
-                        spellCheck={false}
-                      />
-                      <TextInput
-                        label={t('serverUrl')}
-                        value={baseUrl}
-                        readOnly
-                        required
-                        type="url"
-                        styles={{
-                          input: {
-                            cursor: 'not-allowed',
-                            backgroundColor: isDark
-                              ? 'var(--mantine-color-dark-6)'
-                              : 'var(--mantine-color-gray-0)',
-                          },
-                        }}
-                      />
-                      <TextInput
-                        label={t('jsConsoleEndpoint')}
-                        description={t('jsConsoleEndpointDescription')}
-                        placeholder={t('jsConsoleEndpointPlaceholder')}
-                        value={jsconsoleEndpoint}
-                        onChange={e => {
-                          // Remove leading slashes and service prefix if user adds them
-                          const cleanValue = e.currentTarget.value
-                            .replace(/^\/+/, '')
-                            .replace(/^s\//, '');
-                          setJsconsoleEndpoint(cleanValue);
-                        }}
-                      />
-                      <Group justify="flex-end" mt="md">
-                        <Button variant="subtle" onClick={close} disabled={loading}>
-                          {t('cancel')}
-                        </Button>
-                        <Button
-                          onClick={handleSave}
-                          disabled={!isValid || loading}
-                          loading={loading}
-                        >
-                          {t('save')}
-                        </Button>
-                      </Group>
-                    </Stack>
-                  )}
-
-                  {activeSection === 'appearance' && (
-                    <Stack gap="lg" mt={4}>
-                      <div>
-                        <Text size="sm" fw={500} mb="xs">
-                          {t('color')}
-                        </Text>
-                        <ColorPicker
-                          value={color || '#868e96'}
-                          onChange={value => setColor(value || null)}
-                          format="hex"
-                          swatches={[
-                            '#25262b',
-                            '#868e96',
-                            '#fa5252',
-                            '#e64980',
-                            '#be4bdb',
-                            '#7950f2',
-                            '#4c6ef5',
-                            '#228be6',
-                            '#15aabf',
-                            '#12b886',
-                            '#40c057',
-                            '#82c91e',
-                            '#fab005',
-                            '#fd7e14',
-                          ]}
-                          fullWidth
-                        />
-                      </div>
-                      <div>
-                        <Text size="sm" fw={500} mb={4}>
-                          {t('thumbnail')}
-                        </Text>
-                        {thumbnail && (
-                          <Group gap="sm" mb="sm">
-                            <Avatar
-                              src={`data:image/png;base64,${thumbnail}`}
-                              alt={t('thumbnail')}
-                              size={48}
-                              radius="sm"
-                            />
-                            <Button
-                              variant="subtle"
-                              size="xs"
-                              onClick={() => {
-                                setThumbnail(null);
-                                if (fileInputRef.current) {
-                                  fileInputRef.current.value = '';
-                                }
+                    {/* Content */}
+                    {activeSection === 'general' && (
+                      <Stack gap="lg" mt={4}>
+                        <div>
+                          <Text size="sm" fw={500} mb="xs">
+                            {t('label')}
+                          </Text>
+                          <Text size="xs" c="dimmed" mb="sm">
+                            {t('labelDescription')}
+                          </Text>
+                          <Group gap="md" align="center">
+                            <div
+                              style={{
+                                flex: '0 0 auto',
+                                display: 'flex',
+                                alignItems: 'center',
                               }}
                             >
-                              {t('removeThumbnail')}
-                            </Button>
+                              <div style={{ position: 'relative', width: 56, height: 56 }}>
+                                {thumbnail ? (
+                                  <Avatar
+                                    src={`data:image/png;base64,${thumbnail}`}
+                                    alt={name}
+                                    size={56}
+                                    radius="xl"
+                                  />
+                                ) : (
+                                  <div
+                                    style={{
+                                      width: 56,
+                                      height: 56,
+                                      borderRadius: 'var(--mantine-radius-xl)',
+                                      backgroundColor: color || 'var(--mantine-color-gray-3)',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      color: 'white',
+                                      fontWeight: 600,
+                                      fontSize: '1rem',
+                                    }}
+                                  >
+                                    {name.slice(0, 2).toUpperCase()}
+                                  </div>
+                                )}
+                                {label && (
+                                  <Badge
+                                    size="xs"
+                                    variant="filled"
+                                    style={{
+                                      position: 'absolute',
+                                      bottom: -2,
+                                      right: -2,
+                                      minWidth: 'auto',
+                                      height: 18,
+                                      padding: '0 5px',
+                                      fontSize: 10,
+                                      fontWeight: 600,
+                                      lineHeight: 1,
+                                      pointerEvents: 'none',
+                                      backgroundColor: 'var(--mantine-color-gray-7)',
+                                      color: 'var(--mantine-color-gray-0)',
+                                    }}
+                                  >
+                                    {label}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <TextInput
+                                placeholder={t('labelPlaceholder')}
+                                value={label || ''}
+                                onChange={e =>
+                                  setLabel(e.currentTarget.value.trim().toUpperCase() || null)
+                                }
+                                maxLength={4}
+                                styles={{
+                                  input: {
+                                    textTransform: 'uppercase',
+                                  },
+                                }}
+                              />
+                            </div>
                           </Group>
-                        )}
-                        <Button
-                          variant="default"
-                          size="xs"
-                          onClick={handleThumbnailPick}
-                          loading={thumbnailPicking}
-                          mb="xs"
-                        >
-                          {t('thumbnailPlaceholder')}
-                        </Button>
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept="image/jpeg,image/jpg,image/png"
-                          style={{ display: 'none' }}
-                          onChange={e => handleThumbnailChange(e.target.files?.[0] || null)}
+                        </div>
+                        <TextInput
+                          label={t('serverName')}
+                          value={name}
+                          onChange={e => setName(e.currentTarget.value)}
+                          required
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="off"
+                          spellCheck={false}
                         />
-                        <Text size="xs" c="dimmed" mt={4}>
-                          {t('thumbnailHelp')}
-                        </Text>
-                      </div>
-                      <Group justify="flex-end" mt="md">
-                        <Button variant="subtle" onClick={close} disabled={loading}>
-                          {t('cancel')}
-                        </Button>
-                        <Button
-                          onClick={handleSave}
-                          disabled={!isValid || loading}
-                          loading={loading}
-                        >
-                          {t('save')}
-                        </Button>
-                      </Group>
-                    </Stack>
-                  )}
+                        <TextInput
+                          label={t('serverUrl')}
+                          value={baseUrl}
+                          readOnly
+                          required
+                          type="url"
+                          styles={{
+                            input: {
+                              cursor: 'not-allowed',
+                              backgroundColor: isDark
+                                ? 'var(--mantine-color-dark-6)'
+                                : 'var(--mantine-color-gray-0)',
+                            },
+                          }}
+                        />
+                        <TextInput
+                          label={t('jsConsoleEndpoint')}
+                          description={t('jsConsoleEndpointDescription')}
+                          placeholder={t('jsConsoleEndpointPlaceholder')}
+                          value={jsconsoleEndpoint}
+                          onChange={e => {
+                            // Remove leading slashes and service prefix if user adds them
+                            const cleanValue = e.currentTarget.value
+                              .replace(/^\/+/, '')
+                              .replace(/^s\//, '');
+                            setJsconsoleEndpoint(cleanValue);
+                          }}
+                        />
+                        <Group justify="flex-end" mt="md">
+                          <Button variant="subtle" onClick={close} disabled={loading}>
+                            {t('cancel')}
+                          </Button>
+                          <Button
+                            onClick={handleSave}
+                            disabled={!isValid || loading}
+                            loading={loading}
+                          >
+                            {t('save')}
+                          </Button>
+                        </Group>
+                      </Stack>
+                    )}
 
-                  {activeSection === 'info' && (
-                    <Stack gap="md" mt={4}>
-                      {server.serverType === 'alfresco' ? (
-                        <>
-                          {usageLoading && (
-                            <Group justify="center" py="xl">
-                              <Loader size="sm" />
-                              <Text size="sm" c="dimmed">
-                                {t('loadingUsageData')}
-                              </Text>
+                    {activeSection === 'appearance' && (
+                      <Stack gap="lg" mt={4}>
+                        <div>
+                          <Text size="sm" fw={500} mb="xs">
+                            {t('color')}
+                          </Text>
+                          <ColorPicker
+                            value={color || '#868e96'}
+                            onChange={value => setColor(value || null)}
+                            format="hex"
+                            swatches={[
+                              '#25262b',
+                              '#868e96',
+                              '#fa5252',
+                              '#e64980',
+                              '#be4bdb',
+                              '#7950f2',
+                              '#4c6ef5',
+                              '#228be6',
+                              '#15aabf',
+                              '#12b886',
+                              '#40c057',
+                              '#82c91e',
+                              '#fab005',
+                              '#fd7e14',
+                            ]}
+                            fullWidth
+                          />
+                        </div>
+                        <div>
+                          <Text size="sm" fw={500} mb={4}>
+                            {t('thumbnail')}
+                          </Text>
+                          {thumbnail && (
+                            <Group gap="sm" mb="sm">
+                              <Avatar
+                                src={`data:image/png;base64,${thumbnail}`}
+                                alt={t('thumbnail')}
+                                size={48}
+                                radius="sm"
+                              />
+                              <Button
+                                variant="subtle"
+                                size="xs"
+                                onClick={() => {
+                                  setThumbnail(null);
+                                  if (fileInputRef.current) {
+                                    fileInputRef.current.value = '';
+                                  }
+                                }}
+                              >
+                                {t('removeThumbnail')}
+                              </Button>
                             </Group>
                           )}
-                          {usageError && (
-                            <Alert color="red" title={t('error')}>
-                              {usageError}
-                            </Alert>
-                          )}
-                          {usageData && !usageLoading && (
-                            <>
-                              {usageData.lastUpdate && (
-                                <Group>
-                                  <Text fw={500} size="sm" style={{ minWidth: '150px' }}>
-                                    {t('lastUpdate')}
-                                  </Text>
-                                  <Text size="sm">
-                                    {new Date(usageData.lastUpdate).toLocaleString()}
-                                  </Text>
-                                </Group>
-                              )}
-                              {usageData.users !== undefined && (
-                                <Group>
-                                  <Text fw={500} size="sm" style={{ minWidth: '150px' }}>
-                                    {t('users')}
-                                  </Text>
-                                  <Text size="sm">{usageData.users}</Text>
-                                </Group>
-                              )}
-                              {usageData.documents !== undefined && (
-                                <Group>
-                                  <Text fw={500} size="sm" style={{ minWidth: '150px' }}>
-                                    {t('documents')}
-                                  </Text>
-                                  <Text size="sm">{usageData.documents}</Text>
-                                </Group>
-                              )}
-                              {usageData.licenseMode && (
-                                <Group>
-                                  <Text fw={500} size="sm" style={{ minWidth: '150px' }}>
-                                    {t('licenseMode')}
-                                  </Text>
-                                  <Badge>{usageData.licenseMode}</Badge>
-                                </Group>
-                              )}
-                              {usageData.readOnly !== undefined && (
-                                <Group>
-                                  <Text fw={500} size="sm" style={{ minWidth: '150px' }}>
-                                    {t('readOnly')}
-                                  </Text>
-                                  <Badge color={usageData.readOnly ? 'orange' : 'green'}>
-                                    {usageData.readOnly ? t('yes') : t('no')}
-                                  </Badge>
-                                </Group>
-                              )}
-                              {usageData.updated !== undefined && (
-                                <Group>
-                                  <Text fw={500} size="sm" style={{ minWidth: '150px' }}>
-                                    {t('updated')}
-                                  </Text>
-                                  <Badge color={usageData.updated ? 'green' : 'gray'}>
-                                    {usageData.updated ? t('yes') : t('no')}
-                                  </Badge>
-                                </Group>
-                              )}
-                              {usageData.licenseValidUntil && (
-                                <Group>
-                                  <Text fw={500} size="sm" style={{ minWidth: '150px' }}>
-                                    {t('licenseValidUntil')}
-                                  </Text>
-                                  <Text size="sm">
-                                    {new Date(usageData.licenseValidUntil).toLocaleDateString()}
-                                  </Text>
-                                </Group>
-                              )}
-                              {usageData.licenseHolder && (
-                                <Group>
-                                  <Text fw={500} size="sm" style={{ minWidth: '150px' }}>
-                                    {t('licenseHolder')}
-                                  </Text>
-                                  <Text size="sm">{usageData.licenseHolder}</Text>
-                                </Group>
-                              )}
-                              {usageData.level !== undefined && (
-                                <Group>
-                                  <Text fw={500} size="sm" style={{ minWidth: '150px' }}>
-                                    {t('level')}
-                                  </Text>
-                                  <Text size="sm">{usageData.level}</Text>
-                                </Group>
-                              )}
-                              {usageData.warnings &&
-                                Array.isArray(usageData.warnings) &&
-                                usageData.warnings.length > 0 && (
-                                  <div>
-                                    <Text fw={500} size="sm" mb="xs">
-                                      {t('warnings')}
+                          <Button
+                            variant="default"
+                            size="xs"
+                            onClick={handleThumbnailPick}
+                            loading={thumbnailPicking}
+                            mb="xs"
+                          >
+                            {t('thumbnailPlaceholder')}
+                          </Button>
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/jpeg,image/jpg,image/png"
+                            style={{ display: 'none' }}
+                            onChange={e => handleThumbnailChange(e.target.files?.[0] || null)}
+                          />
+                          <Text size="xs" c="dimmed" mt={4}>
+                            {t('thumbnailHelp')}
+                          </Text>
+                        </div>
+                        <Group justify="flex-end" mt="md">
+                          <Button variant="subtle" onClick={close} disabled={loading}>
+                            {t('cancel')}
+                          </Button>
+                          <Button
+                            onClick={handleSave}
+                            disabled={!isValid || loading}
+                            loading={loading}
+                          >
+                            {t('save')}
+                          </Button>
+                        </Group>
+                      </Stack>
+                    )}
+
+                    {activeSection === 'agentGateway' && (
+                      <AgentGatewaySection serverId={server.id} />
+                    )}
+
+                    {activeSection === 'info' && (
+                      <Stack gap="md" mt={4}>
+                        {server.serverType === 'alfresco' ? (
+                          <>
+                            {usageLoading && (
+                              <Group justify="center" py="xl">
+                                <Loader size="sm" />
+                                <Text size="sm" c="dimmed">
+                                  {t('loadingUsageData')}
+                                </Text>
+                              </Group>
+                            )}
+                            {usageError && (
+                              <Alert color="red" title={t('error')}>
+                                {usageError}
+                              </Alert>
+                            )}
+                            {usageData && !usageLoading && (
+                              <>
+                                {usageData.lastUpdate && (
+                                  <Group>
+                                    <Text fw={500} size="sm" style={{ minWidth: '150px' }}>
+                                      {t('lastUpdate')}
                                     </Text>
-                                    <Stack gap="xs">
-                                      {usageData.warnings.map((warning: string, index: number) => (
-                                        <Alert key={index} color="yellow" title={t('warning')}>
-                                          {warning}
-                                        </Alert>
-                                      ))}
-                                    </Stack>
-                                  </div>
-                                )}
-                              {usageData.errors &&
-                                Array.isArray(usageData.errors) &&
-                                usageData.errors.length > 0 && (
-                                  <div>
-                                    <Text fw={500} size="sm" mb="xs">
-                                      {t('errors')}
+                                    <Text size="sm">
+                                      {new Date(usageData.lastUpdate).toLocaleString()}
                                     </Text>
-                                    <Stack gap="xs">
-                                      {usageData.errors.map((error: string, index: number) => (
-                                        <Alert key={index} color="red" title={t('error')}>
-                                          {error}
-                                        </Alert>
-                                      ))}
-                                    </Stack>
-                                  </div>
+                                  </Group>
                                 )}
-                            </>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <Group>
-                            <Text fw={500} size="sm" style={{ minWidth: '120px' }}>
-                              {t('name')}
-                            </Text>
-                            <Text size="sm">{server.name}</Text>
-                          </Group>
-                          <Group>
-                            <Text fw={500} size="sm" style={{ minWidth: '120px' }}>
-                              {t('baseUrl')}
-                            </Text>
-                            <Code style={{ wordBreak: 'break-all' }}>{server.baseUrl}</Code>
-                          </Group>
-                          <Group>
-                            <Text fw={500} size="sm" style={{ minWidth: '120px' }}>
-                              {t('id')}
-                            </Text>
-                            <Code>{server.id}</Code>
-                          </Group>
-                          <Group>
-                            <Text fw={500} size="sm" style={{ minWidth: '120px' }}>
-                              {t('serverType')}
-                            </Text>
-                            <Badge>{server.serverType}</Badge>
-                          </Group>
-                        </>
-                      )}
-                    </Stack>
-                  )}
-                </Stack>
-              );
-            })()}
-          </Box>
-        </Group>
-      ) : (
-        <Text c="dimmed" size="sm">
-          {t('serverNotFound')}
-        </Text>
-      )}
+                                {usageData.users !== undefined && (
+                                  <Group>
+                                    <Text fw={500} size="sm" style={{ minWidth: '150px' }}>
+                                      {t('users')}
+                                    </Text>
+                                    <Text size="sm">{usageData.users}</Text>
+                                  </Group>
+                                )}
+                                {usageData.documents !== undefined && (
+                                  <Group>
+                                    <Text fw={500} size="sm" style={{ minWidth: '150px' }}>
+                                      {t('documents')}
+                                    </Text>
+                                    <Text size="sm">{usageData.documents}</Text>
+                                  </Group>
+                                )}
+                                {usageData.licenseMode && (
+                                  <Group>
+                                    <Text fw={500} size="sm" style={{ minWidth: '150px' }}>
+                                      {t('licenseMode')}
+                                    </Text>
+                                    <Badge>{usageData.licenseMode}</Badge>
+                                  </Group>
+                                )}
+                                {usageData.readOnly !== undefined && (
+                                  <Group>
+                                    <Text fw={500} size="sm" style={{ minWidth: '150px' }}>
+                                      {t('readOnly')}
+                                    </Text>
+                                    <Badge color={usageData.readOnly ? 'orange' : 'green'}>
+                                      {usageData.readOnly ? t('yes') : t('no')}
+                                    </Badge>
+                                  </Group>
+                                )}
+                                {usageData.updated !== undefined && (
+                                  <Group>
+                                    <Text fw={500} size="sm" style={{ minWidth: '150px' }}>
+                                      {t('updated')}
+                                    </Text>
+                                    <Badge color={usageData.updated ? 'green' : 'gray'}>
+                                      {usageData.updated ? t('yes') : t('no')}
+                                    </Badge>
+                                  </Group>
+                                )}
+                                {usageData.licenseValidUntil && (
+                                  <Group>
+                                    <Text fw={500} size="sm" style={{ minWidth: '150px' }}>
+                                      {t('licenseValidUntil')}
+                                    </Text>
+                                    <Text size="sm">
+                                      {new Date(usageData.licenseValidUntil).toLocaleDateString()}
+                                    </Text>
+                                  </Group>
+                                )}
+                                {usageData.licenseHolder && (
+                                  <Group>
+                                    <Text fw={500} size="sm" style={{ minWidth: '150px' }}>
+                                      {t('licenseHolder')}
+                                    </Text>
+                                    <Text size="sm">{usageData.licenseHolder}</Text>
+                                  </Group>
+                                )}
+                                {usageData.level !== undefined && (
+                                  <Group>
+                                    <Text fw={500} size="sm" style={{ minWidth: '150px' }}>
+                                      {t('level')}
+                                    </Text>
+                                    <Text size="sm">{usageData.level}</Text>
+                                  </Group>
+                                )}
+                                {usageData.warnings &&
+                                  Array.isArray(usageData.warnings) &&
+                                  usageData.warnings.length > 0 && (
+                                    <div>
+                                      <Text fw={500} size="sm" mb="xs">
+                                        {t('warnings')}
+                                      </Text>
+                                      <Stack gap="xs">
+                                        {usageData.warnings.map(
+                                          (warning: string, index: number) => (
+                                            <Alert key={index} color="yellow" title={t('warning')}>
+                                              {warning}
+                                            </Alert>
+                                          )
+                                        )}
+                                      </Stack>
+                                    </div>
+                                  )}
+                                {usageData.errors &&
+                                  Array.isArray(usageData.errors) &&
+                                  usageData.errors.length > 0 && (
+                                    <div>
+                                      <Text fw={500} size="sm" mb="xs">
+                                        {t('errors')}
+                                      </Text>
+                                      <Stack gap="xs">
+                                        {usageData.errors.map((error: string, index: number) => (
+                                          <Alert key={index} color="red" title={t('error')}>
+                                            {error}
+                                          </Alert>
+                                        ))}
+                                      </Stack>
+                                    </div>
+                                  )}
+                              </>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <Group>
+                              <Text fw={500} size="sm" style={{ minWidth: '120px' }}>
+                                {t('name')}
+                              </Text>
+                              <Text size="sm">{server.name}</Text>
+                            </Group>
+                            <Group>
+                              <Text fw={500} size="sm" style={{ minWidth: '120px' }}>
+                                {t('baseUrl')}
+                              </Text>
+                              <Code style={{ wordBreak: 'break-all' }}>{server.baseUrl}</Code>
+                            </Group>
+                            <Group>
+                              <Text fw={500} size="sm" style={{ minWidth: '120px' }}>
+                                {t('id')}
+                              </Text>
+                              <Code>{server.id}</Code>
+                            </Group>
+                            <Group>
+                              <Text fw={500} size="sm" style={{ minWidth: '120px' }}>
+                                {t('serverType')}
+                              </Text>
+                              <Badge>{server.serverType}</Badge>
+                            </Group>
+                          </>
+                        )}
+                      </Stack>
+                    )}
+                  </Stack>
+                );
+              })()}
+            </Box>
+          </Group>
+        ) : (
+          <Text c="dimmed" size="sm">
+            {t('serverNotFound')}
+          </Text>
+        )}
+      </div>
     </Modal>
   );
 }

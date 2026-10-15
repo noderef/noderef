@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+import type { AgentChatMcpSettings } from './agentGateway.js';
+
 export type AgentMessageRole = 'user' | 'assistant' | 'system';
 
 export type AgentRunStatus =
@@ -50,6 +52,7 @@ export interface AgentChatSummary {
   lastMessageAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  mcp?: AgentChatMcpSettings | null;
 }
 
 export interface AgentMessage {

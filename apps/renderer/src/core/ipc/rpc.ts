@@ -637,12 +637,35 @@ export async function backendFetch(
   init: RequestInit = {}
 ): Promise<Response> {
   const url = requestUrlFromInput(input);
+  const send = (token: string | null) =>
+    fetch(input, {
+      ...init,
+      headers: headersWithLaunchToken(init.headers, token, url, getBackendUrl()),
+      credentials: init.credentials ?? 'include',
+    });
+
   const token = getCachedLaunchToken() ?? (await loadLaunchToken());
-  return fetch(input, {
-    ...init,
-    headers: headersWithLaunchToken(init.headers, token, url, getBackendUrl()),
-    credentials: init.credentials ?? 'include',
-  });
+  const res = await send(token);
+  if (res.status !== 401 || !token || !(await isLaunchTokenRejection(res))) {
+    return res;
+  }
+
+  // The backend mints a new launch token on every start (e.g. a dev restart).
+  setCachedLaunchToken(null);
+  const fresh = await loadLaunchToken();
+  if (!fresh || fresh === token) {
+    return res;
+  }
+  return send(fresh);
+}
+
+async function isLaunchTokenRejection(res: Response): Promise<boolean> {
+  try {
+    const body = (await res.clone().json()) as { code?: unknown };
+    return body?.code === 'LAUNCH_TOKEN_REQUIRED';
+  } catch {
+    return false;
+  }
 }
 
 export async function startBackend(): Promise<void> {

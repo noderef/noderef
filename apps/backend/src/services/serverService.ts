@@ -26,6 +26,7 @@ import { getPrismaClient } from '../lib/prisma.js';
 import { ServerRepository } from '../repositories/serverRepository.js';
 import { validateCreateServerInput, validateUpdateServerInput } from './validators.js';
 import { refreshOidcTokens } from './alfresco/oidcTicketService.js';
+import { emitServerDeleted, emitServerUpdated } from './agentGateway/serverLifecycle.js';
 
 type ServerCreateInput = Omit<CreateServer, 'userId' | 'insightRangeDays'> & {
   insightRangeDays?: number;
@@ -97,7 +98,17 @@ export class ServerService {
       authType: validated.authType === 'oauth' ? ('openid_connect' as const) : validated.authType,
     };
     const encryptedInput = await this.encryptCredentialPayload(normalized);
+    const before = await this.repository.findById(userId, id);
     const server = await this.repository.update(userId, id, encryptedInput);
+    const identityChanged = Boolean(
+      before &&
+        (Object.prototype.hasOwnProperty.call(normalized, 'baseUrl') ||
+          Object.prototype.hasOwnProperty.call(normalized, 'authType') ||
+          Object.prototype.hasOwnProperty.call(normalized, 'username'))
+    );
+    if (identityChanged) {
+      emitServerUpdated(userId, id);
+    }
     return this.toPublicServer(server);
   }
 
@@ -145,7 +156,11 @@ export class ServerService {
    * Delete a server (scoped to user)
    */
   async delete(userId: number, id: number): Promise<boolean> {
-    return this.repository.delete(userId, id);
+    const deleted = await this.repository.delete(userId, id);
+    if (deleted) {
+      emitServerDeleted(userId, id);
+    }
+    return deleted;
   }
 
   /**

@@ -57,6 +57,7 @@ NodeRef gives Alfresco teams a focused desktop workspace for searching repositor
 - **Saved searches** — Store queries with custom result columns, reuse across servers.
 - **JavaScript console** — Execute scripts across servers, view history, and `/ai` assist.
 - **Agent chat** — Ask your repo in plain English. Search nodes, run scripts, or change permissions by describing what you need.
+- **Agent Gateway** — Optional MCP connection per Alfresco server for extra tools, prompts, and resource context. The desktop backend owns the client; the renderer never talks to the gateway directly.
 - **Privacy masking** — Mask sensitive properties/text before prompts are sent to the configured AI provider.
 - **Multi-server workspace** — Connect prod, test, and dev environments simultaneously.
 - **Tabbed node browser** — Open nodes side-by-side, follow references, compare structures.
@@ -114,6 +115,19 @@ docker run -p 5111:5111 ghcr.io/noderef/noderef:latest
 ```
 
 Then open [http://localhost:5111](http://localhost:5111). The data persists inside the container at `/data`. Use variable `WEB_PASSWORD` to make the app password protected.
+
+### 🔌 **Agent Gateway**
+
+Each Alfresco server can point at a NodeRef Agent Gateway MCP endpoint (`/mcp`, Streamable HTTP). Configure it from **Server settings → Agent Gateway**:
+
+1. Enable the gateway and set the URL.
+   - Local desktop: `http://localhost:3100/mcp` (dev) or the gateway's published URL.
+   - NodeRef in Docker: `localhost` is the backend container itself. Use `http://host.docker.internal:3100/mcp` to reach a gateway on the host, or the Compose service name (for example `http://agentgateway:3000/mcp`) when the gateway is on the same Docker network (`stack/compose.gateway.yaml` in the gateway repo).
+2. Paste the gateway API key. Saved keys are encrypted and never returned to the UI.
+3. **Test connection** uses the key only (no Alfresco credentials) and works with unsaved form values.
+4. **Verify environment** compares `repository.id` on the Alfresco passthrough route. SQL and index backends are not covered. A mismatch blocks MCP tools for that server.
+
+In Agent chat, the plug button next to the model picker turns MCP on for that conversation, lets you select tools (read-only by default), insert a prompt as a draft, and attach resources as untrusted context. Destructive gateway tools always ask for confirmation; existing chats without a gateway keep the original local tool set.
 
 ### 🛠 **Tech stack**
 

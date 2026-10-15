@@ -300,6 +300,8 @@ export async function logout(req: LogoutReq): Promise<LogoutRes> {
   } finally {
     // Always clear the cached client after logout
     dropClient(req.baseUrl);
+    const { emitServerLoggedOut } = await import('../agentGateway/serverLifecycle.js');
+    emitServerLoggedOut(req.baseUrl);
   }
 
   return { success: true };
