@@ -22,7 +22,7 @@
 import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import type { Request } from 'express';
 
-export const LAUNCH_TOKEN_HEADER = 'x-noderef-token';
+const LAUNCH_TOKEN_HEADER = 'x-noderef-token';
 export const LAUNCH_TOKEN_QUERY = 'nr_token';
 export const LAUNCH_TOKEN_FILE = 'backend-token';
 
@@ -38,10 +38,6 @@ export function isServeStaticMode(): boolean {
  */
 export function isLaunchTokenRequired(): boolean {
   return !isServeStaticMode();
-}
-
-export function getLaunchToken(): string | null {
-  return launchToken;
 }
 
 export function getOrCreateLaunchToken(): string {
@@ -84,7 +80,7 @@ function firstQueryValue(value: unknown): string | undefined {
   return undefined;
 }
 
-export function readLaunchTokenFromRequest(req: Request): string | undefined {
+function readLaunchTokenFromRequest(req: Request): string | undefined {
   const header = firstHeaderValue(req.headers[LAUNCH_TOKEN_HEADER])?.trim();
   if (header) {
     return header;

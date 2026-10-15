@@ -20,32 +20,47 @@ import { useTranslation } from 'react-i18next';
 
 interface NodeAspectsProps {
   aspects: AlfrescoNodeDetails['aspects'];
+  compact?: boolean;
 }
 
-export function NodeAspects({ aspects }: NodeAspectsProps) {
+export function NodeAspects({ aspects, compact = false }: NodeAspectsProps) {
   const { t } = useTranslation(['nodeBrowser']);
+
+  const content =
+    aspects.length === 0 ? (
+      <Text size={compact ? 'sm' : undefined} c="dimmed">
+        {t('nodeBrowser:noAspects')}
+      </Text>
+    ) : (
+      <Group gap="xs">
+        {aspects.map((aspect, idx) => (
+          <Badge
+            key={idx}
+            variant="light"
+            color="blue"
+            size="lg"
+            radius="sm"
+            title={aspect.prefixedName}
+            style={{ textTransform: 'none', maxWidth: '100%' }}
+          >
+            {aspect.prefixedName}
+          </Badge>
+        ))}
+      </Group>
+    );
+
+  if (compact) {
+    return (
+      <Stack gap="sm" p="sm">
+        {content}
+      </Stack>
+    );
+  }
 
   return (
     <Stack gap="md" p="md">
       <Paper withBorder p="md">
-        {aspects.length === 0 ? (
-          <Text c="dimmed">{t('nodeBrowser:noAspects')}</Text>
-        ) : (
-          <Group gap="xs">
-            {aspects.map((aspect, idx) => (
-              <Badge
-                key={idx}
-                variant="light"
-                color="blue"
-                size="lg"
-                radius="sm"
-                style={{ textTransform: 'none' }}
-              >
-                {aspect.prefixedName}
-              </Badge>
-            ))}
-          </Group>
-        )}
+        {content}
       </Paper>
     </Stack>
   );

@@ -192,6 +192,7 @@ CRITICAL RULES — you MUST follow these:
    - node_lock, node_unlock for document locks; version_revert, version_delete after node_versions
    - association_list, association_manage for peer and secondary associations
    - comment_list, comment_manage for node comments
+   - get_installed_modules for complete AMP/module listings, versions, and repository edition; include every returned module in one list/table regardless of installState
    - search for repository-wide queries
    - hyland_docs_list_publications then hyland_docs_search then hyland_docs_get_topic for Hyland product docs on docs.hyland.com (pick the guide first, then topics) — not for repository node content
    - search_export_text for text exports saved as repository files (csv/tsv/jsonl/md/xml/plain/custom), especially for large result sets

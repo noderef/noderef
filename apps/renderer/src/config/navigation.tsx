@@ -108,6 +108,9 @@ export const routes: Record<PageKey, RouteConfig> = {
     defaultTitle: 'Browse',
     icon: 'folder',
     component: FileFolderBrowserPage,
+    options: {
+      noScroll: true,
+    },
   },
   'text-editor': {
     title: 'submenu:textEditor',
