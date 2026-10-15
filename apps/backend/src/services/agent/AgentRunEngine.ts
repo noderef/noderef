@@ -95,7 +95,12 @@ import {
   compactToolDataForModel,
   MAX_TOOL_RESULT_JSON_CHARS_FOR_MODEL,
 } from './toolResultCompaction.js';
-import { getAllToolSchemas, getToolByName, resolveToolName } from './tools/registry.js';
+import {
+  getToolByName,
+  getToolSchemasFor,
+  isToolAllowed,
+  resolveToolName,
+} from './tools/registry.js';
 import type { AgentExecutionContext, ResolvedAiRuntime, RunInput } from './types.js';
 
 const log = createLogger('agent.engine');
@@ -283,8 +288,12 @@ export class AgentRunEngine {
     await this.maybeGenerateInitialChatPresentation(input, recentMessages.length > 0);
 
     // ── Build initial message list ─────────────────────────────────────────────
-    const systemPrompt = await buildSystemPrompt(mentionContext, input.preferredLanguage);
-    const allTools = getAllToolSchemas();
+    const systemPrompt = await buildSystemPrompt(
+      mentionContext,
+      input.preferredLanguage,
+      this.execCtx.capabilityProfile
+    );
+    const allTools = getToolSchemasFor(this.execCtx.capabilityProfile);
     const allowScriptExecution = isExplicitScriptExecutionRequested(input.content);
     const tools = allowScriptExecution
       ? allTools
@@ -545,6 +554,21 @@ export class AgentRunEngine {
             type: 'tool_result',
             tool_use_id: call.id,
             content: JSON.stringify({ error: `Unknown tool: ${call.name}` }),
+            is_error: true,
+          });
+          continue;
+        }
+
+        if (!isToolAllowed(call.name, this.execCtx.capabilityProfile)) {
+          const deniedMessage = `Tool "${canonicalOperation}" is not available for this Alfresco account.`;
+          log.info(
+            { name: call.name, canonicalOperation },
+            'Blocked tool call that exceeds capability profile'
+          );
+          toolResultContents.push({
+            type: 'tool_result',
+            tool_use_id: call.id,
+            content: JSON.stringify({ error: deniedMessage }),
             is_error: true,
           });
           continue;

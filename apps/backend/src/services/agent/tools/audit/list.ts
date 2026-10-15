@@ -47,6 +47,7 @@ export const auditListTool: ToolDefinition = {
     },
   },
   requiresConfirmation: false,
+  requires: ['admin'],
 
   async execute(ctx: AgentExecutionContext, args: Record<string, unknown>): Promise<ToolResult> {
     try {

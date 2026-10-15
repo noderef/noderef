@@ -52,7 +52,7 @@ import {
 } from './agentUtils.js';
 import { buildCompletionNote, buildQueuedNote } from './progressMessages.js';
 import { searchMentions } from './searchMentions.js';
-import { getToolByName, resolveToolName } from './tools/registry.js';
+import { getToolByName, isToolAllowed, resolveToolName } from './tools/registry.js';
 import type { AgentExecutionContext } from './types.js';
 
 const log = createLogger('agent.service');
@@ -481,6 +481,11 @@ export class AgentService {
       const tool = getToolByName(canonicalOperation);
       if (!tool) {
         throw new Error(`Unknown tool in confirmed step: ${canonicalOperation}`);
+      }
+      if (!isToolAllowed(canonicalOperation, execCtx.capabilityProfile)) {
+        throw new Error(
+          `Tool "${canonicalOperation}" is not available for this Alfresco account.`
+        );
       }
 
       const toolResult = await tool.execute(execCtx, stepInput);

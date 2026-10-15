@@ -20,8 +20,10 @@
  * Single system prompt for the agent.
  */
 
-import { ALL_TOOLS } from './tools/registry.js';
+import type { CapabilityProfile } from '@app/contracts';
+import { ALL_TOOLS, getToolsFor } from './tools/registry.js';
 import { loadToolSkill } from './tools/skills.js';
+import type { ToolDefinition } from './tools/types.js';
 
 const LANGUAGE_CODE_PATTERN = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})?$/i;
 const MAX_TOOL_SKILLS_CHARS = 60_000;
@@ -86,13 +88,12 @@ function getLanguageDisplayName(code: string): string {
   }
 }
 
-const buildToolSkillsSection = async (): Promise<string> => {
+const buildToolSkillsSection = async (tools: ToolDefinition[]): Promise<string> => {
   const blocks: string[] = [];
   let totalChars = 0;
   let included = 0;
 
-  // TODO: optimize by including only skills relevant to the current request/tools.
-  for (const tool of ALL_TOOLS) {
+  for (const tool of tools) {
     let skillText: string;
     try {
       skillText = await loadToolSkill(tool.skill);
@@ -111,8 +112,8 @@ const buildToolSkillsSection = async (): Promise<string> => {
   }
 
   const truncationNote =
-    included < ALL_TOOLS.length
-      ? `\nNote: skill section truncated to stay under ${MAX_TOOL_SKILLS_CHARS} characters (${included}/${ALL_TOOLS.length} tools included).`
+    included < tools.length
+      ? `\nNote: skill section truncated to stay under ${MAX_TOOL_SKILLS_CHARS} characters (${included}/${tools.length} tools included).`
       : '';
 
   return `TOOL SKILLS (authoritative):
@@ -122,9 +123,22 @@ const buildToolSkillsSection = async (): Promise<string> => {
 ${blocks.join('\n')}`.trim();
 };
 
+function buildCapabilityRestrictionSection(allowed: ToolDefinition[]): string {
+  const allowedNames = new Set(allowed.map(tool => tool.name));
+  const unavailable = ALL_TOOLS.filter(tool => !allowedNames.has(tool.name)).map(tool => tool.name);
+  if (unavailable.length === 0) {
+    return '';
+  }
+  return `Capability restrictions:
+- This Alfresco account does not have administrator (or module) rights for: ${unavailable.join(', ')}.
+- Do not call those tools. If the user asks for them, explain that they require Alfresco administrator rights or a module that is not available.
+`;
+}
+
 export async function buildSystemPrompt(
   mentionContext: string,
-  preferredLanguage?: string
+  preferredLanguage?: string,
+  profile?: CapabilityProfile | null
 ): Promise<string> {
   const normalizedLanguage = normalizeLanguageCode(preferredLanguage);
   const languageDirective = normalizedLanguage
@@ -140,7 +154,9 @@ export async function buildSystemPrompt(
   const mentionBlock = mentionContext.trim()
     ? `\n<mentioned_nodes>\n${mentionContext.trim()}\n</mentioned_nodes>\n`
     : '';
-  const toolSkillsSection = await buildToolSkillsSection();
+  const allowedTools = getToolsFor(profile);
+  const toolSkillsSection = await buildToolSkillsSection(allowedTools);
+  const capabilityRestrictionSection = buildCapabilityRestrictionSection(allowedTools);
 
   // Per-run content (current time, mentions) goes last so servers can reuse the cached prompt prefix across runs.
   return `You are the NodeRef assistant — an Alfresco Content Services repository agent.
@@ -214,6 +230,7 @@ CRITICAL RULES — you MUST follow these:
    - when nodeId is known, include a markdown link using this format:
      [Node Name](nodebrowser://node/<nodeId>)
 
+${capabilityRestrictionSection}
 ${toolSkillsSection}
 
 ${temporalDirective}${mentionBlock}`.trim();
