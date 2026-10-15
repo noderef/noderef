@@ -16,6 +16,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { AgentExecutionContext } from '../../src/services/agent/types.js';
+import { compactToolDataForModel } from '../../src/services/agent/toolResultCompaction.js';
 import {
   DISCOVERY_UNAVAILABLE,
   getInstalledModulesTool,
@@ -249,6 +250,31 @@ describe('getInstalledModules', () => {
       throw new Error('expected success');
     }
     expect(result.data.modules).toHaveLength(2);
+  });
+
+  it('keeps the complete module list for the model regardless of install state', async () => {
+    const modules = Array.from({ length: 30 }, (_, index) => ({
+      id: `module-${index + 1}`,
+      title: `Module ${index + 1}`,
+      version: '1.0.0',
+      ...(index < 4
+        ? { installState: 'INSTALLED' }
+        : index === 29
+          ? {}
+          : { installState: 'UNKNOWN' }),
+    }));
+    mockGetRepositoryInformation.mockResolvedValue({
+      entry: { repository: { modules } },
+    });
+
+    const result = await getInstalledModulesTool.execute(makeCtx(), {});
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error('expected success');
+    }
+
+    expect(result.data.modules).toEqual(modules);
+    expect(compactToolDataForModel(result.data).modules).toEqual(modules);
   });
 
   it('executes empty-module payloads as a clear result', async () => {

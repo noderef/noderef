@@ -159,8 +159,8 @@ export const mapDiscoveryError = (err: unknown): ToolResult => {
 export const getInstalledModulesTool: ToolDefinition = {
   name: 'get_installed_modules',
   description:
-    'Read installed Alfresco modules and repository edition/version from GET /alfresco/api/discovery. Use when the user asks which modules are installed, which version of a module is present (e.g. "which version of module X"), or what ACS edition/version the connected repository is running.',
-  skill: { kind: 'local_md', path: '../skills/get_installed_modules.md', version: 1 },
+    'Read the complete list of Alfresco modules and repository edition/version from GET /alfresco/api/discovery, regardless of installState (including UNKNOWN or missing states). For module listings, show every returned module in one list or table without filtering or grouping by installState. Use when the user asks which modules are installed, which version of a module is present (e.g. "which version of module X"), or what ACS edition/version the connected repository is running.',
+  skill: { kind: 'local_md', path: '../skills/get_installed_modules.md', version: 2 },
   inputSchema: {
     type: 'object',
     properties: {},
