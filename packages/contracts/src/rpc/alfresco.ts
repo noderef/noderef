@@ -15,6 +15,7 @@
  */
 
 import { z } from 'zod';
+import { CapabilityProfileSchema } from '../models/capabilities.js';
 
 /**
  * RPC request/response schemas for Alfresco operations
@@ -88,6 +89,7 @@ export const ValidateCredentialsReqSchema = z.object({
 export const ValidateCredentialsResSchema = z.object({
   valid: z.boolean(),
   isAdmin: z.boolean().optional(),
+  capabilities: CapabilityProfileSchema.optional().nullable(),
   user: z
     .object({
       id: z.string(),

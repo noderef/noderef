@@ -19,13 +19,19 @@
  * Handles all backend.servers.* RPC methods
  */
 
-import type { CreateServer, UpdateServer } from '@app/contracts';
+import type { CapabilityProfile, CreateServer, UpdateServer } from '@app/contracts';
+import { CapabilityProfileSchema, RESTRICTED_PROFILE } from '@app/contracts';
 import { z } from 'zod';
-import { resolveAlfrescoAdminStatus } from '../../services/alfresco/adminStatus.js';
+import { persistCapabilityProfile } from '../../services/alfresco/capabilityPersistence.js';
+import { resolveCapabilityProfile } from '../../services/alfresco/capabilities.js';
 import { exchangeOidcTokenForTicket } from '../../services/alfresco/oidcTicketService.js';
-import type { Routes, RpcContext } from './types.js';
-import { getCurrentUserId, withAuth, withAuthAndCredentials } from './withAuth.js';
 import { InsightRangeDaysSchema } from '../../constants/insights.js';
+import type { Routes, RpcContext } from './types.js';
+import {
+  getCurrentUserId,
+  withAuth,
+  withAuthAndCredentials,
+} from './withAuth.js';
 
 type RpcCreateServerInput = Omit<CreateServer, 'userId' | 'insightRangeDays'> & {
   insightRangeDays?: number;
@@ -67,6 +73,7 @@ export function registerServersHandlers(routes: Routes, ctx: RpcContext): void {
       serverType: z.string().optional(),
       authType: z.string().nullable().optional(),
       isAdmin: z.boolean().optional(),
+      capabilities: CapabilityProfileSchema.nullable().optional(),
       username: z.string().nullable().optional(),
       token: z.string().nullable().optional(),
       refreshToken: z.string().nullable().optional(),
@@ -104,6 +111,7 @@ export function registerServersHandlers(routes: Routes, ctx: RpcContext): void {
       serverType: z.string().optional(),
       authType: z.string().nullable().optional(),
       isAdmin: z.boolean().optional(),
+      capabilities: CapabilityProfileSchema.nullable().optional(),
       username: z.string().nullable().optional(),
       token: z.string().nullable().optional(),
       refreshToken: z.string().nullable().optional(),
@@ -207,26 +215,47 @@ export function registerServersHandlers(routes: Routes, ctx: RpcContext): void {
     },
   };
 
+  const refreshCapabilities = async (id: number): Promise<CapabilityProfile> => {
+    const userId = await getCurrentUserId();
+
+    return withAuth(ctx, id, async (api, server) => {
+      try {
+        const { profile } = await resolveCapabilityProfile(api, {
+          jsconsoleEndpoint: server.jsconsoleEndpoint,
+        });
+        await persistCapabilityProfile(ctx.serverService, userId, id, server, profile);
+        return profile;
+      } catch {
+        if (server.capabilities == null) {
+          const restricted = { ...RESTRICTED_PROFILE, checkedAt: new Date().toISOString() };
+          await persistCapabilityProfile(ctx.serverService, userId, id, server, restricted);
+          return restricted;
+        }
+        const unknown: CapabilityProfile = { ...server.capabilities, status: 'unknown' };
+        await persistCapabilityProfile(ctx.serverService, userId, id, server, unknown);
+        return unknown;
+      }
+    });
+  };
+
+  routes['backend.servers.refreshCapabilities'] = {
+    schema: z.object({
+      id: z.number(),
+    }),
+    handler: async params => {
+      const { id } = params as { id: number };
+      return refreshCapabilities(id);
+    },
+  };
+
   routes['backend.servers.refreshAdminStatus'] = {
     schema: z.object({
       id: z.number(),
     }),
     handler: async params => {
-      const userId = await getCurrentUserId();
       const { id } = params as { id: number };
-
-      return withAuth(ctx, id, async (api, server) => {
-        try {
-          const { isAdmin } = await resolveAlfrescoAdminStatus(api);
-          if (isAdmin !== server.isAdmin) {
-            const updated = await serverService.update(userId, id, { isAdmin });
-            return { isAdmin: updated?.isAdmin ?? isAdmin };
-          }
-          return { isAdmin };
-        } catch {
-          return { isAdmin: server.isAdmin };
-        }
-      });
+      const profile = await refreshCapabilities(id);
+      return { isAdmin: profile.isAdmin };
     },
   };
 
