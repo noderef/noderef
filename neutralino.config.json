@@ -44,7 +44,6 @@
   "modes": {
     "window": {
       "title": "NodeRef",
-      "icon": "/resources/icons/appIcon.png",
       "width": 1200,
       "height": 800,
       "minWidth": 800,
