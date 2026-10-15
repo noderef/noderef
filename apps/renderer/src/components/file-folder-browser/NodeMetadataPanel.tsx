@@ -30,15 +30,16 @@ import {
   Text,
   TextInput,
 } from '@mantine/core';
-import { IconFile, IconFolder, IconSearch, IconX } from '@tabler/icons-react';
-import { useEffect, useMemo, useState } from 'react';
+import { IconSearch, IconX } from '@tabler/icons-react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface NodeMetadataPanelProps {
   serverId: number;
   nodeId: string;
   nodeName: string;
-  isFolder: boolean;
+  nodeIcon: ReactNode;
+  isFile: boolean;
   onClose: () => void;
 }
 
@@ -95,16 +96,37 @@ const formatPropertyValue = (property: PropertyEntry): string => {
     .join(', ');
 };
 
-/** A read-only labelled field, matching the ADF metadata card layout. */
-function MetadataField({ label, value }: { label: string; value: string | null }) {
-  return <TextInput label={label} value={value ?? '—'} readOnly variant="filled" size="xs" />;
+/** Keep read-only values at the same size as the repository list. */
+interface MetadataFieldProps {
+  label: string;
+  value: string | null;
+  truncate?: boolean;
+}
+
+function MetadataField({ label, value, truncate = false }: MetadataFieldProps) {
+  return (
+    <Stack gap={4} style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+      <Text size="xs" c="dimmed">
+        {label}
+      </Text>
+      <Text
+        size="sm"
+        truncate={truncate}
+        title={truncate ? (value ?? undefined) : undefined}
+        style={truncate ? undefined : { whiteSpace: 'pre-wrap' }}
+      >
+        {value ?? '—'}
+      </Text>
+    </Stack>
+  );
 }
 
 export function NodeMetadataPanel({
   serverId,
   nodeId,
   nodeName,
-  isFolder,
+  nodeIcon,
+  isFile,
   onClose,
 }: NodeMetadataPanelProps) {
   const { t, i18n } = useTranslation(['common', 'fileFolderBrowser', 'nodeBrowser']);
@@ -112,6 +134,9 @@ export function NodeMetadataPanel({
   const [error, setError] = useState<string | null>(null);
   const [nodeData, setNodeData] = useState<AlfrescoNodeDetails | null>(null);
   const [filterText, setFilterText] = useState('');
+  const [expandedSections, setExpandedSections] = useState<string[]>(['general']);
+  const [activeTab, setActiveTab] = useState<string | null>('properties');
+  const propertiesViewportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -147,7 +172,8 @@ export function NodeMetadataPanel({
 
   useEffect(() => {
     setFilterText('');
-  }, [nodeId]);
+    setExpandedSections(['general']);
+  }, [serverId, nodeId]);
 
   const generalFields = useMemo(() => {
     if (!nodeData) {
@@ -155,7 +181,6 @@ export function NodeMetadataPanel({
     }
 
     const properties = nodeData.properties;
-    const size = readContentFacet(properties, 'size');
     const formatDate = (value: string | null): string | null => {
       if (!value) {
         return null;
@@ -164,10 +189,11 @@ export function NodeMetadataPanel({
       return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString(i18n.language);
     };
 
-    return [
+    const fields: MetadataFieldProps[] = [
       {
         label: t('fileFolderBrowser:metaName'),
         value: readSingleValue(findProperty(properties, 'cm:name')),
+        truncate: true,
       },
       {
         label: t('fileFolderBrowser:metaTitle'),
@@ -194,16 +220,24 @@ export function NodeMetadataPanel({
         value: formatDate(readSingleValue(findProperty(properties, 'cm:modified'))),
       },
       { label: t('fileFolderBrowser:metaContentType'), value: nodeData.type.prefixedName },
-      {
-        label: t('fileFolderBrowser:metaMimeType'),
-        value: readContentFacet(properties, 'mimetype'),
-      },
-      {
-        label: t('fileFolderBrowser:metaSize'),
-        value: size ? formatBytes(Number(size)) : null,
-      },
     ];
-  }, [nodeData, t, i18n.language]);
+
+    if (isFile) {
+      const size = readContentFacet(properties, 'size');
+      fields.push(
+        {
+          label: t('fileFolderBrowser:metaMimeType'),
+          value: readContentFacet(properties, 'mimetype'),
+        },
+        {
+          label: t('fileFolderBrowser:metaSize'),
+          value: size ? formatBytes(Number(size)) : null,
+        }
+      );
+    }
+
+    return fields;
+  }, [nodeData, isFile, t, i18n.language]);
 
   const filteredProperties = useMemo(() => {
     if (!nodeData) {
@@ -226,7 +260,7 @@ export function NodeMetadataPanel({
   const renderBody = () => {
     if (loading) {
       return (
-        <Stack align="center" justify="center" gap="xs" style={{ flex: 1 }}>
+        <Stack align="center" justify="center" gap="xs" p="md">
           <Loader size="sm" />
           <Text size="sm" c="dimmed">
             {t('common:loading')}
@@ -237,7 +271,7 @@ export function NodeMetadataPanel({
 
     if (error || !nodeData) {
       return (
-        <Stack align="center" justify="center" p="md" style={{ flex: 1 }}>
+        <Stack align="center" justify="center" p="md">
           <Text size="sm" c="red" ta="center">
             {error || t('common:error')}
           </Text>
@@ -247,25 +281,90 @@ export function NodeMetadataPanel({
 
     return (
       <Tabs
-        defaultValue="properties"
+        value={activeTab}
+        onChange={setActiveTab}
         keepMounted={false}
-        style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
+        style={{
+          flex: '0 1 auto',
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
       >
-        <Tabs.List grow>
-          <Tabs.Tab value="properties">{t('nodeBrowser:properties')}</Tabs.Tab>
-          <Tabs.Tab value="aspects">{t('nodeBrowser:aspects')}</Tabs.Tab>
-          <Tabs.Tab value="comments">{t('fileFolderBrowser:metaComments')}</Tabs.Tab>
+        <Tabs.List grow style={{ flexWrap: 'nowrap', flexShrink: 0, overflowX: 'auto' }}>
+          <Tabs.Tab value="properties" px="xs">
+            {t('nodeBrowser:properties')}
+          </Tabs.Tab>
+          <Tabs.Tab value="aspects" px="xs">
+            {t('nodeBrowser:aspects')}
+          </Tabs.Tab>
+          <Tabs.Tab value="comments" px="xs">
+            {t('fileFolderBrowser:metaComments')}
+          </Tabs.Tab>
         </Tabs.List>
 
-        <Tabs.Panel value="properties" style={{ flex: 1, minHeight: 0 }}>
-          <ScrollArea style={{ height: '100%' }}>
-            <Accordion multiple defaultValue={['general']} variant="contained" p="xs">
+        <Tabs.Panel
+          value="properties"
+          style={{
+            flex: '0 1 auto',
+            minHeight: 0,
+            overflow: 'hidden',
+            display: activeTab === 'properties' ? 'flex' : undefined,
+            flexDirection: 'column',
+          }}
+        >
+          <Group
+            p="sm"
+            style={{
+              flexShrink: 0,
+              borderBottom: '1px solid var(--mantine-color-default-border)',
+            }}
+          >
+            <TextInput
+              size="sm"
+              placeholder={t('nodeBrowser:filterProperties')}
+              aria-label={t('nodeBrowser:filterProperties')}
+              leftSection={<IconSearch size={14} />}
+              value={filterText}
+              onChange={event => {
+                const value = event.currentTarget.value;
+                setFilterText(value);
+                propertiesViewportRef.current?.scrollTo({ top: 0 });
+                if (value.trim()) {
+                  setExpandedSections(['all']);
+                }
+              }}
+              style={{ flex: 1 }}
+            />
+          </Group>
+          <ScrollArea.Autosize
+            viewportRef={propertiesViewportRef}
+            scrollbars="y"
+            style={{ minHeight: 0 }}
+            styles={{ content: { minWidth: 0 } }}
+          >
+            <Accordion
+              multiple
+              value={expandedSections}
+              onChange={setExpandedSections}
+              styles={{
+                control: {
+                  fontSize: 'var(--mantine-font-size-sm)',
+                  paddingInline: 'var(--mantine-spacing-sm)',
+                },
+                label: { fontWeight: 500 },
+                content: {
+                  padding: '0 var(--mantine-spacing-sm) var(--mantine-spacing-sm)',
+                },
+              }}
+            >
               <Accordion.Item value="general">
                 <Accordion.Control>{t('fileFolderBrowser:metaGeneral')}</Accordion.Control>
                 <Accordion.Panel>
-                  <Stack gap="xs">
+                  <Stack gap="sm">
                     {generalFields.map(field => (
-                      <MetadataField key={field.label} label={field.label} value={field.value} />
+                      <MetadataField key={field.label} {...field} />
                     ))}
                   </Stack>
                 </Accordion.Panel>
@@ -276,47 +375,56 @@ export function NodeMetadataPanel({
                   {t('fileFolderBrowser:metaAllProperties')} ({nodeData.properties.length})
                 </Accordion.Control>
                 <Accordion.Panel>
-                  <Stack gap="xs">
-                    <TextInput
-                      size="xs"
-                      placeholder={t('nodeBrowser:filterProperties')}
-                      leftSection={<IconSearch size={14} />}
-                      value={filterText}
-                      onChange={event => setFilterText(event.currentTarget.value)}
-                    />
+                  <Stack gap="sm">
                     {filteredProperties.length === 0 ? (
                       <Text size="sm" c="dimmed">
                         {t('nodeBrowser:noMatchingProperties')}
                       </Text>
                     ) : (
                       filteredProperties.map(property => (
-                        <div key={property.name.prefixedName}>
-                          <Text size="xs" c="dimmed">
-                            {property.name.prefixedName}
-                          </Text>
-                          <Text size="sm" style={{ wordBreak: 'break-word' }}>
-                            {formatPropertyValue(property)}
-                          </Text>
-                        </div>
+                        <MetadataField
+                          key={property.name.prefixedName}
+                          label={property.name.prefixedName}
+                          value={formatPropertyValue(property)}
+                          truncate={property.name.prefixedName === 'cm:name'}
+                        />
                       ))
                     )}
                   </Stack>
                 </Accordion.Panel>
               </Accordion.Item>
             </Accordion>
-          </ScrollArea>
+          </ScrollArea.Autosize>
         </Tabs.Panel>
 
-        <Tabs.Panel value="aspects" style={{ flex: 1, minHeight: 0 }}>
-          <ScrollArea style={{ height: '100%' }}>
-            <NodeAspects aspects={nodeData.aspects} />
-          </ScrollArea>
+        <Tabs.Panel
+          value="aspects"
+          style={{
+            flex: '0 1 auto',
+            minHeight: 0,
+            overflow: 'hidden',
+            display: activeTab === 'aspects' ? 'flex' : undefined,
+            flexDirection: 'column',
+          }}
+        >
+          <ScrollArea.Autosize style={{ minHeight: 0 }}>
+            <NodeAspects aspects={nodeData.aspects} compact />
+          </ScrollArea.Autosize>
         </Tabs.Panel>
 
-        <Tabs.Panel value="comments" style={{ flex: 1, minHeight: 0 }}>
-          <ScrollArea style={{ height: '100%' }}>
+        <Tabs.Panel
+          value="comments"
+          style={{
+            flex: '0 1 auto',
+            minHeight: 0,
+            overflow: 'hidden',
+            display: activeTab === 'comments' ? 'flex' : undefined,
+            flexDirection: 'column',
+          }}
+        >
+          <ScrollArea.Autosize style={{ minHeight: 0 }}>
             <NodeComments serverId={serverId} nodeId={nodeId} />
-          </ScrollArea>
+          </ScrollArea.Autosize>
         </Tabs.Panel>
       </Tabs>
     );
@@ -326,22 +434,28 @@ export function NodeMetadataPanel({
     <Paper
       withBorder
       radius="md"
-      style={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}
+      style={{
+        maxHeight: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: 0,
+        overflow: 'hidden',
+        userSelect: 'text',
+      }}
     >
       <Group
         justify="space-between"
         wrap="nowrap"
         gap="xs"
-        p="xs"
-        style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}
+        p="sm"
+        style={{
+          flexShrink: 0,
+          borderBottom: '1px solid var(--mantine-color-default-border)',
+        }}
       >
-        <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
-          {isFolder ? (
-            <IconFolder size={18} color="var(--mantine-color-yellow-6)" />
-          ) : (
-            <IconFile size={18} color="var(--mantine-color-gray-6)" />
-          )}
-          <Text size="sm" fw={600} truncate title={nodeName}>
+        <Group gap="xs" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
+          {nodeIcon}
+          <Text size="sm" fw={600} truncate title={nodeName} style={{ flex: 1, minWidth: 0 }}>
             {nodeName}
           </Text>
         </Group>
@@ -349,6 +463,7 @@ export function NodeMetadataPanel({
           variant="subtle"
           onClick={onClose}
           aria-label={t('fileFolderBrowser:closeMetadata')}
+          style={{ flexShrink: 0 }}
         >
           <IconX size={16} />
         </ActionIcon>

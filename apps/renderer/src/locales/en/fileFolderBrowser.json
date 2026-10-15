@@ -61,7 +61,7 @@
   "documentContextMessage": "\"{{name}}\" set as document context",
   "openInTextEditorError": "Failed to open file",
   "metadata": "Metadata",
-  "metadataAction": "Show metadata",
+  "metadataAction": "Properties",
   "closeMetadata": "Close metadata panel",
   "metadataLoadError": "Failed to load metadata",
   "metadataToggle": "Toggle metadata panel",

@@ -176,9 +176,9 @@ export function NodeComments({ serverId, nodeId }: NodeCommentsProps) {
   };
 
   return (
-    <Stack gap="sm" p="xs">
+    <Stack gap="sm" p="sm">
       <Textarea
-        size="xs"
+        size="sm"
         autosize
         minRows={2}
         maxRows={6}
@@ -189,7 +189,7 @@ export function NodeComments({ serverId, nodeId }: NodeCommentsProps) {
       />
       <Group justify="flex-end">
         <Button
-          size="xs"
+          size="sm"
           onClick={handleSubmit}
           loading={submitting}
           disabled={!draft.trim() || !server}

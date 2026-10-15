@@ -61,7 +61,7 @@
   "documentContextMessage": "\"{{name}}\" défini comme contexte du document",
   "openInTextEditorError": "Impossible d'ouvrir le fichier",
   "metadata": "Métadonnées",
-  "metadataAction": "Afficher les métadonnées",
+  "metadataAction": "Propriétés",
   "closeMetadata": "Fermer le panneau des métadonnées",
   "metadataLoadError": "Échec du chargement des métadonnées",
   "metadataToggle": "Afficher ou masquer le panneau des métadonnées",

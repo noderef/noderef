@@ -61,7 +61,7 @@
   "documentContextMessage": "\"{{name}}\" als Dokumentkontext festgelegt",
   "openInTextEditorError": "Datei konnte nicht geöffnet werden",
   "metadata": "Metadaten",
-  "metadataAction": "Metadaten anzeigen",
+  "metadataAction": "Eigenschaften",
   "closeMetadata": "Metadatenbereich schließen",
   "metadataLoadError": "Metadaten konnten nicht geladen werden",
   "metadataToggle": "Metadatenbereich umschalten",

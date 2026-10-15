@@ -63,7 +63,7 @@ import {
   useCombobox,
 } from '@mantine/core';
 import { Dropzone, type FileRejection } from '@mantine/dropzone';
-import { useIntersection, useMediaQuery } from '@mantine/hooks';
+import { useElementSize, useIntersection, useMediaQuery } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import { filesystem, os } from '@neutralinojs/lib';
@@ -74,8 +74,6 @@ import {
   IconEdit,
   IconFileSearch,
   IconFolder,
-  IconLayoutSidebarRightCollapse,
-  IconLayoutSidebarRightExpand,
   IconListDetails,
   IconLock,
   IconPhoto,
@@ -427,7 +425,7 @@ export function FileFolderBrowserView({
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
   const [selectedItem, setSelectedItem] = useState<RepositoryNode | null>(null);
   const [metadataNode, setMetadataNode] = useState<RepositoryNode | null>(null);
-  const [metadataOpen, setMetadataOpen] = useState(false);
+  const metadataOpen = metadataNode !== null;
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ completed: number; total: number } | null>(
     null
@@ -461,9 +459,12 @@ export function FileFolderBrowserView({
   const { open: openPermissionsModal } = useModal(MODAL_KEYS.NODE_PERMISSIONS);
   const loadRemoteTextFile = useTextEditorStore(state => state.loadRemoteFile);
   const isCompact = useMediaQuery('(max-width: 1024px)');
-  // The metadata panel claims 30% of the row, leaving no room for the description column.
+  const { ref: browserRef, width: browserWidth } = useElementSize();
+  // Use the available panel width so resizing the navigation also adapts the layout.
+  const stackMetadata = metadataOpen && browserWidth < 720;
   const showDescription = !isCompact && !metadataOpen;
-  const tableColumnCount = showDescription ? 5 : 4;
+  const showModifiedBy = !metadataOpen || browserWidth >= (stackMetadata ? 600 : 1000);
+  const tableColumnCount = 3 + Number(showDescription) + Number(showModifiedBy);
 
   // Resizable Name column - width is persisted per server in localStorage
   const {
@@ -569,6 +570,10 @@ export function FileFolderBrowserView({
     });
     setMetadataNode(prev => (prev ? (children.find(child => child.id === prev.id) ?? null) : null));
   }, [children]);
+
+  useEffect(() => {
+    setMetadataNode(null);
+  }, [serverId, nodeId]);
 
   const uploadFileToFolder = useCallback(
     async (file: File, targetFolderId?: string) => {
@@ -1132,6 +1137,7 @@ export function FileFolderBrowserView({
   };
 
   const handleOpenNode = (node: RepositoryNode) => {
+    setMetadataNode(null);
     if (node.isFolder) {
       openFolderTab({
         nodeId: node.id,
@@ -1151,25 +1157,19 @@ export function FileFolderBrowserView({
   };
 
   const handleRowKeyDown = (event: React.KeyboardEvent, node: RepositoryNode) => {
-    if (event.key === 'Enter') {
+    if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       handleOpenNode(node);
-      return;
-    }
-    if (event.key === ' ') {
-      event.preventDefault();
-      handleSelectNode(node);
     }
   };
 
-  const handleSelectNode = (node: RepositoryNode) => {
-    setMetadataNode(node);
-    setMetadataOpen(true);
+  const handleCloseMetadata = () => {
+    setMetadataNode(null);
   };
 
   const handleShowMetadata = () => {
     if (!selectedItem) return;
-    handleSelectNode(selectedItem);
+    setMetadataNode(selectedItem);
     setContextMenuOpened(false);
   };
 
@@ -1472,7 +1472,7 @@ export function FileFolderBrowserView({
     if (!selectedItem) return;
     setContextMenuOpened(false);
 
-    const isJsFile = isJavaScriptFile(selectedItem);
+    const isJsFile = selectedItem.isFile && isJavaScriptFile(selectedItem);
 
     if (isJsFile) {
       // For JavaScript files: load content into editor
@@ -1695,7 +1695,7 @@ export function FileFolderBrowserView({
     }
 
     return (
-      <ScrollArea style={{ flex: 1 }}>
+      <ScrollArea.Autosize style={{ minHeight: 0, maxHeight: '100%' }}>
         <Table highlightOnHover style={{ tableLayout: 'fixed' }}>
           <Table.Thead>
             <Table.Tr>
@@ -1710,37 +1710,42 @@ export function FileFolderBrowserView({
               </Table.Th>
               <Table.Th
                 style={{
-                  width: isCompact ? 'auto' : nameColumnWidth,
-                  maxWidth: isCompact ? undefined : nameColumnWidth,
+                  width: isCompact || metadataOpen ? 'auto' : nameColumnWidth,
+                  maxWidth: isCompact || metadataOpen ? undefined : nameColumnWidth,
                   minWidth: 0,
                   overflow: 'hidden',
                   position: 'relative',
                 }}
               >
                 {t('fileFolderBrowser:name')}
-                <ColumnResizeHandle
-                  onMouseDown={handleNameColumnResizeStart}
-                  isResizing={isResizingNameColumn}
-                />
+                {!metadataOpen && (
+                  <ColumnResizeHandle
+                    onMouseDown={handleNameColumnResizeStart}
+                    isResizing={isResizingNameColumn}
+                  />
+                )}
               </Table.Th>
               {showDescription && <Table.Th>{t('fileFolderBrowser:description')}</Table.Th>}
               <Table.Th style={{ width: 150 }}>{t('fileFolderBrowser:modified')}</Table.Th>
-              <Table.Th style={{ width: 150 }}>{t('fileFolderBrowser:modifiedBy')}</Table.Th>
+              {showModifiedBy && (
+                <Table.Th style={{ width: 150 }}>{t('fileFolderBrowser:modifiedBy')}</Table.Th>
+              )}
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
             {sortedChildren.map(child => (
               <Table.Tr
                 key={child.id}
-                onClick={() => handleSelectNode(child)}
-                onDoubleClick={() => handleOpenNode(child)}
+                onClick={() => handleOpenNode(child)}
                 onKeyDown={event => handleRowKeyDown(event, child)}
                 tabIndex={0}
                 onContextMenu={event => handleRowContextMenu(event, child)}
                 style={{
                   cursor: 'pointer',
                   backgroundColor:
-                    metadataNode?.id === child.id ? 'var(--mantine-color-blue-light)' : undefined,
+                    metadataOpen && metadataNode?.id === child.id
+                      ? 'var(--mantine-color-blue-light)'
+                      : undefined,
                 }}
               >
                 <Table.Td style={{ width: 32 }}>
@@ -1794,9 +1799,11 @@ export function FileFolderBrowserView({
                     {formatRelativeDate(child.modifiedAt)}
                   </Text>
                 </Table.Td>
-                <Table.Td>
-                  <Text size="sm">{getModifier(child)}</Text>
-                </Table.Td>
+                {showModifiedBy && (
+                  <Table.Td>
+                    <Text size="sm">{getModifier(child)}</Text>
+                  </Table.Td>
+                )}
               </Table.Tr>
             ))}
             {paginationState.hasMore && (
@@ -1810,7 +1817,7 @@ export function FileFolderBrowserView({
             )}
           </Table.Tbody>
         </Table>
-      </ScrollArea>
+      </ScrollArea.Autosize>
     );
   };
 
@@ -1853,8 +1860,16 @@ export function FileFolderBrowserView({
   }, [visibleBreadcrumb, visibleBreadcrumbStart, effectiveBreadcrumb, handleBreadcrumbClick, t]);
 
   return (
-    <Stack gap="md" style={{ height: '100%', padding: 'var(--mantine-spacing-md)' }}>
-      <Group justify="space-between" align="flex-start">
+    <Stack
+      gap="md"
+      style={{
+        height: '100%',
+        minHeight: 0,
+        overflow: 'hidden',
+        padding: 'var(--mantine-spacing-md)',
+      }}
+    >
+      <Group justify="space-between" align="flex-start" style={{ flexShrink: 0 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             ref={breadcrumbContainerRef}
@@ -1909,17 +1924,6 @@ export function FileFolderBrowserView({
           >
             <IconRefresh size={18} />
           </ActionIcon>
-          <ActionIcon
-            variant={metadataOpen ? 'light' : 'subtle'}
-            onClick={() => setMetadataOpen(open => !open)}
-            aria-label={t('fileFolderBrowser:metadataToggle')}
-          >
-            {metadataOpen ? (
-              <IconLayoutSidebarRightCollapse size={18} />
-            ) : (
-              <IconLayoutSidebarRightExpand size={18} />
-            )}
-          </ActionIcon>
         </Group>
       </Group>
 
@@ -1955,10 +1959,18 @@ export function FileFolderBrowserView({
         styles={{
           root: {
             flex: 1,
+            minHeight: 0,
             border: 'none',
             padding: 0,
             background: 'transparent',
             width: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+          },
+          inner: {
+            flex: 1,
+            minHeight: 0,
+            minWidth: 0,
             display: 'flex',
             flexDirection: 'column',
           },
@@ -1977,24 +1989,56 @@ export function FileFolderBrowserView({
             />
           </div>
         )}
-        <Group align="stretch" gap="md" wrap="nowrap" style={{ flex: 1, minHeight: 0 }}>
+        <Group
+          ref={browserRef}
+          align="stretch"
+          gap="md"
+          wrap="nowrap"
+          style={{ flex: 1, minHeight: 0, flexDirection: stackMetadata ? 'column' : 'row' }}
+        >
           <Paper
             withBorder
             radius="md"
-            style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0 }}
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: 0,
+              minWidth: 0,
+              maxHeight: '100%',
+              alignSelf: stackMetadata ? 'stretch' : 'flex-start',
+              overflow: 'hidden',
+            }}
           >
             {renderContent()}
           </Paper>
-          {metadataOpen && (
-            <div style={{ flex: '0 0 30%', minWidth: 0, minHeight: 0 }}>
-              {/* Without a selection the panel describes the folder currently being browsed. */}
-              <NodeMetadataPanel
-                serverId={serverId}
-                nodeId={metadataNode?.id ?? nodeId}
-                nodeName={metadataNode?.name ?? nodeName}
-                isFolder={metadataNode?.isFolder ?? true}
-                onClose={() => setMetadataOpen(false)}
-              />
+          {metadataNode && (
+            <div
+              style={{
+                flex: stackMetadata ? '1 1 0' : '0 0 clamp(320px, 30%, 420px)',
+                minWidth: 0,
+                minHeight: 0,
+                position: 'relative',
+              }}
+            >
+              {/* Keep metadata content out of the list's intrinsic height calculation. */}
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                <NodeMetadataPanel
+                  serverId={serverId}
+                  nodeId={metadataNode.id}
+                  nodeName={metadataNode.name}
+                  nodeIcon={renderNodeIcon(metadataNode)}
+                  isFile={metadataNode.isFile}
+                  onClose={handleCloseMetadata}
+                />
+              </div>
             </div>
           )}
         </Group>
@@ -2048,6 +2092,9 @@ export function FileFolderBrowserView({
                 onClick={handleOpenInNodeBrowser}
               >
                 {t('submenu:nodeBrowser')}
+              </Menu.Item>
+              <Menu.Item leftSection={<IconCode size={14} />} onClick={handleOpenInJsConsole}>
+                {t('submenu:jsConsole')}
               </Menu.Item>
             </>
           )}

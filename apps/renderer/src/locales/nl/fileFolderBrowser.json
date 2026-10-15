@@ -61,7 +61,7 @@
   "documentContextMessage": "\"{{name}}\" ingesteld als documentcontext",
   "openInTextEditorError": "Bestand kon niet worden geopend",
   "metadata": "Metadata",
-  "metadataAction": "Metadata tonen",
+  "metadataAction": "Eigenschappen",
   "closeMetadata": "Metadatapaneel sluiten",
   "metadataLoadError": "Metadata laden mislukt",
   "metadataToggle": "Metadatapaneel in- of uitklappen",
