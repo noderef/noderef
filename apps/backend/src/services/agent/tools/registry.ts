@@ -29,6 +29,7 @@ import { auditAppsTool } from './audit/apps.js';
 import { auditListTool } from './audit/list.js';
 import { commentListTool } from './comments/list.js';
 import { commentManageTool } from './comments/manage.js';
+import { getInstalledModulesTool } from './discovery/get_installed_modules.js';
 import { nodeCopyTool } from './node/copy.js';
 import { nodeCreateTool } from './node/create.js';
 import { nodeDeleteTool } from './node/delete.js';
@@ -137,6 +138,7 @@ export const ALL_TOOLS: ToolDefinition[] = [
   associationManageTool,
   commentListTool,
   commentManageTool,
+  getInstalledModulesTool,
   scriptCreateTool,
   scriptExecuteTool,
 ];
@@ -211,6 +213,7 @@ const TOOL_NAME_ALIASES: Record<string, string> = {
   manage_associations: 'association_manage',
   list_comments: 'comment_list',
   manage_comments: 'comment_manage',
+  getInstalledModules: 'get_installed_modules',
   list_hyland_docs: 'hyland_docs_list_publications',
   hyland_docs_list: 'hyland_docs_list_publications',
   docs_list_publications: 'hyland_docs_list_publications',

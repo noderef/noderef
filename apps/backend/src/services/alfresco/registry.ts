@@ -22,6 +22,7 @@ import {
   CommentsApi,
   ContentApi,
   CustomModelApi,
+  DiscoveryApi,
   DownloadsApi,
   FavoritesApi,
   GroupsApi,
@@ -84,6 +85,9 @@ export const API_REGISTRY: Record<string, ApiClass> = {
 
   // auth-rest APIs
   auth: AuthenticationApi,
+
+  // discovery-rest APIs
+  discovery: DiscoveryApi,
 };
 
 /**
