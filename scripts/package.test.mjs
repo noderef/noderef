@@ -39,9 +39,11 @@ test('Windows MSI defaults to per-user install without elevation', () => {
   assert.doesNotMatch(xml, /InstallScope="perMachine"/);
 });
 
-test('Neutralino window and Windows exe use the NodeRef PNG icon', () => {
+test('macOS keeps its bundle icon and Windows exe keeps the NodeRef icon', () => {
   const config = JSON.parse(readFileSync(join(rootDir, 'neutralino.config.json'), 'utf8'));
 
-  assert.equal(config.modes.window.icon, '/resources/icons/appIcon.png');
+  assert.equal(config.modes.window.icon, undefined);
+  assert.equal(config.buildScript.mac.appIcon, 'resources/icons/appIcon.icns');
   assert.equal(config.applicationIcon, 'resources/icons/appIcon.png');
+  assert.equal(config.buildScript.win.appIcon, 'resources/icons/appIcon.ico');
 });
