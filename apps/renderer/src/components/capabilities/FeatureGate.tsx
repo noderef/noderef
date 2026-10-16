@@ -87,7 +87,7 @@ export function FeatureMenuItem({
   color?: string;
 }) {
   return (
-    <FeatureGate feature={feature}>
+    <FeatureGate feature={feature} hideWhenUnavailable>
       <Menu.Item
         leftSection={leftSection}
         rightSection={rightSection}

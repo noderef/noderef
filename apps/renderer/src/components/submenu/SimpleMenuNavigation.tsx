@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-import { useFeatureUnavailableLabel } from '@/components/capabilities/FeatureGate';
 import { backendRpc } from '@/core/ipc/backend';
 import { useAgentStore } from '@/core/store/agent';
 import type { PageKey } from '@/core/store/keys';
@@ -151,7 +150,6 @@ export function SimpleMenuNavigation() {
     isFeatureAvailable(profile, Feature.SystemTree);
   const capabilitiesReady =
     isNodeRefSpace || server?.serverType !== 'alfresco' || profile !== null;
-  const jsConsoleUnavailableLabel = useFeatureUnavailableLabel(Feature.JsConsole);
 
   // Load saved searches when component mounts or when activeServerId changes
   useEffect(() => {
@@ -188,7 +186,12 @@ export function SimpleMenuNavigation() {
               activePage === 'insights';
 
             if (!shouldPreservePage) {
-              navigate(jsConsoleAvailable ? 'jsconsole' : 'repo');
+              if (jsConsoleAvailable) {
+                navigate('jsconsole');
+              } else {
+                setActiveChatId(null);
+                navigate('agentPage');
+              }
             }
           }
         } else {
@@ -213,6 +216,7 @@ export function SimpleMenuNavigation() {
     navigate,
     jsConsoleAvailable,
     capabilitiesReady,
+    setActiveChatId,
   ]);
 
   // Load agent chats for active server or all servers in NodeRef space.
@@ -541,16 +545,16 @@ export function SimpleMenuNavigation() {
   // Repository Admin is now in the submenu header dropdown as an external link
 
   // Alfresco top-level items (not in sections)
-  const alfrescoPrimaryTopLevelItems: MenuItemType[] = [
-    {
-      id: 'jsconsole',
-      label: t('submenu:jsConsole'),
-      icon: 'code',
-      viewMode: 'monaco',
-      disabled: !jsConsoleAvailable,
-      disabledReason: jsConsoleUnavailableLabel,
-    },
-  ];
+  const alfrescoPrimaryTopLevelItems: MenuItemType[] = jsConsoleAvailable
+    ? [
+        {
+          id: 'jsconsole',
+          label: t('submenu:jsConsole'),
+          icon: 'code',
+          viewMode: 'monaco',
+        },
+      ]
+    : [];
 
   const alfrescoSecondaryTopLevelItems: MenuItemType[] = [
     {
@@ -592,8 +596,6 @@ export function SimpleMenuNavigation() {
   if (isNodeRefSpace) {
     sections = [...agentSections, ...alfrescoSections];
   } else if (server.serverType === 'alfresco') {
-    // Show all Alfresco menu items for any Alfresco server
-    // Feature availability should be handled at runtime, not by hiding menu items
     sections = [...agentSections, ...alfrescoSections];
     topLevelItems = alfrescoPrimaryTopLevelItems;
     secondaryTopLevelItems = alfrescoSecondaryTopLevelItems;

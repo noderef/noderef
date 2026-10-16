@@ -358,12 +358,16 @@ export function ServerEditModal() {
       icon: IconPalette,
       description: t('appearanceDescription'),
     },
-    {
-      key: 'info' as ServerEditSection,
-      label: t('info'),
-      icon: IconInfoCircle,
-      description: t('infoDescription'),
-    },
+    ...(server?.serverType === 'alfresco' && !canLoadUsage
+      ? []
+      : [
+          {
+            key: 'info' as ServerEditSection,
+            label: t('info'),
+            icon: IconInfoCircle,
+            description: t('infoDescription'),
+          },
+        ]),
   ];
 
   return (

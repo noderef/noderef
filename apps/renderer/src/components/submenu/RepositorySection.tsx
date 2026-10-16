@@ -75,7 +75,11 @@ import { useCallback, useEffect, useRef, useState, type ComponentPropsWithoutRef
 import { useTranslation } from 'react-i18next';
 import { CreateSiteForm } from './CreateSiteForm';
 import { getFileIconByMimeType } from './fileIconUtils';
-import { getAvailableActions, type NodeActionContext } from './nodeActionEvaluators';
+import {
+  canManagePermissions,
+  getAvailableActions,
+  type NodeActionContext,
+} from './nodeActionEvaluators';
 
 interface RepositorySectionProps {
   label: string;
@@ -93,6 +97,7 @@ interface TreeNode {
   isFile?: boolean;
   mimeType?: string;
   path?: string;
+  allowableOperations?: string[];
   children?: TreeNode[];
   isLoadMorePlaceholder?: boolean;
   parentId?: string;
@@ -953,6 +958,7 @@ export function RepositorySection({
       isFile: node.isFile,
       mimeType: node.mimeType,
       path: node.path,
+      allowableOperations: node.allowableOperations,
       children: node.isFolder ? [] : undefined, // Empty array for folders to show expand icon
     }));
   }, []);
@@ -1419,11 +1425,14 @@ export function RepositorySection({
                       isFolder: treeNode.isFolder || false,
                       isFile: treeNode.isFile || false,
                       path: treeNode.path,
+                      mimeType: treeNode.mimeType,
+                      allowableOperations: treeNode.allowableOperations,
                     };
                     const actions = getAvailableActions(context);
                     const canOpenContextMenu =
                       actions.length > 0 ||
                       treeNode.isFolder ||
+                      treeNode.isFile ||
                       treeNode.nodeType === 'st:sites' ||
                       treeNode.nodeType === 'st:site';
 
@@ -1564,6 +1573,17 @@ export function RepositorySection({
                       (() => {
                         const isSitesRoot = selectedNode.nodeType === 'st:sites';
                         const isSiteNode = selectedNode.nodeType === 'st:site';
+                        const actionContext: NodeActionContext = {
+                          nodeId: selectedNode.value,
+                          nodeName: selectedNode.label,
+                          nodeType: selectedNode.nodeType || '',
+                          isFolder: selectedNode.isFolder || false,
+                          isFile: selectedNode.isFile || false,
+                          path: selectedNode.path,
+                          mimeType: selectedNode.mimeType,
+                          allowableOperations: selectedNode.allowableOperations,
+                        };
+                        const showPermissions = canManagePermissions(actionContext);
                         const sections: React.ReactNode[][] = [];
 
                         if (!selectedNode.isFolder && !isSitesRoot && !isSiteNode) {
@@ -1599,15 +1619,17 @@ export function RepositorySection({
                             </Menu.Item>
                           );
                           sections.push(fileSection);
-                          sections.push([
-                            <Menu.Item
-                              key="manage-permissions"
-                              leftSection={<IconLock size={14} />}
-                              onClick={handleManagePermissions}
-                            >
-                              {t('submenu:managePermissionsAction')}
-                            </Menu.Item>,
-                          ]);
+                          if (showPermissions) {
+                            sections.push([
+                              <Menu.Item
+                                key="manage-permissions"
+                                leftSection={<IconLock size={14} />}
+                                onClick={handleManagePermissions}
+                              >
+                                {t('submenu:managePermissionsAction')}
+                              </Menu.Item>,
+                            ]);
+                          }
                         }
 
                         if (selectedNode.isFolder && !isSitesRoot && !isSiteNode) {
@@ -1628,19 +1650,21 @@ export function RepositorySection({
                               {t('submenu:jsConsole')}
                             </FeatureMenuItem>,
                           ]);
-                          sections.push([
-                            <Menu.Item
-                              key="folder-manage-permissions"
-                              leftSection={<IconLock size={14} />}
-                              onClick={handleManagePermissions}
-                            >
-                              {t('submenu:managePermissionsAction')}
-                            </Menu.Item>,
-                          ]);
+                          if (showPermissions) {
+                            sections.push([
+                              <Menu.Item
+                                key="folder-manage-permissions"
+                                leftSection={<IconLock size={14} />}
+                                onClick={handleManagePermissions}
+                              >
+                                {t('submenu:managePermissionsAction')}
+                              </Menu.Item>,
+                            ]);
+                          }
                         }
 
                         if (isSitesRoot) {
-                          sections.push([
+                          const sitesSection: React.ReactNode[] = [
                             <Menu.Item
                               key="sites-node-browser"
                               leftSection={<IconFileSearch size={14} />}
@@ -1648,14 +1672,19 @@ export function RepositorySection({
                             >
                               {t('submenu:nodeBrowser')}
                             </Menu.Item>,
-                            <Menu.Item
-                              key="sites-manage-permissions"
-                              leftSection={<IconLock size={14} />}
-                              onClick={handleManagePermissions}
-                            >
-                              {t('submenu:managePermissionsAction')}
-                            </Menu.Item>,
-                          ]);
+                          ];
+                          if (showPermissions) {
+                            sitesSection.push(
+                              <Menu.Item
+                                key="sites-manage-permissions"
+                                leftSection={<IconLock size={14} />}
+                                onClick={handleManagePermissions}
+                              >
+                                {t('submenu:managePermissionsAction')}
+                              </Menu.Item>
+                            );
+                          }
+                          sections.push(sitesSection);
                           sections.push([
                             <Menu.Item
                               key="create-site"
@@ -1668,7 +1697,7 @@ export function RepositorySection({
                         }
 
                         if (isSiteNode) {
-                          sections.push([
+                          const siteSection: React.ReactNode[] = [
                             <Menu.Item
                               key="site-node-browser"
                               leftSection={<IconFileSearch size={14} />}
@@ -1676,14 +1705,19 @@ export function RepositorySection({
                             >
                               {t('submenu:nodeBrowser')}
                             </Menu.Item>,
-                            <Menu.Item
-                              key="site-manage-permissions"
-                              leftSection={<IconLock size={14} />}
-                              onClick={handleManagePermissions}
-                            >
-                              {t('submenu:managePermissionsAction')}
-                            </Menu.Item>,
-                          ]);
+                          ];
+                          if (showPermissions) {
+                            siteSection.push(
+                              <Menu.Item
+                                key="site-manage-permissions"
+                                leftSection={<IconLock size={14} />}
+                                onClick={handleManagePermissions}
+                              >
+                                {t('submenu:managePermissionsAction')}
+                              </Menu.Item>
+                            );
+                          }
+                          sections.push(siteSection);
                           sections.push([
                             <Menu.Item
                               key="edit-site"
@@ -1703,15 +1737,7 @@ export function RepositorySection({
                           ]);
                         }
 
-                        const availableActions = getAvailableActions({
-                          nodeId: selectedNode.value,
-                          nodeName: selectedNode.label,
-                          nodeType: selectedNode.nodeType || '',
-                          isFolder: selectedNode.isFolder || false,
-                          isFile: selectedNode.isFile || false,
-                          path: selectedNode.path,
-                          mimeType: selectedNode.mimeType,
-                        });
+                        const availableActions = getAvailableActions(actionContext);
 
                         const otherActions = availableActions.filter(
                           action =>
@@ -1757,7 +1783,9 @@ export function RepositorySection({
                           );
                         }
 
-                        const flattened = sections.flatMap((section, index) => {
+                        const flattened = sections
+                          .filter(section => section.length > 0)
+                          .flatMap((section, index) => {
                           const divider =
                             index > 0 ? [<Menu.Divider key={`divider-${index}`} />] : [];
                           return [...divider, ...section];

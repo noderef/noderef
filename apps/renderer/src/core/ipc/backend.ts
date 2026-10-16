@@ -1078,6 +1078,7 @@ export interface RepositoryNode {
   modifiedById?: string;
   hasChildren: boolean;
   path?: string;
+  allowableOperations?: string[];
 }
 
 export interface RepositoryBreadcrumbItem {

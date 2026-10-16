@@ -65,6 +65,7 @@ function mapNode(entry: any) {
     modifiedById: entry.modifiedByUser?.id,
     hasChildren: entry.isFolder,
     path: entry.path?.name,
+    allowableOperations: entry.allowableOperations,
   };
 }
 
@@ -200,7 +201,7 @@ export function registerRepositoryHandlers(routes: Routes, ctx: RpcContext): voi
         log.debug({ serverId, nodeId: targetNodeId }, 'Fetching node children');
 
         const result = await nodesApi.listNodeChildren(targetNodeId, {
-          include: ['properties', 'aspectNames', 'path'],
+          include: ['properties', 'aspectNames', 'path', 'allowableOperations'],
           fields: [
             'id',
             'name',
@@ -213,6 +214,7 @@ export function registerRepositoryHandlers(routes: Routes, ctx: RpcContext): voi
             'createdByUser',
             'content',
             'path',
+            'allowableOperations',
           ],
           maxItems,
           skipCount,

@@ -15,6 +15,7 @@
  */
 
 import { backendRpc } from '@/core/ipc/backend';
+import { useAgentStore } from '@/core/store/agent';
 import { useServersStore } from '@/core/store/servers';
 import { useActivePage, useNavigation } from '@/hooks/useNavigation';
 import type { PublicServer } from '@app/contracts';
@@ -55,9 +56,12 @@ export function ServerIconColumn({
 
     if (isAlreadySelected && server?.serverType === 'alfresco') {
       // Server already selected - keep behavior deterministic and avoid saved-search auto-redirect.
-      navigate(
-        isFeatureAvailable(server.capabilities, Feature.JsConsole) ? 'jsconsole' : 'repo'
-      );
+      if (isFeatureAvailable(server.capabilities, Feature.JsConsole)) {
+        navigate('jsconsole');
+      } else {
+        useAgentStore.getState().setActiveChatId(null);
+        navigate('agentPage');
+      }
     } else if (GLOBAL_PAGES.includes(activePage as any)) {
       // Stay on current global page when switching servers to prevent flickering
       // No navigation needed - just update the server

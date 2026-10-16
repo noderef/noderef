@@ -19,8 +19,8 @@ import { applyRefreshedCapabilities } from '@/core/capabilities';
 import { backendRpc, refreshWorkspace } from '@/core/ipc/backend';
 import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
 import { MODAL_KEYS } from '@/core/store/keys';
-import { useServersStore } from '@/core/store/servers';
-import { Feature } from '@app/contracts';
+import { useServerCapabilities, useServersStore } from '@/core/store/servers';
+import { Feature, isFeatureAvailable } from '@app/contracts';
 import { useModal } from '@/hooks/useModal';
 import { useActiveServerId, useNavigation } from '@/hooks/useNavigation';
 import { Avatar, Group, Loader, Menu, Stack, Text, TextInput, UnstyledButton } from '@mantine/core';
@@ -76,6 +76,7 @@ export function SubmenuHeader() {
   const { open: openLogsModal } = useModal(MODAL_KEYS.LOGS);
   const { open: openUsersGroupsModal } = useModal(MODAL_KEYS.USERS_GROUPS);
   const getServerById = useServersStore(state => state.getServerById);
+  const capabilities = useServerCapabilities(activeServerId);
   const { setActiveServer, navigate } = useNavigation();
   const [spaceTitle, setSpaceTitle] = useState<string>('');
   const [spaceTitleDraft, setSpaceTitleDraft] = useState<string>('');
@@ -163,6 +164,15 @@ export function SubmenuHeader() {
   const server = getServerById(activeServerId);
   const title = server?.name ?? (spaceTitle || t('submenu:nodeRefSpace'));
   const subtitle = server ? server.baseUrl : t('submenu:noServerSelected');
+  const hasAlfrescoHeaderItems =
+    !server ||
+    server.serverType !== 'alfresco' ||
+    [
+      Feature.RepoAdmin,
+      Feature.UsersGroups,
+      Feature.ModelExplorer,
+      Feature.Logs,
+    ].some(feature => isFeatureAvailable(capabilities, feature));
 
   useEffect(() => {
     if (!activeServerId) {
@@ -745,7 +755,7 @@ export function SubmenuHeader() {
             {t('submenu:logs')}
           </Menu.Item>
         )}
-        <Menu.Divider />
+        {hasAlfrescoHeaderItems && <Menu.Divider />}
         <Menu.Item leftSection={<IconEdit size={14} />} onClick={handleEdit}>
           {t('server:edit')}
         </Menu.Item>

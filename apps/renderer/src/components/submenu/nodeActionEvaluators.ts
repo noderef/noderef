@@ -28,6 +28,18 @@ export interface NodeActionContext {
   isFile: boolean;
   path?: string;
   mimeType?: string;
+  allowableOperations?: string[];
+}
+
+/**
+ * Unknown operation lists (client-created nodes, older payloads) stay permissive
+ * so the backend remains the safety net.
+ */
+export function hasOperation(ctx: NodeActionContext, op: string): boolean {
+  if (ctx.allowableOperations == null) {
+    return true;
+  }
+  return ctx.allowableOperations.includes(op);
 }
 
 export interface NodeAction {
@@ -70,7 +82,7 @@ const PROTECTED_NODE_TYPES = ['st:site', 'st:sites', 'rma:rmsite'];
 /**
  * Evaluator: Can the node be renamed?
  */
-function canRename(context: NodeActionContext): boolean {
+export function canRename(context: NodeActionContext): boolean {
   // Cannot rename company home
   if (context.nodeId === '-root-') {
     return false;
@@ -96,13 +108,13 @@ function canRename(context: NodeActionContext): boolean {
     return false;
   }
 
-  return true;
+  return hasOperation(context, 'update');
 }
 
 /**
  * Evaluator: Can the node be deleted?
  */
-function canDelete(context: NodeActionContext): boolean {
+export function canDelete(context: NodeActionContext): boolean {
   // Cannot delete company home
   if (context.nodeId === '-root-') {
     return false;
@@ -128,7 +140,14 @@ function canDelete(context: NodeActionContext): boolean {
     return false;
   }
 
-  return true;
+  return hasOperation(context, 'delete');
+}
+
+/**
+ * Coordinator / Site Manager / admin typically receive `updatePermissions`.
+ */
+export function canManagePermissions(context: NodeActionContext): boolean {
+  return hasOperation(context, 'updatePermissions');
 }
 
 /**

@@ -17,6 +17,12 @@
 import { ColumnResizeHandle } from '@/components/common/ColumnResizeHandle';
 import { CreateSiteForm } from '@/components/submenu/CreateSiteForm';
 import { getFileIconByMimeType } from '@/components/submenu/fileIconUtils';
+import {
+  canDelete,
+  canManagePermissions,
+  canRename,
+  type NodeActionContext,
+} from '@/components/submenu/nodeActionEvaluators';
 import { alfrescoRpc } from '@/core/ipc/alfresco';
 import {
   backendRpc,
@@ -34,6 +40,7 @@ import { useNavigationStore } from '@/core/store/navigation';
 import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
 import { useServersStore } from '@/core/store/servers';
 import { useTextEditorStore } from '@/core/store/textEditor';
+import { Feature, isFeatureAvailable } from '@app/contracts';
 import { isTextLikeFile } from '@/features/text-editor/language';
 import { useColumnResize } from '@/hooks/useColumnResize';
 import { useModal } from '@/hooks/useModal';
@@ -102,6 +109,19 @@ interface FileFolderBrowserViewProps {
 }
 
 const PAGE_SIZE = 50;
+
+function toActionContext(node: RepositoryNode): NodeActionContext {
+  return {
+    nodeId: node.id,
+    nodeName: node.name,
+    nodeType: node.nodeType,
+    isFolder: node.isFolder,
+    isFile: node.isFile,
+    path: node.path,
+    mimeType: node.mimeType,
+    allowableOperations: node.allowableOperations,
+  };
+}
 
 const getFileNameFromPath = (path: string): string => {
   if (!path) return 'file';
@@ -1859,6 +1879,20 @@ export function FileFolderBrowserView({
     return items;
   }, [visibleBreadcrumb, visibleBreadcrumbStart, effectiveBreadcrumb, handleBreadcrumbClick, t]);
 
+  const jsConsoleAvailable = isFeatureAvailable(server?.capabilities, Feature.JsConsole);
+  const selectedActionContext = selectedItem ? toActionContext(selectedItem) : null;
+  const selectedCanRename = selectedActionContext ? canRename(selectedActionContext) : false;
+  const selectedCanDelete = selectedActionContext ? canDelete(selectedActionContext) : false;
+  const selectedCanManagePermissions = selectedActionContext
+    ? canManagePermissions(selectedActionContext)
+    : false;
+  const canBulkDelete =
+    selectedNodeIds.length > 0 &&
+    selectedNodeIds.every(id => {
+      const node = children.find(child => child.id === id);
+      return node ? canDelete(toActionContext(node)) : false;
+    });
+
   return (
     <Stack
       gap="md"
@@ -1907,7 +1941,7 @@ export function FileFolderBrowserView({
             variant="subtle"
             color="red"
             onClick={handleBulkDeleteClick}
-            disabled={selectedNodeIds.length === 0 || bulkDeleting}
+            disabled={selectedNodeIds.length === 0 || bulkDeleting || !canBulkDelete}
             loading={bulkDeleting}
             aria-label={t('fileFolderBrowser:deleteSelected', {
               count: selectedNodeIds.length,
@@ -2077,9 +2111,11 @@ export function FileFolderBrowserView({
                   {t('submenu:textEditor')}
                 </Menu.Item>
               )}
-              <Menu.Item leftSection={<IconCode size={14} />} onClick={handleOpenInJsConsole}>
-                {t('submenu:jsConsole')}
-              </Menu.Item>
+              {jsConsoleAvailable && (
+                <Menu.Item leftSection={<IconCode size={14} />} onClick={handleOpenInJsConsole}>
+                  {t('submenu:jsConsole')}
+                </Menu.Item>
+              )}
             </>
           )}
           {selectedItem?.isFolder && (
@@ -2093,9 +2129,11 @@ export function FileFolderBrowserView({
               >
                 {t('submenu:nodeBrowser')}
               </Menu.Item>
-              <Menu.Item leftSection={<IconCode size={14} />} onClick={handleOpenInJsConsole}>
-                {t('submenu:jsConsole')}
-              </Menu.Item>
+              {jsConsoleAvailable && (
+                <Menu.Item leftSection={<IconCode size={14} />} onClick={handleOpenInJsConsole}>
+                  {t('submenu:jsConsole')}
+                </Menu.Item>
+              )}
             </>
           )}
           {selectedItem && (
@@ -2104,9 +2142,11 @@ export function FileFolderBrowserView({
               <Menu.Item leftSection={<IconListDetails size={14} />} onClick={handleShowMetadata}>
                 {t('fileFolderBrowser:metadataAction')}
               </Menu.Item>
-              <Menu.Item leftSection={<IconLock size={14} />} onClick={handleManagePermissions}>
-                {t('submenu:managePermissionsAction')}
-              </Menu.Item>
+              {selectedCanManagePermissions && (
+                <Menu.Item leftSection={<IconLock size={14} />} onClick={handleManagePermissions}>
+                  {t('submenu:managePermissionsAction')}
+                </Menu.Item>
+              )}
             </>
           )}
           {selectedItem?.nodeType === 'st:sites' && (
@@ -2132,28 +2172,29 @@ export function FileFolderBrowserView({
               </Menu.Item>
             </>
           )}
-          {selectedItem &&
-            !['st:site', 'st:sites', 'rma:rmsite'].includes(selectedItem.nodeType) && (
+          {selectedItem && (selectedCanRename || selectedCanDelete) && (
               <>
                 <Menu.Divider />
-                <Menu.Item
-                  leftSection={<IconEdit size={14} />}
-                  onClick={handleRenameClick}
-                  disabled={!selectedItem}
-                >
-                  {t('submenu:renameAction')}
-                </Menu.Item>
-                <Menu.Item
-                  leftSection={<IconTrash size={14} />}
-                  color="red"
-                  onClick={handleDeleteClick}
-                  disabled={!selectedItem}
-                >
-                  {t('submenu:deleteAction')}
-                </Menu.Item>
+                {selectedCanRename && (
+                  <Menu.Item
+                    leftSection={<IconEdit size={14} />}
+                    onClick={handleRenameClick}
+                  >
+                    {t('submenu:renameAction')}
+                  </Menu.Item>
+                )}
+                {selectedCanDelete && (
+                  <Menu.Item
+                    leftSection={<IconTrash size={14} />}
+                    color="red"
+                    onClick={handleDeleteClick}
+                  >
+                    {t('submenu:deleteAction')}
+                  </Menu.Item>
+                )}
               </>
             )}
-          {selectedNodeIds.length > 1 && (
+          {selectedNodeIds.length > 1 && canBulkDelete && (
             <>
               <Menu.Divider />
               <Menu.Item
