@@ -18,6 +18,7 @@ Use for folder inventory and quick breakdowns.
 ## Output reading rules (critical)
 - `pagination.totalCount` is the true number of direct children.
 - `sample` is a page preview, not full listing if total exceeds returned count.
+- Each `sample` item may include `allowableOperations` (`create`, `update`, `delete`, `updatePermissions`). Use that list before proposing mutations on a child.
 - `breakdown.files` and `breakdown.folders` apply to returned sample.
 - Use `extensions` as a top sampled distribution, not full folder truth unless fully retrieved.
 

@@ -16,7 +16,11 @@
 
 import { createOkProfile, FULL_ADMIN_PROFILE, RESTRICTED_PROFILE } from '@app/contracts';
 import { describe, expect, it } from 'vitest';
-import { getToolsFor, isToolAllowed } from '../../src/services/agent/tools/registry.js';
+import {
+  getToolsFor,
+  isToolAllowed,
+  toolCapabilityDeniedMessage,
+} from '../../src/services/agent/tools/registry.js';
 
 const nonAdmin = createOkProfile({
   isAdmin: false,
@@ -54,5 +58,13 @@ describe('agent tool capability filter', () => {
   it('is restrictive when the profile is unknown', () => {
     expect(isToolAllowed('script_execute', RESTRICTED_PROFILE)).toBe(false);
     expect(isToolAllowed('search', RESTRICTED_PROFILE)).toBe(true);
+  });
+
+  it('explains why a gated tool is unavailable', () => {
+    expect(toolCapabilityDeniedMessage('script_execute')).toContain('JavaScript Console');
+    expect(toolCapabilityDeniedMessage('people_create')).toContain('administrator');
+    expect(toolCapabilityDeniedMessage('search')).toBe(
+      'Tool "search" is not available for this Alfresco account.'
+    );
   });
 });

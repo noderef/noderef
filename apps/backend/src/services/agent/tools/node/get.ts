@@ -17,7 +17,11 @@
 import { NodesApi } from '@alfresco/js-api';
 import { getAlfrescoNodePath } from '../../../../lib/alfresco-endpoints.js';
 import type { AgentExecutionContext } from '../../types.js';
-import { isRecord, normalizeNodePath } from '../helpers/nodeResultHelpers.js';
+import {
+  isRecord,
+  normalizeAllowableOperations,
+  normalizeNodePath,
+} from '../helpers/nodeResultHelpers.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
 
 export const nodeGetTool: ToolDefinition = {
@@ -53,6 +57,7 @@ export const nodeGetTool: ToolDefinition = {
           'modifiedAt',
           'createdByUser',
           'modifiedByUser',
+          'allowableOperations',
         ],
         include: ['path', 'properties', 'allowableOperations'],
       };
@@ -89,7 +94,7 @@ export const nodeGetTool: ToolDefinition = {
           createdBy: e?.createdByUser?.displayName ?? e?.createdByUser?.id,
           modifiedBy: e?.modifiedByUser?.displayName ?? e?.modifiedByUser?.id,
           properties: isRecord(e?.properties) ? e.properties : null,
-          allowableOperations: isRecord(e?.allowableOperations) ? e.allowableOperations : null,
+          allowableOperations: normalizeAllowableOperations(e?.allowableOperations),
         },
       };
     } catch (err) {

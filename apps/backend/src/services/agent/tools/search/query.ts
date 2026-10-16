@@ -16,7 +16,7 @@
 
 import { SearchApi } from '@alfresco/js-api';
 import type { AgentExecutionContext } from '../../types.js';
-import { normalizeNodePath } from '../helpers/nodeResultHelpers.js';
+import { normalizeAllowableOperations, normalizeNodePath } from '../helpers/nodeResultHelpers.js';
 import { extractByPath, SEARCH_API_PATH } from '../helpers/searchHelpers.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
 
@@ -101,7 +101,9 @@ export const searchTool: ToolDefinition = {
       const includeProperties =
         Boolean(args.includeProperties) ||
         returnFields.some(field => field === 'properties' || field.startsWith('properties.'));
-      const responseInclude = includeProperties ? ['path', 'properties'] : ['path'];
+      const responseInclude = includeProperties
+        ? ['path', 'properties', 'allowableOperations']
+        : ['path', 'allowableOperations'];
 
       if (ctx.signal.aborted) throw new Error('Run was cancelled');
 
@@ -193,6 +195,7 @@ export const searchTool: ToolDefinition = {
         isFile: entry.isFile,
         path: normalizeNodePath(entry.path?.name),
         mimeType: entry.content?.mimeType ?? null,
+        allowableOperations: normalizeAllowableOperations(entry.allowableOperations),
         ...(includeProperties ? { properties: entry.properties ?? null } : {}),
       }));
       const verifiedNames = verifiedItems

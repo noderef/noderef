@@ -10,6 +10,7 @@ Update node ACLs by toggling inheritance and adding/removing local permissions.
 ## When NOT to use
 - Inspecting current ACLs without changes (use `permissions_get`).
 - Non-permission metadata updates (use `node_update`).
+- Nodes whose `allowableOperations` does not include `updatePermissions` — explain that this user cannot manage permissions on that node.
 
 ## Inputs
 - `nodeId` (required): target node UUID.

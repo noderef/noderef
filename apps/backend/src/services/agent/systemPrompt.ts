@@ -123,16 +123,178 @@ const buildToolSkillsSection = async (tools: ToolDefinition[]): Promise<string> 
 ${blocks.join('\n')}`.trim();
 };
 
+const PREFERRED_TOOL_GROUPS: Array<{ tools: string[]; description: string }> = [
+  {
+    tools: ['node_get', 'node_get_content', 'node_list_children'],
+    description: 'for reading nodes/folders/content',
+  },
+  {
+    tools: [
+      'node_create',
+      'node_update',
+      'node_update_content',
+      'node_move',
+      'node_copy',
+      'node_delete',
+    ],
+    description: 'for modifications',
+  },
+  { tools: ['node_versions'], description: 'for version history' },
+  {
+    tools: ['permissions_get', 'permissions_set'],
+    description: 'for reading/managing node permissions and ACLs',
+  },
+  {
+    tools: ['people_get', 'people_list'],
+    description: 'for user lookup and listing',
+  },
+  {
+    tools: ['people_create', 'people_update'],
+    description: 'for account changes',
+  },
+  {
+    tools: ['group_get', 'group_members'],
+    description: 'for group inspection and membership management',
+  },
+  {
+    tools: ['site_list', 'site_get', 'site_create', 'site_update', 'site_delete', 'site_members'],
+    description: 'for Alfresco sites',
+  },
+  {
+    tools: ['trashcan_list', 'trashcan_restore', 'trashcan_purge'],
+    description: 'for deleted-node recovery and permanent removal',
+  },
+  { tools: ['tag_list', 'tag_manage'], description: 'for tags' },
+  {
+    tools: ['category_list', 'category_manage'],
+    description: 'for taxonomy/category links',
+  },
+  {
+    tools: ['audit_apps', 'audit_list'],
+    description: 'for audit applications and entries (app or node scope)',
+  },
+  { tools: ['action_list', 'action_execute'], description: 'for repository actions' },
+  { tools: ['node_lock', 'node_unlock'], description: 'for document locks' },
+  { tools: ['version_revert', 'version_delete'], description: 'after node_versions' },
+  {
+    tools: ['association_list', 'association_manage'],
+    description: 'for peer and secondary associations',
+  },
+  {
+    tools: ['comment_list', 'comment_manage'],
+    description: 'for node comments',
+  },
+  {
+    tools: ['get_installed_modules'],
+    description:
+      'for complete AMP/module listings, versions, and repository edition; include every returned module in one list/table regardless of installState',
+  },
+  { tools: ['search'], description: 'for repository-wide queries' },
+  {
+    tools: ['hyland_docs_list_publications', 'hyland_docs_search', 'hyland_docs_get_topic'],
+    description:
+      'for Hyland product docs on docs.hyland.com (pick the guide first, then topics) — not for repository node content',
+  },
+  {
+    tools: ['search_export_text'],
+    description:
+      'for text exports saved as repository files (csv/tsv/jsonl/md/xml/plain/custom), especially for large result sets',
+  },
+  {
+    tools: ['text_write_begin', 'text_write_append', 'text_write_commit'],
+    description: 'for arbitrary large text writes (any text format)',
+  },
+  {
+    tools: ['text_write_status', 'text_write_abort'],
+    description: 'for session control',
+  },
+  {
+    tools: ['script_create'],
+    description: 'when the user asks to generate/write a JavaScript Console script',
+  },
+  {
+    tools: ['script_execute'],
+    description: 'only when the user explicitly asks to run/execute a script',
+  },
+];
+
+function buildPreferredToolLines(allowed: ToolDefinition[]): string {
+  const allowedNames = new Set(allowed.map(tool => tool.name));
+  return PREFERRED_TOOL_GROUPS.map(group => {
+    const present = group.tools.filter(name => allowedNames.has(name));
+    if (present.length === 0) {
+      return null;
+    }
+    if (group.tools[0] === 'hyland_docs_list_publications' && present.length === 3) {
+      return `   - ${present[0]} then ${present[1]} then ${present[2]} ${group.description}`;
+    }
+    if (group.tools[0] === 'text_write_begin') {
+      return `   - ${present.join('/')} ${group.description}`;
+    }
+    if (group.tools[0] === 'text_write_status') {
+      return `   - ${present.join('/')} ${group.description}`;
+    }
+    return `   - ${present.join(', ')} ${group.description}`;
+  })
+    .filter((line): line is string => Boolean(line))
+    .join('\n');
+}
+
+function capabilityLabel(requires: string[] | undefined): string {
+  const required = requires ?? [];
+  if (required.includes('jsConsole')) {
+    return 'JavaScript Console scripts (requires the JS Console module, typically an Alfresco administrator)';
+  }
+  if (required.includes('admin')) {
+    return 'Alfresco administrator-only APIs';
+  }
+  if (required.includes('supportTools')) {
+    return 'support-tools module APIs';
+  }
+  if (required.includes('nodeBrowser')) {
+    return 'Node Browser admin APIs';
+  }
+  return 'Unavailable tools';
+}
+
+function buildAclSection(): string {
+  return `Repository ACL rules:
+- You act as this signed-in Alfresco user. Ordinary REST tools (search, nodes, sites, people lookup, tags, comments, etc.) stay available, but Alfresco ACLs still apply per node and per action.
+- When a tool returns allowableOperations, that list is the operations this user may perform on that node. Typical values: create, update, delete, updatePermissions.
+- If a needed operation is missing from allowableOperations, do not call the matching mutate tool. Explain that this user cannot do that on that item.
+- If allowableOperations is null/absent, you may try the REST tool; Alfresco will enforce ACLs and may return 403.
+- If a tool returns errorKind "permission_denied" or a 403/access-denied error: tell the user this account does not have permission for that action on that item. Do not retry the same mutation. Do not claim it succeeded.
+`;
+}
+
 function buildCapabilityRestrictionSection(allowed: ToolDefinition[]): string {
   const allowedNames = new Set(allowed.map(tool => tool.name));
-  const unavailable = ALL_TOOLS.filter(tool => !allowedNames.has(tool.name)).map(tool => tool.name);
+  const unavailable = ALL_TOOLS.filter(tool => !allowedNames.has(tool.name));
   if (unavailable.length === 0) {
-    return '';
+    return buildAclSection();
   }
-  return `Capability restrictions:
-- This Alfresco account does not have administrator (or module) rights for: ${unavailable.join(', ')}.
-- Do not call those tools. If the user asks for them, explain that they require Alfresco administrator rights or a module that is not available.
-`;
+
+  const grouped = new Map<string, string[]>();
+  for (const tool of unavailable) {
+    const label = capabilityLabel(tool.requires);
+    const names = grouped.get(label) ?? [];
+    names.push(tool.name);
+    grouped.set(label, names);
+  }
+
+  const lines = ['Capability restrictions:'];
+  for (const [label, names] of grouped) {
+    lines.push(`- ${label}: ${names.join(', ')}.`);
+  }
+  lines.push(
+    '- Do not call those tools, mention them as available, or offer to perform those actions.'
+  );
+  lines.push(
+    '- If the user asks, explain that this Alfresco account does not have the required administrator rights or module, and suggest an administrator.'
+  );
+  lines.push('');
+  lines.push(buildAclSection());
+  return lines.join('\n');
 }
 
 export async function buildSystemPrompt(
@@ -157,6 +319,7 @@ export async function buildSystemPrompt(
   const allowedTools = getToolsFor(profile);
   const toolSkillsSection = await buildToolSkillsSection(allowedTools);
   const capabilityRestrictionSection = buildCapabilityRestrictionSection(allowedTools);
+  const preferredToolLines = buildPreferredToolLines(allowedTools);
 
   // Per-run content (current time, mentions) goes last so servers can reuse the cached prompt prefix across runs.
   return `You are the NodeRef assistant — an Alfresco Content Services repository agent.
@@ -186,28 +349,7 @@ CRITICAL RULES — you MUST follow these:
    Only use values present in tool output.
 8. For full listings/overviews, use paged retrieval (collectAllPages / skipCount) and report when results are truncated by limits.
 9. Prefer canonical tool actions:
-   - node_get, node_get_content, node_list_children for reading nodes/folders/content
-   - node_create, node_update, node_update_content, node_move, node_copy, node_delete for modifications
-   - node_versions for version history
-   - permissions_get, permissions_set for reading/managing node permissions and ACLs
-   - people_get, people_list for user lookup and listing; people_create, people_update for account changes
-   - group_get, group_members for group inspection and membership management
-   - site_list, site_get, site_create, site_update, site_delete, site_members for Alfresco sites
-   - trashcan_list, trashcan_restore, trashcan_purge for deleted-node recovery and permanent removal
-   - tag_list, tag_manage for tags; category_list, category_manage for taxonomy/category links
-   - audit_apps, audit_list for audit applications and entries (app or node scope)
-   - action_list, action_execute for repository actions
-   - node_lock, node_unlock for document locks; version_revert, version_delete after node_versions
-   - association_list, association_manage for peer and secondary associations
-   - comment_list, comment_manage for node comments
-   - get_installed_modules for complete AMP/module listings, versions, and repository edition; include every returned module in one list/table regardless of installState
-   - search for repository-wide queries
-   - hyland_docs_list_publications then hyland_docs_search then hyland_docs_get_topic for Hyland product docs on docs.hyland.com (pick the guide first, then topics) — not for repository node content
-   - search_export_text for text exports saved as repository files (csv/tsv/jsonl/md/xml/plain/custom), especially for large result sets
-   - text_write_begin/text_write_append/text_write_commit for arbitrary large text writes (any text format)
-   - text_write_status/text_write_abort for session control
-   - script_create when the user asks to generate/write a JavaScript Console script
-   - script_execute only when the user explicitly asks to run/execute a script
+${preferredToolLines}
 10. After mutating actions (create/update/move/copy/delete), verify outcome using a read tool and present the verified result.
 11. If user asks to show file content and tool returns isTextBased=true:
    - present content in a fenced markdown code block

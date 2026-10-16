@@ -95,11 +95,13 @@ import {
   compactToolDataForModel,
   MAX_TOOL_RESULT_JSON_CHARS_FOR_MODEL,
 } from './toolResultCompaction.js';
+import { clarifyToolErrorPayload } from './tools/helpers/toolError.js';
 import {
   getToolByName,
   getToolSchemasFor,
   isToolAllowed,
   resolveToolName,
+  toolCapabilityDeniedMessage,
 } from './tools/registry.js';
 import type { AgentExecutionContext, ResolvedAiRuntime, RunInput } from './types.js';
 
@@ -560,7 +562,7 @@ export class AgentRunEngine {
         }
 
         if (!isToolAllowed(call.name, this.execCtx.capabilityProfile)) {
-          const deniedMessage = `Tool "${canonicalOperation}" is not available for this Alfresco account.`;
+          const deniedMessage = `${toolCapabilityDeniedMessage(call.name)} Do not retry. Explain this limitation to the user.`;
           log.info(
             { name: call.name, canonicalOperation },
             'Blocked tool call that exceeds capability profile'
@@ -702,7 +704,7 @@ export class AgentRunEngine {
         const durationMs = Date.now() - executionStartedAt;
         const modelPayload = toolResult.ok
           ? compactToolDataForModel(toolResult.data)
-          : { error: toolResult.error };
+          : clarifyToolErrorPayload(toolResult.error);
         let resultStr = JSON.stringify(modelPayload);
         if (resultStr.length > MAX_TOOL_RESULT_JSON_CHARS_FOR_MODEL) {
           resultStr = `${resultStr.slice(0, MAX_TOOL_RESULT_JSON_CHARS_FOR_MODEL)}\n... [truncated ${resultStr.length - MAX_TOOL_RESULT_JSON_CHARS_FOR_MODEL} chars for model context]`;
