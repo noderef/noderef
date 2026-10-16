@@ -14,13 +14,16 @@
  * limitations under the License.
  */
 
+import { FeatureMenuItem } from '@/components/capabilities/FeatureGate';
 import { DeleteConfirmationForm } from '@/components/common/DeleteConfirmationForm';
+import { getRpcErrorCode, refreshCapabilitiesDebounced } from '@/core/capabilities';
 import {
   backendRpc,
   type RepositoryNode,
   type RepositoryPaginationInfo,
   type SiteVisibility,
 } from '@/core/ipc/backend';
+import { ErrorCode, Feature } from '@app/contracts';
 import { rpc } from '@/core/ipc/rpc';
 import { useFileFolderBrowserTabsStore } from '@/core/store/fileFolderBrowserTabs';
 import { useJsConsoleStore } from '@/core/store/jsConsole';
@@ -72,7 +75,11 @@ import { useCallback, useEffect, useRef, useState, type ComponentPropsWithoutRef
 import { useTranslation } from 'react-i18next';
 import { CreateSiteForm } from './CreateSiteForm';
 import { getFileIconByMimeType } from './fileIconUtils';
-import { getAvailableActions, type NodeActionContext } from './nodeActionEvaluators';
+import {
+  canManagePermissions,
+  getAvailableActions,
+  type NodeActionContext,
+} from './nodeActionEvaluators';
 
 interface RepositorySectionProps {
   label: string;
@@ -90,6 +97,7 @@ interface TreeNode {
   isFile?: boolean;
   mimeType?: string;
   path?: string;
+  allowableOperations?: string[];
   children?: TreeNode[];
   isLoadMorePlaceholder?: boolean;
   parentId?: string;
@@ -336,6 +344,7 @@ export function RepositorySection({
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [rootLoadAttempts, setRootLoadAttempts] = useState(0);
   const [loadedNodes, setLoadedNodes] = useState<Set<string>>(new Set());
   const [loadingNodes, setLoadingNodes] = useState<Set<string>>(new Set());
@@ -887,6 +896,7 @@ export function RepositorySection({
 
     setLoading(true);
     setError(null);
+    setErrorCode(null);
     const attemptNumber = rootLoadAttempts + 1;
     setRootLoadAttempts(attemptNumber);
 
@@ -917,6 +927,11 @@ export function RepositorySection({
       }
 
       console.error('Failed to load root nodes:', err);
+      const code = getRpcErrorCode(err) ?? null;
+      setErrorCode(code);
+      if (code === ErrorCode.PERMISSION_DENIED) {
+        void refreshCapabilitiesDebounced(requestServerId);
+      }
       if (attemptNumber >= MAX_ROOT_LOAD_ATTEMPTS) {
         const baseMessage = err instanceof Error ? err.message : t('submenu:loadError');
         setError(
@@ -943,6 +958,7 @@ export function RepositorySection({
       isFile: node.isFile,
       mimeType: node.mimeType,
       path: node.path,
+      allowableOperations: node.allowableOperations,
       children: node.isFolder ? [] : undefined, // Empty array for folders to show expand icon
     }));
   }, []);
@@ -1360,7 +1376,7 @@ export function RepositorySection({
                   >
                     {t('common:retry')}
                   </Button>
-                  {canReauth && (
+                  {canReauth && errorCode === ErrorCode.UNAUTHORIZED && (
                     <Button
                       variant="filled"
                       size="xs"
@@ -1409,11 +1425,14 @@ export function RepositorySection({
                       isFolder: treeNode.isFolder || false,
                       isFile: treeNode.isFile || false,
                       path: treeNode.path,
+                      mimeType: treeNode.mimeType,
+                      allowableOperations: treeNode.allowableOperations,
                     };
                     const actions = getAvailableActions(context);
                     const canOpenContextMenu =
                       actions.length > 0 ||
                       treeNode.isFolder ||
+                      treeNode.isFile ||
                       treeNode.nodeType === 'st:sites' ||
                       treeNode.nodeType === 'st:site';
 
@@ -1554,6 +1573,17 @@ export function RepositorySection({
                       (() => {
                         const isSitesRoot = selectedNode.nodeType === 'st:sites';
                         const isSiteNode = selectedNode.nodeType === 'st:site';
+                        const actionContext: NodeActionContext = {
+                          nodeId: selectedNode.value,
+                          nodeName: selectedNode.label,
+                          nodeType: selectedNode.nodeType || '',
+                          isFolder: selectedNode.isFolder || false,
+                          isFile: selectedNode.isFile || false,
+                          path: selectedNode.path,
+                          mimeType: selectedNode.mimeType,
+                          allowableOperations: selectedNode.allowableOperations,
+                        };
+                        const showPermissions = canManagePermissions(actionContext);
                         const sections: React.ReactNode[][] = [];
 
                         if (!selectedNode.isFolder && !isSitesRoot && !isSiteNode) {
@@ -1570,13 +1600,14 @@ export function RepositorySection({
                             );
                           }
                           fileSection.push(
-                            <Menu.Item
+                            <FeatureMenuItem
                               key="open-js"
+                              feature={Feature.JsConsole}
                               leftSection={<IconCode size={14} />}
                               onClick={handleOpenInJsConsole}
                             >
                               {t('submenu:jsConsole')}
-                            </Menu.Item>
+                            </FeatureMenuItem>
                           );
                           fileSection.push(
                             <Menu.Item
@@ -1588,15 +1619,17 @@ export function RepositorySection({
                             </Menu.Item>
                           );
                           sections.push(fileSection);
-                          sections.push([
-                            <Menu.Item
-                              key="manage-permissions"
-                              leftSection={<IconLock size={14} />}
-                              onClick={handleManagePermissions}
-                            >
-                              {t('submenu:managePermissionsAction')}
-                            </Menu.Item>,
-                          ]);
+                          if (showPermissions) {
+                            sections.push([
+                              <Menu.Item
+                                key="manage-permissions"
+                                leftSection={<IconLock size={14} />}
+                                onClick={handleManagePermissions}
+                              >
+                                {t('submenu:managePermissionsAction')}
+                              </Menu.Item>,
+                            ]);
+                          }
                         }
 
                         if (selectedNode.isFolder && !isSitesRoot && !isSiteNode) {
@@ -1608,27 +1641,30 @@ export function RepositorySection({
                             >
                               {t('submenu:nodeBrowser')}
                             </Menu.Item>,
-                            <Menu.Item
+                            <FeatureMenuItem
                               key="folder-js"
+                              feature={Feature.JsConsole}
                               leftSection={<IconCode size={14} />}
                               onClick={handleOpenInJsConsole}
                             >
                               {t('submenu:jsConsole')}
-                            </Menu.Item>,
+                            </FeatureMenuItem>,
                           ]);
-                          sections.push([
-                            <Menu.Item
-                              key="folder-manage-permissions"
-                              leftSection={<IconLock size={14} />}
-                              onClick={handleManagePermissions}
-                            >
-                              {t('submenu:managePermissionsAction')}
-                            </Menu.Item>,
-                          ]);
+                          if (showPermissions) {
+                            sections.push([
+                              <Menu.Item
+                                key="folder-manage-permissions"
+                                leftSection={<IconLock size={14} />}
+                                onClick={handleManagePermissions}
+                              >
+                                {t('submenu:managePermissionsAction')}
+                              </Menu.Item>,
+                            ]);
+                          }
                         }
 
                         if (isSitesRoot) {
-                          sections.push([
+                          const sitesSection: React.ReactNode[] = [
                             <Menu.Item
                               key="sites-node-browser"
                               leftSection={<IconFileSearch size={14} />}
@@ -1636,14 +1672,19 @@ export function RepositorySection({
                             >
                               {t('submenu:nodeBrowser')}
                             </Menu.Item>,
-                            <Menu.Item
-                              key="sites-manage-permissions"
-                              leftSection={<IconLock size={14} />}
-                              onClick={handleManagePermissions}
-                            >
-                              {t('submenu:managePermissionsAction')}
-                            </Menu.Item>,
-                          ]);
+                          ];
+                          if (showPermissions) {
+                            sitesSection.push(
+                              <Menu.Item
+                                key="sites-manage-permissions"
+                                leftSection={<IconLock size={14} />}
+                                onClick={handleManagePermissions}
+                              >
+                                {t('submenu:managePermissionsAction')}
+                              </Menu.Item>
+                            );
+                          }
+                          sections.push(sitesSection);
                           sections.push([
                             <Menu.Item
                               key="create-site"
@@ -1656,7 +1697,7 @@ export function RepositorySection({
                         }
 
                         if (isSiteNode) {
-                          sections.push([
+                          const siteSection: React.ReactNode[] = [
                             <Menu.Item
                               key="site-node-browser"
                               leftSection={<IconFileSearch size={14} />}
@@ -1664,14 +1705,19 @@ export function RepositorySection({
                             >
                               {t('submenu:nodeBrowser')}
                             </Menu.Item>,
-                            <Menu.Item
-                              key="site-manage-permissions"
-                              leftSection={<IconLock size={14} />}
-                              onClick={handleManagePermissions}
-                            >
-                              {t('submenu:managePermissionsAction')}
-                            </Menu.Item>,
-                          ]);
+                          ];
+                          if (showPermissions) {
+                            siteSection.push(
+                              <Menu.Item
+                                key="site-manage-permissions"
+                                leftSection={<IconLock size={14} />}
+                                onClick={handleManagePermissions}
+                              >
+                                {t('submenu:managePermissionsAction')}
+                              </Menu.Item>
+                            );
+                          }
+                          sections.push(siteSection);
                           sections.push([
                             <Menu.Item
                               key="edit-site"
@@ -1691,15 +1737,7 @@ export function RepositorySection({
                           ]);
                         }
 
-                        const availableActions = getAvailableActions({
-                          nodeId: selectedNode.value,
-                          nodeName: selectedNode.label,
-                          nodeType: selectedNode.nodeType || '',
-                          isFolder: selectedNode.isFolder || false,
-                          isFile: selectedNode.isFile || false,
-                          path: selectedNode.path,
-                          mimeType: selectedNode.mimeType,
-                        });
+                        const availableActions = getAvailableActions(actionContext);
 
                         const otherActions = availableActions.filter(
                           action =>
@@ -1745,7 +1783,9 @@ export function RepositorySection({
                           );
                         }
 
-                        const flattened = sections.flatMap((section, index) => {
+                        const flattened = sections
+                          .filter(section => section.length > 0)
+                          .flatMap((section, index) => {
                           const divider =
                             index > 0 ? [<Menu.Divider key={`divider-${index}`} />] : [];
                           return [...divider, ...section];

@@ -34,6 +34,7 @@ export const scriptExecuteTool: ToolDefinition = {
   },
   requiresConfirmation: true,
   confirmation: { phrase: 'CONFIRM' },
+  requires: ['jsConsole'],
 
   async execute(ctx: AgentExecutionContext, args: Record<string, unknown>): Promise<ToolResult> {
     try {

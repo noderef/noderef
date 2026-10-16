@@ -15,7 +15,7 @@
  */
 
 import { MenuItem as MenuItemType } from '@/types/menu';
-import { Badge, Group, Menu, Text, TextInput, UnstyledButton } from '@mantine/core';
+import { Badge, Group, Menu, Text, TextInput, Tooltip, UnstyledButton } from '@mantine/core';
 import { IconEdit, IconTrash } from '@tabler/icons-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -152,7 +152,12 @@ export function MenuItem({
 
   const content = (
     <UnstyledButton
-      onClick={() => onSelect?.(item)}
+      onClick={() => {
+        if (item.disabled) {
+          return;
+        }
+        onSelect?.(item);
+      }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onContextMenu={handleContextMenu}
@@ -170,6 +175,8 @@ export function MenuItem({
             : 'transparent',
         fontWeight: active ? 500 : 400,
         transition: 'all 150ms ease',
+        opacity: item.disabled ? 0.55 : 1,
+        cursor: item.disabled ? 'not-allowed' : 'pointer',
       }}
     >
       <Group gap="xs" wrap="nowrap" justify="space-between">
@@ -231,13 +238,21 @@ export function MenuItem({
     </UnstyledButton>
   );
 
+  const maybeDisabled = item.disabled && item.disabledReason ? (
+    <Tooltip label={item.disabledReason} withArrow>
+      <div>{content}</div>
+    </Tooltip>
+  ) : (
+    content
+  );
+
   if (!hasContextMenu) {
-    return content;
+    return maybeDisabled;
   }
 
   return (
     <>
-      {content}
+      {maybeDisabled}
       <Menu
         opened={contextMenuOpened}
         onChange={setContextMenuOpened}

@@ -33,6 +33,7 @@ export const auditAppsTool: ToolDefinition = {
     },
   },
   requiresConfirmation: false,
+  requires: ['admin'],
 
   async execute(ctx: AgentExecutionContext, args: Record<string, unknown>): Promise<ToolResult> {
     try {

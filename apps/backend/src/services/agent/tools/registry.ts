@@ -19,6 +19,8 @@
  * To add a new tool: create tools/myTool.ts implementing ToolDefinition, then add it here.
  */
 
+import type { Capability, CapabilityProfile } from '@app/contracts';
+import { hasCapability } from '@app/contracts';
 import type { AgentToolSchema } from '../../../ai/anthropic.js';
 import { existsSync } from 'node:fs';
 import { actionExecuteTool } from './actions/execute.js';
@@ -236,4 +238,46 @@ export function getToolByName(name: string): ToolDefinition | undefined {
 /** Return Anthropic-format tool schemas for all tools */
 export function getAllToolSchemas(): AgentToolSchema[] {
   return ALL_TOOLS.map(toAnthropicSchema);
+}
+
+export function isToolAllowed(
+  name: string,
+  profile: CapabilityProfile | null | undefined
+): boolean {
+  const tool = getToolByName(name);
+  if (!tool) {
+    return false;
+  }
+  const required = tool.requires ?? [];
+  return required.every(capability => hasCapability(profile, capability));
+}
+
+const CAPABILITY_REASON: Record<Capability, string> = {
+  admin: 'Alfresco administrator rights',
+  jsConsole: 'the JavaScript Console module (typically administrator rights)',
+  supportTools: 'the Alfresco support-tools module',
+  nodeBrowser: 'Node Browser / slingshot admin access',
+};
+
+/** User-facing denial when a tool exceeds the signed-in account's capabilities. */
+export function toolCapabilityDeniedMessage(name: string): string {
+  const tool = getToolByName(name);
+  const canonical = resolveToolName(name);
+  if (!tool) {
+    return `Tool "${canonical}" is not available for this Alfresco account.`;
+  }
+  const required = tool.requires ?? [];
+  const reasons = required.map(capability => CAPABILITY_REASON[capability] ?? capability);
+  const reasonText = reasons.length ? ` It requires ${reasons.join(' and ')}.` : '';
+  return `Tool "${canonical}" is not available for this Alfresco account.${reasonText}`;
+}
+
+export function getToolsFor(profile: CapabilityProfile | null | undefined): ToolDefinition[] {
+  return ALL_TOOLS.filter(tool => isToolAllowed(tool.name, profile));
+}
+
+export function getToolSchemasFor(
+  profile: CapabilityProfile | null | undefined
+): AgentToolSchema[] {
+  return getToolsFor(profile).map(toAnthropicSchema);
 }

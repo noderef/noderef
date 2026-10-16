@@ -20,8 +20,9 @@
  */
 
 import { NodesApi, SearchApi, SitesApi } from '@alfresco/js-api';
+import { hasCapability } from '@app/contracts';
 import { z } from 'zod';
-import { buildSlingshotContentUrl } from '../../lib/alfresco-url.js';
+import { buildNodesApiContentUrl, buildSlingshotContentUrl } from '../../lib/alfresco-url.js';
 import { AppErrors } from '../../lib/errors.js';
 import { createLogger } from '../../lib/logger.js';
 import {
@@ -30,11 +31,19 @@ import {
   extractParentRefFromSlingshotNode,
   fetchSlingshotNodeData,
   getNodePropertyValue,
+  mapNodeEntryToBrowserNode,
+  mapNodeEntryToSlingshotChild,
   normalizeNodeRef,
   resolveSystemNodeId,
 } from './helpers.js';
 import type { Routes, RpcContext } from './types.js';
-import { getCurrentUserId, withAuth, withAuthAndCredentials, withCredentials } from './withAuth.js';
+import {
+  getCurrentUserId,
+  withAuth,
+  withAuthAndCredentials,
+  withCapabilityAndCredentials,
+  withCredentials,
+} from './withAuth.js';
 
 const log = createLogger('backend.rpc.repository');
 
@@ -56,6 +65,7 @@ function mapNode(entry: any) {
     modifiedById: entry.modifiedByUser?.id,
     hasChildren: entry.isFolder,
     path: entry.path?.name,
+    allowableOperations: entry.allowableOperations,
   };
 }
 
@@ -73,22 +83,41 @@ export function registerRepositoryHandlers(routes: Routes, ctx: RpcContext): voi
     handler: async params => {
       const { serverId, nodeId } = params as { serverId: number; nodeId: string };
 
-      return withCredentials(ctx, serverId, async ({ username, token, authType, server }) => {
-        const { nodeData, slingshotUrl } = await fetchSlingshotNodeData(
-          server.baseUrl,
-          nodeId,
-          username || '',
-          token!,
-          authType as 'basic' | 'openid_connect'
-        );
+      return withAuthAndCredentials(
+        ctx,
+        serverId,
+        async ({ api, username, token, authType, server }) => {
+          if (!hasCapability(server.capabilities, 'nodeBrowser')) {
+            const nodesApi = new NodesApi(api);
+            const result = await nodesApi.listNodeChildren(nodeId, {
+              include: ['properties', 'aspectNames', 'path', 'permissions', 'isLink'],
+              maxItems: 200,
+            });
+            const children = (result.list?.entries || []).map((item: { entry?: unknown }, index: number) =>
+              mapNodeEntryToSlingshotChild(
+                (item.entry ?? item) as Record<string, unknown>,
+                index
+              )
+            );
+            return { children };
+          }
 
-        log.debug(
-          { serverId, nodeId, slingshotUrl, childCount: nodeData.children?.length || 0 },
-          'Fetched slingshot children'
-        );
+          const { nodeData, slingshotUrl } = await fetchSlingshotNodeData(
+            server.baseUrl,
+            nodeId,
+            username || '',
+            token!,
+            authType as 'basic' | 'openid_connect'
+          );
 
-        return { children: nodeData.children ?? [] };
-      });
+          log.debug(
+            { serverId, nodeId, slingshotUrl, childCount: nodeData.children?.length || 0 },
+            'Fetched slingshot children'
+          );
+
+          return { children: nodeData.children ?? [] };
+        }
+      );
     },
   };
 
@@ -99,9 +128,10 @@ export function registerRepositoryHandlers(routes: Routes, ctx: RpcContext): voi
     handler: async params => {
       const { serverId } = params as { serverId: number };
 
-      return withAuthAndCredentials(
+      return withCapabilityAndCredentials(
         ctx,
         serverId,
+        'nodeBrowser',
         async ({ api, username, token, authType, server }) => {
           const nodesApi = new NodesApi(api);
           const searchApi = new SearchApi(api);
@@ -171,7 +201,7 @@ export function registerRepositoryHandlers(routes: Routes, ctx: RpcContext): voi
         log.debug({ serverId, nodeId: targetNodeId }, 'Fetching node children');
 
         const result = await nodesApi.listNodeChildren(targetNodeId, {
-          include: ['properties', 'aspectNames', 'path'],
+          include: ['properties', 'aspectNames', 'path', 'allowableOperations'],
           fields: [
             'id',
             'name',
@@ -184,6 +214,7 @@ export function registerRepositoryHandlers(routes: Routes, ctx: RpcContext): voi
             'createdByUser',
             'content',
             'path',
+            'allowableOperations',
           ],
           maxItems,
           skipCount,
@@ -563,16 +594,48 @@ export function registerRepositoryHandlers(routes: Routes, ctx: RpcContext): voi
       const { serverId, nodeId } = params as { serverId: number; nodeId: string };
       const userId = await getCurrentUserId();
 
-      return withCredentials(ctx, serverId, async ({ username, token, authType, server }) => {
-        const { nodeData, slingshotUrl } = await fetchSlingshotNodeData(
-          server.baseUrl,
-          nodeId,
-          username || '',
-          token!,
-          authType as 'basic' | 'openid_connect'
-        );
+      return withAuthAndCredentials(
+        ctx,
+        serverId,
+        async ({ api, username, token, authType, server }) => {
+        const loadViaRest = async () => {
+          const nodesApi = new NodesApi(api);
+          const node = await nodesApi.getNode(nodeId, {
+            include: ['properties', 'aspectNames', 'path', 'permissions', 'isLink'],
+          });
+          let childEntries: Array<Record<string, unknown>> = [];
+          try {
+            const children = await nodesApi.listNodeChildren(nodeId, {
+              include: ['properties', 'aspectNames', 'path', 'isLink'],
+              maxItems: 200,
+            });
+            childEntries = (children.list?.entries || []) as unknown as Array<Record<string, unknown>>;
+          } catch (err) {
+            log.debug({ err, nodeId }, 'REST children lookup failed while mapping node details');
+          }
+          return mapNodeEntryToBrowserNode(
+            (node.entry ?? node) as unknown as Record<string, unknown>,
+            childEntries
+          );
+        };
 
-        log.debug({ serverId, nodeId, slingshotUrl }, 'Fetched node details from slingshot API');
+        let nodeData: any;
+        if (!hasCapability(server.capabilities, 'nodeBrowser')) {
+          nodeData = await loadViaRest();
+        } else {
+          const slingshot = await fetchSlingshotNodeData(
+            server.baseUrl,
+            nodeId,
+            username || '',
+            token!,
+            authType as 'basic' | 'openid_connect'
+          );
+          nodeData = slingshot.nodeData;
+          log.debug(
+            { serverId, nodeId, slingshotUrl: slingshot.slingshotUrl },
+            'Fetched node details from slingshot API'
+          );
+        }
 
         const fullPath = nodeData.qnamePath?.prefixedName ?? null;
         let parentPath = fullPath;
@@ -616,17 +679,20 @@ export function registerRepositoryHandlers(routes: Routes, ctx: RpcContext): voi
         property: string;
       };
 
-      return withCredentials(ctx, serverId, async ({ username, token, authType, server }) => {
-        // Build slingshot content URL
+      return withAuthAndCredentials(
+        ctx,
+        serverId,
+        async ({ username, token, authType, server }) => {
         const nodeRef = `workspace/SpacesStore/${nodeId}`;
-        const contentUrl = buildSlingshotContentUrl(server.baseUrl, nodeRef, property);
+        const contentUrl = hasCapability(server.capabilities, 'nodeBrowser')
+          ? buildSlingshotContentUrl(server.baseUrl, nodeRef, property)
+          : buildNodesApiContentUrl(server.baseUrl, nodeId);
 
         log.debug(
           { serverId, nodeId, property, contentUrl },
-          'Downloading content from slingshot API'
+          'Downloading node content'
         );
 
-        // Build Authorization header based on auth type
         const authHeader =
           authType === 'openid_connect'
             ? `Bearer ${token}`

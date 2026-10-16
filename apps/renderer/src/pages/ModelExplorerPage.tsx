@@ -14,13 +14,15 @@
  * limitations under the License.
  */
 
+import { FeatureUnavailablePage } from '@/components/capabilities/FeatureUnavailablePage';
 import { AspectNode, TypeNode } from '@/components/model-explorer/SchemaNode';
 import { SchemaInspector } from '@/components/model-explorer/SchemaInspector';
 import type { SchemaNodeData } from '@/components/model-explorer/types';
 import { useClassPropertyDetails } from '@/core/hooks/useClassPropertyDetails';
 import { useModelData, type KindFilter } from '@/core/hooks/useModelData';
-import { useServersStore } from '@/core/store/servers';
+import { useServerCapabilities, useServersStore } from '@/core/store/servers';
 import { useActiveServerId } from '@/hooks/useNavigation';
+import { Feature, isFeatureAvailable } from '@app/contracts';
 import {
   ActionIcon,
   Alert,
@@ -294,6 +296,12 @@ function ModelExplorerCanvas() {
 }
 
 function ModelExplorerPage() {
+  const activeServerId = useActiveServerId();
+  const capabilities = useServerCapabilities(activeServerId);
+  if (!isFeatureAvailable(capabilities, Feature.ModelExplorer)) {
+    return <FeatureUnavailablePage feature={Feature.ModelExplorer} />;
+  }
+
   return (
     <ReactFlowProvider>
       <ModelExplorerCanvas />

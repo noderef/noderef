@@ -1,7 +1,7 @@
 {
   "addServer": "Server toevoegen",
   "selectServerType": "Selecteer het type server dat u aan uw werkruimte wilt toevoegen",
-  "moreServerTypesComing": "Alleen Alfresco beheerders kunnen servers toevoegen. Dit kan worden gewijzigd in toekomstige releases.",
+  "moreServerTypesComing": "Meer servertypen komen beschikbaar in toekomstige releases.",
   "configureAlfrescoServer": "Alfresco configureren",
   "serverName": "Servernaam",
   "serverNamePlaceholder": "Mijn server",
@@ -25,5 +25,18 @@
   "oidcClientId": "Client ID",
   "oidcClientIdPlaceholder": "alfresco-client",
   "authenticated": "Geauthenticeerd",
-  "loginWithOidc": "Inloggen met OIDC"
+  "loginWithOidc": "Inloggen met OIDC",
+  "validCredentials": "Geldige inloggegevens",
+  "nonAdminInfo": "Dit account is geen Alfresco-beheerder. Zoeken, de repository-boom, Insights en de agent blijven beschikbaar. Beheerderstools blijven uitgeschakeld.",
+  "restrictedAccessTitle": "Beperkte toegang",
+  "invalidCredentials": "Ongeldige inloggegevens",
+  "failedToValidateCredentials": "Inloggegevens valideren is mislukt",
+  "validationFailedTitle": "Validatie mislukt",
+  "serverAdded": "Server \"{{name}}\" toegevoegd",
+  "failedToAddServer": "Server toevoegen is mislukt",
+  "validationErrorTitle": "Validatiefout",
+  "invalidServerUrl": "Voer een geldige server-URL in",
+  "enterUsernamePassword": "Voer gebruikersnaam en wachtwoord in voor basisauthenticatie",
+  "authenticationRequiredTitle": "Authenticatie vereist",
+  "oidcLoginRequired": "Log in met OIDC voordat u de server toevoegt"
 }

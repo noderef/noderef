@@ -2,8 +2,7 @@
  * Copyright 2025-2026 NodeRef
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * you may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -20,38 +19,24 @@
  */
 
 import type { AlfrescoApi } from '@alfresco/js-api';
-import type { PublicServer } from '@app/contracts';
+import type { Capability, PublicServer } from '@app/contracts';
+import { hasCapability } from '@app/contracts';
 import { AppErrors } from '../../lib/errors.js';
 import { getAuthenticatedClientWithRefresh } from '../../services/alfresco/authenticationHelper.js';
+import { ensureCapabilityProfile } from '../../services/alfresco/capabilityPersistence.js';
 import { getCurrentUserId } from '../../services/userBootstrap.js';
 import type { RpcContext } from './types.js';
 
+function assertCapability(server: PublicServer, capability: Capability): void {
+  if (!hasCapability(server.capabilities, capability)) {
+    AppErrors.permissionDenied(
+      `Your Alfresco account does not have permission for this action (${capability})`
+    );
+  }
+}
+
 /**
  * Execute a function with authenticated Alfresco API client
- * Handles all the boilerplate of:
- * 1. Getting current user ID
- * 2. Looking up server by ID (scoped to user)
- * 3. Authenticating with automatic token refresh
- * 4. Throwing appropriate errors if anything fails
- *
- * @param ctx - RPC context containing services
- * @param serverId - Server ID to authenticate against
- * @param fn - Function to execute with authenticated API client and server
- * @returns Result of the function
- *
- * @example
- * ```typescript
- * routes['backend.repository.getNodeChildren'] = {
- *   schema: z.object({ serverId: z.number(), nodeId: z.string() }),
- *   handler: async params => {
- *     const { serverId, nodeId } = params as { serverId: number; nodeId: string };
- *     return withAuth(ctx, serverId, async (api, server) => {
- *       const nodesApi = new NodesApi(api);
- *       return nodesApi.listNodeChildren(nodeId);
- *     });
- *   },
- * };
- * ```
  */
 export async function withAuth<T>(
   ctx: RpcContext,
@@ -60,25 +45,26 @@ export async function withAuth<T>(
 ): Promise<T> {
   const userId = await getCurrentUserId();
 
-  // Look up server (scoped to user for security)
   const server = await ctx.serverService.findById(userId, serverId);
   if (!server) {
     return AppErrors.notFound('Server', serverId);
   }
 
-  // Authenticate with automatic token refresh for OIDC
   const api = await getAuthenticatedClientWithRefresh(userId, serverId, server.baseUrl, ctx.prisma);
   if (!api) {
     return AppErrors.unauthorized('No stored credentials found for server');
   }
 
-  return fn(api, server);
+  const resolved = await ensureCapabilityProfile(
+    ctx.serverService,
+    userId,
+    serverId,
+    api,
+    server
+  );
+  return fn(api, resolved);
 }
 
-/**
- * Get credentials for direct HTTP calls (e.g., Slingshot API)
- * Use this when you need raw credentials instead of an AlfrescoApi client
- */
 export async function withCredentials<T>(
   ctx: RpcContext,
   serverId: number,
@@ -91,13 +77,11 @@ export async function withCredentials<T>(
 ): Promise<T> {
   const userId = await getCurrentUserId();
 
-  // Look up server (scoped to user for security)
   const server = await ctx.serverService.findById(userId, serverId);
   if (!server) {
     return AppErrors.notFound('Server', serverId);
   }
 
-  // Get decrypted credentials
   const creds = await ctx.serverService.getCredentialsForBackend(userId, serverId);
   if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
     return AppErrors.unauthorized('No stored credentials found for server');
@@ -111,10 +95,6 @@ export async function withCredentials<T>(
   });
 }
 
-/**
- * Execute a function with both authenticated API client and raw credentials
- * Use this when you need both the SDK client and direct credentials (e.g., for username in runas)
- */
 export async function withAuthAndCredentials<T>(
   ctx: RpcContext,
   serverId: number,
@@ -128,34 +108,65 @@ export async function withAuthAndCredentials<T>(
 ): Promise<T> {
   const userId = await getCurrentUserId();
 
-  // Look up server (scoped to user for security)
   const server = await ctx.serverService.findById(userId, serverId);
   if (!server) {
     return AppErrors.notFound('Server', serverId);
   }
 
-  // Get decrypted credentials
   const creds = await ctx.serverService.getCredentialsForBackend(userId, serverId);
   if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
     return AppErrors.unauthorized('No stored credentials found for server');
   }
 
-  // Authenticate with automatic token refresh for OIDC
   const api = await getAuthenticatedClientWithRefresh(userId, serverId, server.baseUrl, ctx.prisma);
   if (!api) {
     return AppErrors.unauthorized('Failed to authenticate with server');
   }
 
+  const resolved = await ensureCapabilityProfile(
+    ctx.serverService,
+    userId,
+    serverId,
+    api,
+    server
+  );
   return fn({
     api,
-    server,
+    server: resolved,
     username: creds.username,
     token: creds.token,
     authType: creds.authType,
   });
 }
 
-/**
- * Get current user ID - convenience wrapper for handlers
- */
+export async function withCapability<T>(
+  ctx: RpcContext,
+  serverId: number,
+  capability: Capability,
+  fn: (api: AlfrescoApi, server: PublicServer) => Promise<T>
+): Promise<T> {
+  return withAuth(ctx, serverId, async (api, server) => {
+    assertCapability(server, capability);
+    return fn(api, server);
+  });
+}
+
+export async function withCapabilityAndCredentials<T>(
+  ctx: RpcContext,
+  serverId: number,
+  capability: Capability,
+  fn: (params: {
+    api: AlfrescoApi;
+    server: PublicServer;
+    username: string | null;
+    token: string | null;
+    authType: string | null;
+  }) => Promise<T>
+): Promise<T> {
+  return withAuthAndCredentials(ctx, serverId, async params => {
+    assertCapability(params.server, capability);
+    return fn(params);
+  });
+}
+
 export { getCurrentUserId };

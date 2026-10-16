@@ -21,8 +21,13 @@
 
 import { buildSlingshotNodeUrl } from '../../lib/alfresco-url.js';
 import { createLogger } from '../../lib/logger.js';
+import { throwMappedAlfrescoError } from '../../services/alfresco/errorMapper.js';
 
 const log = createLogger('backend.rpc.helpers');
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+}
 
 /**
  * Fetch node data from Alfresco Slingshot API
@@ -53,7 +58,10 @@ export async function fetchSlingshotNodeData(
 
   if (!response.ok) {
     log.error({ slingshotUrl, status: response.status }, 'Failed to fetch node details');
-    throw new Error(`Failed to fetch node details: ${response.statusText}`);
+    throwMappedAlfrescoError(response.status, {
+      adminWebscript: true,
+      message: `Failed to fetch node details: ${response.statusText}`,
+    });
   }
 
   const nodeData = await response.json();
@@ -481,4 +489,123 @@ export async function resolveSystemNodeId(
   }
 
   return null;
+}
+
+function asName(value: string | undefined | null): { name: string; prefixedName: string } {
+  const name = value || '';
+  return { name, prefixedName: name };
+}
+
+function nodeRefFromId(id: string | undefined | null): string {
+  if (!id) {
+    return '';
+  }
+  if (id.includes('://') || id.startsWith('workspace/')) {
+    return normalizeNodeRef(id) ?? id;
+  }
+  return `workspace://SpacesStore/${id}`;
+}
+
+function mapRestProperty(prefixedName: string, value: unknown) {
+  const values = Array.isArray(value) ? value : [value];
+  return {
+    name: asName(prefixedName),
+    values: values.map(item => ({
+      dataType: typeof item,
+      value: item,
+      isContent: prefixedName === 'cm:content',
+      isNodeRef: typeof item === 'string' && String(item).includes('://'),
+      isNullValue: item === null || item === undefined,
+    })),
+    type: asName('d:text'),
+    multiple: Array.isArray(value),
+    residual: false,
+  };
+}
+
+export function mapNodeEntryToSlingshotChild(
+  entry: Record<string, unknown>,
+  index = 0
+): Record<string, unknown> {
+  const id = typeof entry.id === 'string' ? entry.id : '';
+  const name = typeof entry.name === 'string' ? entry.name : id;
+  const nodeType = typeof entry.nodeType === 'string' ? entry.nodeType : '';
+  return {
+    name: asName(name),
+    nodeRef: nodeRefFromId(id),
+    type: asName(nodeType),
+    assocType: asName('cm:contains'),
+    primary: true,
+    index,
+  };
+}
+
+/**
+ * Map a Nodes API entry (+ optional children) onto the slingshot node-details DTO
+ * the renderer already consumes.
+ */
+export function mapNodeEntryToBrowserNode(
+  entry: Record<string, unknown>,
+  childEntries: Array<Record<string, unknown>> = []
+): Record<string, unknown> {
+  const id = typeof entry.id === 'string' ? entry.id : '';
+  const name = typeof entry.name === 'string' ? entry.name : id;
+  const nodeType = typeof entry.nodeType === 'string' ? entry.nodeType : '';
+  const parentId = typeof entry.parentId === 'string' ? entry.parentId : '';
+  const path = asRecord(entry.path);
+  const pathName = typeof path?.name === 'string' ? path.name : '';
+  const aspectNames = Array.isArray(entry.aspectNames) ? (entry.aspectNames as string[]) : [];
+  const properties = asRecord(entry.properties) ?? {};
+  const permissions = asRecord(entry.permissions);
+  const locallySet = Array.isArray(permissions?.locallySet)
+    ? (permissions.locallySet as Array<Record<string, unknown>>)
+    : [];
+  const inherited = Array.isArray(permissions?.inherited)
+    ? (permissions.inherited as Array<Record<string, unknown>>)
+    : [];
+  const owner =
+    typeof properties['cm:owner'] === 'string'
+      ? properties['cm:owner']
+      : typeof asRecord(entry.createdByUser)?.id === 'string'
+        ? String(asRecord(entry.createdByUser)?.id)
+        : '';
+
+  const permissionEntries = [...locallySet, ...inherited].map(item => ({
+    permission: typeof item.name === 'string' ? item.name : '',
+    authority: typeof item.authorityId === 'string' ? item.authorityId : '',
+    rel: item.accessStatus === 'DENIED' ? 'DENIED' : 'ALLOWED',
+  }));
+
+  return {
+    nodeRef: nodeRefFromId(id),
+    id,
+    qnamePath: asName(pathName),
+    name: asName(name),
+    parentNodeRef: nodeRefFromId(parentId),
+    type: asName(nodeType),
+    aspects: aspectNames.map(aspect => asName(aspect)),
+    properties: Object.entries(properties).map(([key, value]) => mapRestProperty(key, value)),
+    children: childEntries.map((child, index) =>
+      mapNodeEntryToSlingshotChild(asRecord(child.entry) ?? child, index)
+    ),
+    parents: parentId
+      ? [
+          {
+            name: asName(''),
+            nodeRef: nodeRefFromId(parentId),
+            type: asName('cm:folder'),
+            assocType: asName('cm:contains'),
+            primary: true,
+          },
+        ]
+      : [],
+    assocs: [],
+    sourceAssocs: [],
+    permissions: {
+      entries: permissionEntries,
+      masks: [],
+      inherit: permissions?.isInheritanceEnabled !== false,
+      owner,
+    },
+  };
 }

@@ -47,6 +47,8 @@ export enum ErrorCode {
   // Permissions
   UNAUTHORIZED = 'UNAUTHORIZED',
   FORBIDDEN = 'FORBIDDEN',
+  /** Capability guard or admin-webscript 401 mapped as a rights error (not a session expiry). */
+  PERMISSION_DENIED = 'PERMISSION_DENIED',
 
   // File System (common in desktop apps)
 

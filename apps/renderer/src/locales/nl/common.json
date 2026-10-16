@@ -46,5 +46,21 @@
   "noServers": "Geen servers beschikbaar",
   "back": "Terug",
   "updateAvailable": "Update beschikbaar",
-  "updateAvailableMessage": "Versie {{version}} is klaar om te downloaden."
+  "updateAvailableMessage": "Versie {{version}} is klaar om te downloaden.",
+  "featureUnavailable": "{{feature}} vereist Alfresco-beheerdersrechten of een module die niet op deze server beschikbaar is.",
+  "features": {
+    "RepoBrowser": "Repository",
+    "NodeBrowser": "Node Browser",
+    "SystemTree": "Systeemboom",
+    "JsConsole": "JavaScript Console",
+    "Logs": "Logs",
+    "UsersGroups": "Gebruikers en groepen",
+    "ModelExplorer": "Model Explorer",
+    "RepoAdmin": "Repository-beheer",
+    "ServerUsage": "Servergebruik",
+    "AgentScripts": "Agent-scripts",
+    "Search": "Zoeken",
+    "Agent": "Agent",
+    "Insights": "Insights"
+  }
 }

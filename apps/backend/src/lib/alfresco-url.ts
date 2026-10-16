@@ -61,6 +61,13 @@ export function buildSlingshotNodeUrl(baseUrl: string, nodeRef: string): string 
  * Build slingshot API URL for node content download
  * Supports downloading specific properties (e.g., cm:preferenceValues)
  */
+export function buildNodesApiContentUrl(baseUrl: string, nodeId: string): string {
+  return buildAlfrescoUrl(
+    baseUrl,
+    `/api/-default-/public/alfresco/versions/1/nodes/${encodeURIComponent(nodeId)}/content`
+  );
+}
+
 export function buildSlingshotContentUrl(
   baseUrl: string,
   nodeRef: string,

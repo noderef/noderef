@@ -58,5 +58,11 @@
   "success": "Erfolgreich",
   "serverUpdated": "Server \"{{name}}\" aktualisiert",
   "updateError": "Fehler",
-  "updateErrorMessage": "Server konnte nicht aktualisiert werden"
+  "updateErrorMessage": "Server konnte nicht aktualisiert werden",
+  "adminAccess": "Zugriff",
+  "adminBadge": "Admin",
+  "restrictedBadge": "Eingeschränkt",
+  "refreshCapabilities": "Berechtigungen erneut prüfen",
+  "refreshCapabilitiesSuccess": "Berechtigungen wurden aktualisiert",
+  "refreshCapabilitiesError": "Berechtigungen konnten nicht aktualisiert werden"
 }

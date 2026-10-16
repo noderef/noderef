@@ -20,6 +20,7 @@
  */
 
 import { z } from 'zod';
+import { CapabilityProfileSchema } from './capabilities.js';
 
 /**
  * Server type enum
@@ -58,7 +59,8 @@ const ServerSchema = z.object({
   baseUrl: z.string().url(),
   serverType: ServerTypeSchema.default('alfresco'),
   authType: AuthTypeSchema.nullable(),
-  isAdmin: z.boolean().default(true),
+  isAdmin: z.boolean().default(false),
+  capabilities: CapabilityProfileSchema.nullable().default(null),
   username: z.string().nullable(),
   token: z.string().nullable(), // Encrypted: password for basic auth OR access_token for OAuth
   refreshToken: z.string().nullable(), // Encrypted: OAuth refresh token
@@ -87,7 +89,8 @@ const CreateServerSchema = z.object({
   baseUrl: z.string().url(),
   serverType: ServerTypeSchema.optional().default('alfresco'),
   authType: AuthTypeSchema.nullable().optional(),
-  isAdmin: z.boolean().optional().default(true),
+  isAdmin: z.boolean().optional().default(false),
+  capabilities: CapabilityProfileSchema.nullable().optional().default(null),
   username: z.string().nullable().optional(),
   token: z.string().nullable().optional(), // Password for basic auth OR access_token for OAuth
   refreshToken: z.string().nullable().optional(), // OAuth refresh token

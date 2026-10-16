@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 
+import { applyRefreshedCapabilities } from '@/core/capabilities';
 import { call as alfrescoCall } from '@/core/ipc/alfresco';
 import { backendRpc, refreshWorkspace } from '@/core/ipc/backend';
+import { Feature, isFeatureAvailable } from '@app/contracts';
 import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
 import { MODAL_KEYS } from '@/core/store/keys';
 import { useServersStore } from '@/core/store/servers';
@@ -61,7 +63,7 @@ interface UsageData {
 
 export function ServerEditModal() {
   const { isOpen, close, payload } = useModal(MODAL_KEYS.SERVER_EDIT);
-  const { t } = useTranslation('server');
+  const { t } = useTranslation(['server', 'common']);
   const getServerById = useServersStore(state => state.getServerById);
   const setServers = useServersStore(state => state.setServers);
   const colorScheme = useComputedColorScheme('light', { getInitialValueInEffect: true });
@@ -83,6 +85,8 @@ export function ServerEditModal() {
   const [usageData, setUsageData] = useState<UsageData | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
   const [usageError, setUsageError] = useState<string | null>(null);
+  const [refreshingCapabilities, setRefreshingCapabilities] = useState(false);
+  const canLoadUsage = isFeatureAvailable(server?.capabilities, Feature.ServerUsage);
   const isDesktop = isNeutralinoMode();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -136,6 +140,7 @@ export function ServerEditModal() {
       isOpen &&
       activeSection === 'info' &&
       server.serverType === 'alfresco' &&
+      canLoadUsage &&
       !usageData &&
       !usageLoading &&
       !usageError
@@ -163,12 +168,26 @@ export function ServerEditModal() {
           setUsageLoading(false);
         });
     }
-  }, [server, isOpen, activeSection, t, usageData, usageError, usageLoading]);
+  }, [server, isOpen, activeSection, t, usageData, usageError, usageLoading, canLoadUsage]);
 
   const validateJsconsoleEndpoint = (value: string): boolean => {
     if (!value.trim()) return true; // Optional field
     // Should not start with slash (service prefix is added automatically)
     return !value.trim().startsWith('/');
+  };
+
+  const handleRefreshCapabilities = async () => {
+    if (!server) {
+      return;
+    }
+    setRefreshingCapabilities(true);
+    const profile = await applyRefreshedCapabilities(server.id);
+    setRefreshingCapabilities(false);
+    notifications.show({
+      title: profile ? t('success') : t('updateError'),
+      message: profile ? t('refreshCapabilitiesSuccess') : t('refreshCapabilitiesError'),
+      color: profile ? 'green' : 'red',
+    });
   };
 
   const validateThumbnail = (
@@ -339,12 +358,16 @@ export function ServerEditModal() {
       icon: IconPalette,
       description: t('appearanceDescription'),
     },
-    {
-      key: 'info' as ServerEditSection,
-      label: t('info'),
-      icon: IconInfoCircle,
-      description: t('infoDescription'),
-    },
+    ...(server?.serverType === 'alfresco' && !canLoadUsage
+      ? []
+      : [
+          {
+            key: 'info' as ServerEditSection,
+            label: t('info'),
+            icon: IconInfoCircle,
+            description: t('infoDescription'),
+          },
+        ]),
   ];
 
   return (
@@ -649,6 +672,21 @@ export function ServerEditModal() {
                     <Stack gap="md" mt={4}>
                       {server.serverType === 'alfresco' ? (
                         <>
+                          <Button
+                            variant="light"
+                            onClick={() => void handleRefreshCapabilities()}
+                            loading={refreshingCapabilities}
+                            style={{ alignSelf: 'flex-start' }}
+                          >
+                            {t('refreshCapabilities')}
+                          </Button>
+                          {!canLoadUsage && (
+                            <Alert color="gray">
+                              {t('common:featureUnavailable', {
+                                feature: t('common:features.ServerUsage'),
+                              })}
+                            </Alert>
+                          )}
                           {usageLoading && (
                             <Group justify="center" py="xl">
                               <Loader size="sm" />

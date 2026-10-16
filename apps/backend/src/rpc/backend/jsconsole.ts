@@ -36,7 +36,11 @@ import { AppErrors } from '../../lib/errors.js';
 import { createLogger } from '../../lib/logger.js';
 import { extractParentRefFromNodeEntry, normalizeNodeRef } from './helpers.js';
 import type { Routes, RpcContext } from './types.js';
-import { getCurrentUserId, withAuth, withAuthAndCredentials } from './withAuth.js';
+import {
+  getCurrentUserId,
+  withCapability,
+  withCapabilityAndCredentials,
+} from './withAuth.js';
 
 const log = createLogger('backend.rpc.jsconsole');
 
@@ -154,9 +158,10 @@ export function registerJsConsoleHandlers(routes: Routes, ctx: RpcContext): void
       };
       const script = (params as any).script as string;
 
-      return withAuthAndCredentials(
+      return withCapabilityAndCredentials(
         ctx,
         serverId,
+        'jsConsole',
         async ({ api, server, username, token, authType }) => {
           const jsConsoleEndpoint = server.jsconsoleEndpoint;
           if (!jsConsoleEndpoint) {
@@ -350,7 +355,7 @@ export function registerJsConsoleHandlers(routes: Routes, ctx: RpcContext): void
         documentNodeRef?: string;
       };
 
-      return withAuthAndCredentials(ctx, serverId, async ({ api, server }) => {
+      return withCapabilityAndCredentials(ctx, serverId, 'jsConsole', async ({ api, server }) => {
         const jsConsoleEndpoint = server.jsconsoleEndpoint;
         if (!jsConsoleEndpoint) {
           return AppErrors.invalidInput(
@@ -436,7 +441,7 @@ export function registerJsConsoleHandlers(routes: Routes, ctx: RpcContext): void
     handler: async params => {
       const { serverId } = params as { serverId: number };
 
-      return withAuth(ctx, serverId, async api => {
+      return withCapability(ctx, serverId, 'jsConsole', async api => {
         try {
           const searchApi = new SearchApi(api);
 
@@ -482,7 +487,7 @@ export function registerJsConsoleHandlers(routes: Routes, ctx: RpcContext): void
       const userId = await getCurrentUserId();
       const { serverId, nodeId } = params as { serverId: number; nodeId: string };
 
-      return withAuth(ctx, serverId, async api => {
+      return withCapability(ctx, serverId, 'jsConsole', async api => {
         try {
           const nodesApi = new NodesApi(api);
 
@@ -541,7 +546,7 @@ export function registerJsConsoleHandlers(routes: Routes, ctx: RpcContext): void
         imports: Array<{ resource: string; type: 'path' | 'noderef' | 'classpath' }>;
       };
 
-      return withAuth(ctx, serverId, async api => {
+      return withCapability(ctx, serverId, 'jsConsole', async api => {
         try {
           const nodesApi = new NodesApi(api);
           const searchApi = new SearchApi(api);
@@ -663,7 +668,7 @@ export function registerJsConsoleHandlers(routes: Routes, ctx: RpcContext): void
         content: string;
       };
 
-      return withAuth(ctx, serverId, async api => {
+      return withCapability(ctx, serverId, 'jsConsole', async api => {
         try {
           const nodesApi = new NodesApi(api);
 
