@@ -27,7 +27,7 @@
   "authenticated": "Autenticado",
   "loginWithOidc": "Iniciar sesión con OIDC",
   "validCredentials": "Credenciales válidas",
-  "nonAdminInfo": "Esta cuenta no es administrador de Alfresco. La búsqueda, el árbol del repositorio, Insights y el agente siguen disponibles. Las herramientas de administrador permanecen desactivadas.",
+  "nonAdminInfo": "Esta no es una cuenta de administrador. No todas las funciones están disponibles.",
   "restrictedAccessTitle": "Acceso limitado",
   "invalidCredentials": "Credenciales no válidas",
   "failedToValidateCredentials": "No se pudieron validar las credenciales",

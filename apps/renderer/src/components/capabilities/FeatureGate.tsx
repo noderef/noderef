@@ -17,56 +17,13 @@
 import { useServerCapabilities } from '@/core/store/servers';
 import { useActiveServerId } from '@/hooks/useNavigation';
 import { Feature, isFeatureAvailable } from '@app/contracts';
-import { Menu, Tooltip } from '@mantine/core';
-import {
-  cloneElement,
-  isValidElement,
-  type MouseEventHandler,
-  type ReactElement,
-  type ReactNode,
-} from 'react';
+import { Menu } from '@mantine/core';
+import type { MouseEventHandler, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 export function useFeatureUnavailableLabel(feature: Feature): string {
   const { t } = useTranslation('common');
   return t('featureUnavailable', { feature: t(`features.${feature}`) });
-}
-
-export function FeatureGate({
-  feature,
-  children,
-  fallback,
-  hideWhenUnavailable = false,
-}: {
-  feature: Feature;
-  children: ReactElement;
-  fallback?: ReactNode;
-  hideWhenUnavailable?: boolean;
-}) {
-  const activeServerId = useActiveServerId();
-  const profile = useServerCapabilities(activeServerId);
-  const available = isFeatureAvailable(profile, feature);
-  const label = useFeatureUnavailableLabel(feature);
-
-  if (available) {
-    return children;
-  }
-  if (hideWhenUnavailable) {
-    return null;
-  }
-  if (fallback) {
-    return <>{fallback}</>;
-  }
-
-  const disabledChild = isValidElement(children)
-    ? cloneElement(children, { disabled: true, onClick: undefined } as Record<string, unknown>)
-    : children;
-
-  return (
-    <Tooltip label={label} withArrow>
-      <div>{disabledChild}</div>
-    </Tooltip>
-  );
 }
 
 export function FeatureMenuItem({
@@ -86,17 +43,21 @@ export function FeatureMenuItem({
   disabled?: boolean;
   color?: string;
 }) {
+  const activeServerId = useActiveServerId();
+  const profile = useServerCapabilities(activeServerId);
+  if (!isFeatureAvailable(profile, feature)) {
+    return null;
+  }
+
   return (
-    <FeatureGate feature={feature} hideWhenUnavailable>
-      <Menu.Item
-        leftSection={leftSection}
-        rightSection={rightSection}
-        onClick={onClick}
-        disabled={disabled}
-        color={color}
-      >
-        {children}
-      </Menu.Item>
-    </FeatureGate>
+    <Menu.Item
+      leftSection={leftSection}
+      rightSection={rightSection}
+      onClick={onClick}
+      disabled={disabled}
+      color={color}
+    >
+      {children}
+    </Menu.Item>
   );
 }

@@ -15,6 +15,7 @@
  */
 
 import { backendRpc } from '@/core/ipc/backend';
+import { getAlfrescoLandingPage, shouldPreservePageOnAlfrescoServer } from '@/core/serverLanding';
 import { useAgentStore } from '@/core/store/agent';
 import type { PageKey } from '@/core/store/keys';
 import { useSavedSearchesStore } from '@/core/store/savedSearches';
@@ -142,14 +143,13 @@ export function SimpleMenuNavigation() {
   const server = getServerById(activeServerId);
   const isNodeRefSpace = !server || !server.serverType;
   const profile = useServerCapabilities(activeServerId);
-  const jsConsoleAvailable =
-    isNodeRefSpace || isFeatureAvailable(profile, Feature.JsConsole);
+  const serverJsConsoleAvailable = isFeatureAvailable(profile, Feature.JsConsole);
+  const jsConsoleAvailable = isNodeRefSpace || serverJsConsoleAvailable;
   const systemTreeAvailable =
     !isNodeRefSpace &&
     server?.serverType === 'alfresco' &&
     isFeatureAvailable(profile, Feature.SystemTree);
-  const capabilitiesReady =
-    isNodeRefSpace || server?.serverType !== 'alfresco' || profile !== null;
+  const capabilitiesReady = isNodeRefSpace || server?.serverType !== 'alfresco' || profile !== null;
 
   // Load saved searches when component mounts or when activeServerId changes
   useEffect(() => {
@@ -179,19 +179,12 @@ export function SimpleMenuNavigation() {
               return;
             }
             serverInitializationRef.current = activeServerId;
-            const shouldPreservePage =
-              activePage === 'jsconsole' ||
-              activePage === 'text-editor' ||
-              activePage === 'agentPage' ||
-              activePage === 'insights';
-
-            if (!shouldPreservePage) {
-              if (jsConsoleAvailable) {
-                navigate('jsconsole');
-              } else {
+            if (!shouldPreservePageOnAlfrescoServer(activePage, profile)) {
+              const landingPage = getAlfrescoLandingPage(profile);
+              if (landingPage === 'agentPage') {
                 setActiveChatId(null);
-                navigate('agentPage');
               }
+              navigate(landingPage);
             }
           }
         } else {
@@ -214,8 +207,29 @@ export function SimpleMenuNavigation() {
     activeSavedSearchId,
     activePage,
     navigate,
-    jsConsoleAvailable,
+    profile,
     capabilitiesReady,
+    setActiveChatId,
+  ]);
+
+  // Leave JS Console when the active Alfresco server cannot open it.
+  // NodeRef space always exposes JS Console, so switching back to a non-admin
+  // server must not keep that page just because it was "global".
+  useEffect(() => {
+    if (isNodeRefSpace || !capabilitiesReady || !activeServerId) {
+      return;
+    }
+    if (activePage === 'jsconsole' && !serverJsConsoleAvailable) {
+      setActiveChatId(null);
+      navigate('agentPage');
+    }
+  }, [
+    isNodeRefSpace,
+    capabilitiesReady,
+    activeServerId,
+    activePage,
+    serverJsConsoleAvailable,
+    navigate,
     setActiveChatId,
   ]);
 

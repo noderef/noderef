@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-import { FeatureUnavailablePage } from '@/components/capabilities/FeatureUnavailablePage';
 import { ConsoleOutput } from '@/components/js-console/ConsoleOutput';
 import { ExecuteBar } from '@/components/js-console/ExecuteBar';
 import { JsConsoleEditor } from '@/components/js-console/JsConsoleEditor';
@@ -27,10 +26,12 @@ import {
 } from '@/core/ai/consoleClient';
 import { rpc } from '@/core/ipc/rpc';
 import { dslManager } from '@/core/monaco/dsl-manager';
+import { useAgentStore } from '@/core/store/agent';
 import { useJsConsoleStore } from '@/core/store/jsConsole';
 import { useServerCapabilities, useServersStore } from '@/core/store/servers';
-import { useActiveServerId } from '@/hooks/useNavigation';
+import { useActiveServerId, useNavigation } from '@/hooks/useNavigation';
 import { Feature, isFeatureAvailable } from '@app/contracts';
+import { Center, Loader } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import type * as monaco from 'monaco-editor';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -60,6 +61,8 @@ const formatPrintOutputToString = (printOutput: unknown): string => {
 
 function JsConsolePage() {
   const { t } = useTranslation('jsConsole');
+  const { navigate } = useNavigation();
+  const setActiveChatId = useAgentStore(state => state.setActiveChatId);
   const activeServerId = useActiveServerId();
   const servers = useServersStore(state => state.servers);
   const getServerById = useServersStore(state => state.getServerById);
@@ -86,8 +89,17 @@ function JsConsolePage() {
   );
   const isNodeRefSpace = !activeServer || !activeServer.serverType;
   const capabilities = useServerCapabilities(activeServerId);
-  const jsConsoleAvailable =
-    isNodeRefSpace || isFeatureAvailable(capabilities, Feature.JsConsole);
+  const jsConsoleAvailable = isNodeRefSpace || isFeatureAvailable(capabilities, Feature.JsConsole);
+
+  useEffect(() => {
+    if (isNodeRefSpace || capabilities === null) {
+      return;
+    }
+    if (!isFeatureAvailable(capabilities, Feature.JsConsole)) {
+      setActiveChatId(null);
+      navigate('agentPage');
+    }
+  }, [isNodeRefSpace, capabilities, navigate, setActiveChatId]);
 
   // Focus editor when page loads or editor instance becomes available
   useEffect(() => {
@@ -819,7 +831,11 @@ function JsConsolePage() {
   }, [handleExecute]);
 
   if (!jsConsoleAvailable) {
-    return <FeatureUnavailablePage feature={Feature.JsConsole} />;
+    return (
+      <Center h="100%">
+        <Loader size="lg" />
+      </Center>
+    );
   }
 
   return (

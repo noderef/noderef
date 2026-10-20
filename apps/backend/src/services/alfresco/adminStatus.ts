@@ -13,9 +13,4 @@
  * limitations under the License.
  */
 
-export {
-  isAdminFromGroupMemberships,
-  isAdminFromPerson,
-  resolveAlfrescoAdminStatus,
-  type AlfrescoPersonSummary,
-} from './capabilities.js';
+export { isAdminFromGroupMemberships, isAdminFromPerson } from './capabilities.js';

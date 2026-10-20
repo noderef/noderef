@@ -15,11 +15,12 @@
  */
 
 import { backendRpc } from '@/core/ipc/backend';
+import { getAlfrescoLandingPage, shouldPreservePageOnAlfrescoServer } from '@/core/serverLanding';
 import { useAgentStore } from '@/core/store/agent';
+import type { PageKey } from '@/core/store/keys';
 import { useServersStore } from '@/core/store/servers';
 import { useActivePage, useNavigation } from '@/hooks/useNavigation';
 import type { PublicServer } from '@app/contracts';
-import { Feature, isFeatureAvailable } from '@app/contracts';
 import { ScrollArea, Stack } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useRef, useState } from 'react';
@@ -27,8 +28,8 @@ import { AddServerButton } from './AddServerButton';
 import { ServerIconButton } from './ServerIconButton';
 import classes from './ServerIconColumn.module.css';
 
-// Pages that work across all servers and should be preserved when switching
-const GLOBAL_PAGES = ['jsconsole', 'text-editor', 'agentPage'] as const;
+// Pages that work across servers that are not JS Console (gated per server)
+const CROSS_SERVER_PAGES = new Set<PageKey>(['text-editor', 'agentPage']);
 
 interface ServerIconColumnProps {
   servers: PublicServer[];
@@ -48,26 +49,32 @@ export function ServerIconColumn({
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const originalOrderRef = useRef<PublicServer[]>([]);
 
+  const goToAlfrescoLanding = (server: PublicServer) => {
+    const landingPage = getAlfrescoLandingPage(server.capabilities);
+    if (landingPage === 'agentPage') {
+      useAgentStore.getState().setActiveChatId(null);
+    }
+    navigate(landingPage);
+  };
+
   const handleSelectServer = async (serverId: number) => {
     const isAlreadySelected = selectedServerId === serverId;
     onSelectServer(serverId);
 
     const server = servers.find(s => s.id === serverId);
 
-    if (isAlreadySelected && server?.serverType === 'alfresco') {
-      // Server already selected - keep behavior deterministic and avoid saved-search auto-redirect.
-      if (isFeatureAvailable(server.capabilities, Feature.JsConsole)) {
-        navigate('jsconsole');
-      } else {
-        useAgentStore.getState().setActiveChatId(null);
-        navigate('agentPage');
+    if (server?.serverType === 'alfresco') {
+      if (isAlreadySelected) {
+        goToAlfrescoLanding(server);
+      } else if (!shouldPreservePageOnAlfrescoServer(activePage, server.capabilities)) {
+        // From NodeRef space, JS Console is always available. Do not keep it
+        // when the target server (e.g. a non-admin) cannot open it.
+        goToAlfrescoLanding(server);
       }
-    } else if (GLOBAL_PAGES.includes(activePage as any)) {
-      // Stay on current global page when switching servers to prevent flickering
-      // No navigation needed - just update the server
-    } else {
-      // Navigate to default page for the server type
-      navigate(server?.serverType === 'alfresco' ? 'repo' : 'dashboard');
+    } else if (isAlreadySelected) {
+      navigate('dashboard');
+    } else if (!CROSS_SERVER_PAGES.has(activePage)) {
+      navigate('dashboard');
     }
 
     // Update last accessed (fire-and-forget, silent failure)

@@ -15,11 +15,7 @@
 
 import type { AlfrescoApi } from '@alfresco/js-api';
 import { GroupsApi, PeopleApi, WebscriptApi } from '@alfresco/js-api';
-import {
-  createOkProfile,
-  RESTRICTED_PROFILE,
-  type CapabilityProfile,
-} from '@app/contracts';
+import { createOkProfile, RESTRICTED_PROFILE, type CapabilityProfile } from '@app/contracts';
 import { createLogger } from '../../lib/logger.js';
 
 const log = createLogger('alfresco.capabilities');
@@ -133,7 +129,7 @@ function unknownProfile(): CapabilityProfile {
   return { ...RESTRICTED_PROFILE, checkedAt: nowIso() };
 }
 
-export function normalizeJsconsoleEndpoint(endpoint: string | null | undefined): string | null {
+function normalizeJsconsoleEndpoint(endpoint: string | null | undefined): string | null {
   if (!endpoint) {
     return null;
   }
@@ -141,7 +137,7 @@ export function normalizeJsconsoleEndpoint(endpoint: string | null | undefined):
   return trimmed || null;
 }
 
-export function isDefaultOotbeeJsconsole(endpoint: string | null | undefined): boolean {
+function isDefaultOotbeeJsconsole(endpoint: string | null | undefined): boolean {
   const normalized = normalizeJsconsoleEndpoint(endpoint);
   return !normalized || normalized === DEFAULT_JSCONSOLE_PATH;
 }
@@ -253,7 +249,7 @@ export async function resolveCapabilityProfileWithDeps(
   };
 }
 
-export async function probeWebscriptStatus(api: AlfrescoApi, scriptPath: string): Promise<number> {
+async function probeWebscriptStatus(api: AlfrescoApi, scriptPath: string): Promise<number> {
   try {
     const webscriptApi = new WebscriptApi(api);
     await webscriptApi.executeWebScript(
@@ -290,12 +286,4 @@ export async function resolveCapabilityProfile(
     },
     options
   );
-}
-
-export async function resolveAlfrescoAdminStatus(api: AlfrescoApi): Promise<{
-  isAdmin: boolean;
-  user: AlfrescoPersonSummary;
-}> {
-  const { profile, user } = await resolveCapabilityProfile(api);
-  return { isAdmin: profile.isAdmin, user };
 }

@@ -18,9 +18,11 @@ import { ColumnResizeHandle } from '@/components/common/ColumnResizeHandle';
 import { CreateSiteForm } from '@/components/submenu/CreateSiteForm';
 import { getFileIconByMimeType } from '@/components/submenu/fileIconUtils';
 import {
+  canCreate,
   canDelete,
   canManagePermissions,
   canRename,
+  hasOperation,
   type NodeActionContext,
 } from '@/components/submenu/nodeActionEvaluators';
 import { alfrescoRpc } from '@/core/ipc/alfresco';
@@ -40,7 +42,7 @@ import { useNavigationStore } from '@/core/store/navigation';
 import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
 import { useServersStore } from '@/core/store/servers';
 import { useTextEditorStore } from '@/core/store/textEditor';
-import { Feature, isFeatureAvailable } from '@app/contracts';
+import { Feature, hasCapability, isFeatureAvailable } from '@app/contracts';
 import { isTextLikeFile } from '@/features/text-editor/language';
 import { useColumnResize } from '@/hooks/useColumnResize';
 import { useModal } from '@/hooks/useModal';
@@ -1880,12 +1882,25 @@ export function FileFolderBrowserView({
   }, [visibleBreadcrumb, visibleBreadcrumbStart, effectiveBreadcrumb, handleBreadcrumbClick, t]);
 
   const jsConsoleAvailable = isFeatureAvailable(server?.capabilities, Feature.JsConsole);
+  const nodeBrowserAvailable = hasCapability(server?.capabilities, 'nodeBrowser');
   const selectedActionContext = selectedItem ? toActionContext(selectedItem) : null;
   const selectedCanRename = selectedActionContext ? canRename(selectedActionContext) : false;
   const selectedCanDelete = selectedActionContext ? canDelete(selectedActionContext) : false;
   const selectedCanManagePermissions = selectedActionContext
     ? canManagePermissions(selectedActionContext)
     : false;
+  const selectedCanCreateSite =
+    selectedItem?.nodeType === 'st:sites' && selectedActionContext
+      ? canCreate(selectedActionContext)
+      : false;
+  const selectedCanEditSite =
+    selectedItem?.nodeType === 'st:site' && selectedActionContext
+      ? hasOperation(selectedActionContext, 'update')
+      : false;
+  const selectedCanDeleteSite =
+    selectedItem?.nodeType === 'st:site' && selectedActionContext
+      ? hasOperation(selectedActionContext, 'delete')
+      : false;
   const canBulkDelete =
     selectedNodeIds.length > 0 &&
     selectedNodeIds.every(id => {
@@ -2123,12 +2138,14 @@ export function FileFolderBrowserView({
               <Menu.Item leftSection={<IconPlus size={14} />} onClick={handleOpenSelectionInNewTab}>
                 {t('submenu:openInNewTab')}
               </Menu.Item>
-              <Menu.Item
-                leftSection={<IconFileSearch size={14} />}
-                onClick={handleOpenInNodeBrowser}
-              >
-                {t('submenu:nodeBrowser')}
-              </Menu.Item>
+              {nodeBrowserAvailable && (
+                <Menu.Item
+                  leftSection={<IconFileSearch size={14} />}
+                  onClick={handleOpenInNodeBrowser}
+                >
+                  {t('submenu:nodeBrowser')}
+                </Menu.Item>
+              )}
               {jsConsoleAvailable && (
                 <Menu.Item leftSection={<IconCode size={14} />} onClick={handleOpenInJsConsole}>
                   {t('submenu:jsConsole')}
@@ -2149,7 +2166,7 @@ export function FileFolderBrowserView({
               )}
             </>
           )}
-          {selectedItem?.nodeType === 'st:sites' && (
+          {selectedCanCreateSite && (
             <>
               <Menu.Divider />
               <Menu.Item leftSection={<IconWorldPlus size={14} />} onClick={handleCreateSite}>
@@ -2157,19 +2174,23 @@ export function FileFolderBrowserView({
               </Menu.Item>
             </>
           )}
-          {selectedItem?.nodeType === 'st:site' && (
+          {selectedItem?.nodeType === 'st:site' && (selectedCanEditSite || selectedCanDeleteSite) && (
             <>
               <Menu.Divider />
-              <Menu.Item leftSection={<IconEdit size={14} />} onClick={handleEditSite}>
-                {t('submenu:editSiteAction')}
-              </Menu.Item>
-              <Menu.Item
-                leftSection={<IconWorldX size={14} />}
-                color="red"
-                onClick={handleDeleteSite}
-              >
-                {t('submenu:deleteSiteAction')}
-              </Menu.Item>
+              {selectedCanEditSite && (
+                <Menu.Item leftSection={<IconEdit size={14} />} onClick={handleEditSite}>
+                  {t('submenu:editSiteAction')}
+                </Menu.Item>
+              )}
+              {selectedCanDeleteSite && (
+                <Menu.Item
+                  leftSection={<IconWorldX size={14} />}
+                  color="red"
+                  onClick={handleDeleteSite}
+                >
+                  {t('submenu:deleteSiteAction')}
+                </Menu.Item>
+              )}
             </>
           )}
           {selectedItem && (selectedCanRename || selectedCanDelete) && (
