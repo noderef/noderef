@@ -86,7 +86,13 @@ export function NodeBrowser({ tabId, serverId, nodeId, nodeName: _nodeName }: No
 
         const mimeType = extractMimeType(response.nodeData);
         const nodeType = response.nodeData.type?.prefixedName ?? null;
-        updateTabMetadata(tabId, { mimeType, nodeType });
+        const resolvedName =
+          response.nodeData.name?.name || response.nodeData.name?.prefixedName || undefined;
+        updateTabMetadata(tabId, {
+          mimeType,
+          nodeType,
+          ...(resolvedName ? { nodeName: resolvedName } : {}),
+        });
       } catch (err) {
         if (cancelled) {
           return;
