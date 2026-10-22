@@ -17,6 +17,8 @@
   "groupSites": "Sites",
   "groupPaths": "Chemins",
   "groupOperators": "Opérateurs",
+  "groupNodeBrowser": "Navigateur de nœuds",
+  "openInNodeBrowser": "Ouvrir dans le navigateur de nœuds",
   "loadingProperties": "Chargement des propriétés {{prefix}}*…",
   "loadingTypes": "Chargement des types {{prefix}}*…",
   "loadingAspects": "Chargement des aspects {{prefix}}*…",

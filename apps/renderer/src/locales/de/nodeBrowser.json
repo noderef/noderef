@@ -8,6 +8,8 @@
   "parents": "Übergeordnete",
   "permissions": "Berechtigungen",
   "reference": "Referenz",
+  "copyReference": "NodeRef kopieren",
+  "copied": "Kopiert",
   "primaryPath": "Primärpfad",
   "type": "Typ",
   "parentNode": "Übergeordneter Node",

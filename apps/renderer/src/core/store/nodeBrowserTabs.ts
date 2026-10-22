@@ -44,7 +44,7 @@ interface NodeBrowserTabsActions {
   clearAllTabs: () => void;
   updateTabMetadata: (
     tabId: string,
-    metadata: Partial<Pick<NodeBrowserTab, 'mimeType' | 'nodeType'>>
+    metadata: Partial<Pick<NodeBrowserTab, 'mimeType' | 'nodeType' | 'nodeName'>>
   ) => void;
   pruneTabsForServers: (validServerIds: number[]) => void;
   requestRefresh: (tabId: string) => void;
