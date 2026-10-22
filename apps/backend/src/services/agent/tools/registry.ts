@@ -235,11 +235,6 @@ export function getToolByName(name: string): ToolDefinition | undefined {
   return toolMap.get(resolveToolName(name));
 }
 
-/** Return Anthropic-format tool schemas for all tools */
-export function getAllToolSchemas(): AgentToolSchema[] {
-  return ALL_TOOLS.map(toAnthropicSchema);
-}
-
 export function isToolAllowed(
   name: string,
   profile: CapabilityProfile | null | undefined

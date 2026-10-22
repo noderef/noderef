@@ -55,44 +55,8 @@ export async function withAuth<T>(
     return AppErrors.unauthorized('No stored credentials found for server');
   }
 
-  const resolved = await ensureCapabilityProfile(
-    ctx.serverService,
-    userId,
-    serverId,
-    api,
-    server
-  );
+  const resolved = await ensureCapabilityProfile(ctx.serverService, userId, serverId, api, server);
   return fn(api, resolved);
-}
-
-export async function withCredentials<T>(
-  ctx: RpcContext,
-  serverId: number,
-  fn: (creds: {
-    username: string | null;
-    token: string | null;
-    authType: string | null;
-    server: PublicServer;
-  }) => Promise<T>
-): Promise<T> {
-  const userId = await getCurrentUserId();
-
-  const server = await ctx.serverService.findById(userId, serverId);
-  if (!server) {
-    return AppErrors.notFound('Server', serverId);
-  }
-
-  const creds = await ctx.serverService.getCredentialsForBackend(userId, serverId);
-  if (!creds?.token || (creds.authType === 'basic' && !creds.username)) {
-    return AppErrors.unauthorized('No stored credentials found for server');
-  }
-
-  return fn({
-    username: creds.username,
-    token: creds.token,
-    authType: creds.authType,
-    server,
-  });
 }
 
 export async function withAuthAndCredentials<T>(
@@ -123,13 +87,7 @@ export async function withAuthAndCredentials<T>(
     return AppErrors.unauthorized('Failed to authenticate with server');
   }
 
-  const resolved = await ensureCapabilityProfile(
-    ctx.serverService,
-    userId,
-    serverId,
-    api,
-    server
-  );
+  const resolved = await ensureCapabilityProfile(ctx.serverService, userId, serverId, api, server);
   return fn({
     api,
     server: resolved,

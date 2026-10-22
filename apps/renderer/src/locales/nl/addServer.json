@@ -27,7 +27,7 @@
   "authenticated": "Geauthenticeerd",
   "loginWithOidc": "Inloggen met OIDC",
   "validCredentials": "Geldige inloggegevens",
-  "nonAdminInfo": "Dit account is geen Alfresco-beheerder. Zoeken, de repository-boom, Insights en de agent blijven beschikbaar. Beheerderstools blijven uitgeschakeld.",
+  "nonAdminInfo": "Dit is geen beheerdersaccount. Niet alle functies zijn beschikbaar.",
   "restrictedAccessTitle": "Beperkte toegang",
   "invalidCredentials": "Ongeldige inloggegevens",
   "failedToValidateCredentials": "Inloggegevens valideren is mislukt",

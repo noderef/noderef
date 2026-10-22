@@ -17,6 +17,18 @@
 import { describe, expect, it } from 'vitest';
 import { mapNodeEntryToBrowserNode } from '../../src/rpc/backend/helpers.js';
 
+function propertyValue(
+  mapped: Record<string, unknown>,
+  prefixedName: string
+): unknown {
+  const properties = mapped.properties as Array<{
+    name: { prefixedName: string };
+    values: Array<{ value: unknown }>;
+  }>;
+  return properties.find(property => property.name.prefixedName === prefixedName)?.values?.[0]
+    ?.value;
+}
+
 describe('mapNodeEntryToBrowserNode', () => {
   it('maps a Nodes API entry onto the slingshot-shaped DTO', () => {
     const mapped = mapNodeEntryToBrowserNode(
@@ -41,5 +53,36 @@ describe('mapNodeEntryToBrowserNode', () => {
     expect((mapped.children as unknown[]).length).toBe(1);
     expect((mapped.aspects as unknown[]).length).toBe(1);
     expect((mapped.permissions as { inherit: boolean }).inherit).toBe(true);
+  });
+
+  it('fills standard metadata from REST top-level fields', () => {
+    const mapped = mapNodeEntryToBrowserNode({
+      id: 'abc-123',
+      name: 'invite_user_email.ftl',
+      nodeType: 'cm:content',
+      createdAt: '2024-03-01T10:00:00.000Z',
+      modifiedAt: '2025-04-02T11:30:00.000Z',
+      createdByUser: { id: 'System', displayName: 'System' },
+      modifiedByUser: { id: 'System', displayName: 'System' },
+      content: {
+        mimeType: 'text/plain',
+        sizeInBytes: 2048,
+        encoding: 'UTF-8',
+      },
+      properties: {
+        'cm:title': 'invite_user_email.ftl',
+        'cm:description': 'Email template for notifying users',
+      },
+    });
+
+    expect(propertyValue(mapped, 'cm:name')).toBe('invite_user_email.ftl');
+    expect(propertyValue(mapped, 'cm:title')).toBe('invite_user_email.ftl');
+    expect(propertyValue(mapped, 'cm:created')).toBe('2024-03-01T10:00:00.000Z');
+    expect(propertyValue(mapped, 'cm:modified')).toBe('2025-04-02T11:30:00.000Z');
+    expect(propertyValue(mapped, 'cm:creator')).toBe('System');
+    expect(propertyValue(mapped, 'cm:modifier')).toBe('System');
+    expect(propertyValue(mapped, 'cm:content')).toBe(
+      'mimetype=text/plain|size=2048|encoding=UTF-8'
+    );
   });
 });

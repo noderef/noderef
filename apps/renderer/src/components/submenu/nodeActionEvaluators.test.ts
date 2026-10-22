@@ -15,6 +15,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  canCreate,
   canDelete,
   canManagePermissions,
   canRename,
@@ -38,6 +39,7 @@ describe('nodeActionEvaluators allowableOperations', () => {
     expect(canRename(readOnly)).toBe(false);
     expect(canDelete(readOnly)).toBe(false);
     expect(canManagePermissions(readOnly)).toBe(false);
+    expect(canCreate(readOnly)).toBe(false);
   });
 
   it('allows rename only for Collaborator-like update rights', () => {
@@ -49,11 +51,12 @@ describe('nodeActionEvaluators allowableOperations', () => {
 
   it('allows rename, delete and permissions for Coordinator rights', () => {
     const coordinator = ctx({
-      allowableOperations: ['update', 'delete', 'updatePermissions'],
+      allowableOperations: ['update', 'delete', 'updatePermissions', 'create'],
     });
     expect(canRename(coordinator)).toBe(true);
     expect(canDelete(coordinator)).toBe(true);
     expect(canManagePermissions(coordinator)).toBe(true);
+    expect(canCreate(coordinator)).toBe(true);
   });
 
   it('stays permissive when allowableOperations is unknown', () => {

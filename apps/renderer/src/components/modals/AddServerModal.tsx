@@ -19,6 +19,8 @@ import { alfrescoRpc } from '@/core/ipc/alfresco';
 import { backendRpc, refreshWorkspace } from '@/core/ipc/backend';
 import { isNeutralinoMode } from '@/core/ipc/neutralino';
 import { getRpcBaseUrl } from '@/core/ipc/rpc';
+import { getAlfrescoLandingPage } from '@/core/serverLanding';
+import { useAgentStore } from '@/core/store/agent';
 import type { ServerType } from '@/core/store/keys';
 import { MODAL_KEYS } from '@/core/store/keys';
 import { useServersStore } from '@/core/store/servers';
@@ -703,7 +705,11 @@ export function AddServerModal() {
       });
 
       if (newServer.serverType === 'alfresco') {
-        navigate('repo');
+        const landingPage = getAlfrescoLandingPage(newServer.capabilities);
+        if (landingPage === 'agentPage') {
+          useAgentStore.getState().setActiveChatId(null);
+        }
+        navigate(landingPage);
       } else {
         navigate('dashboard');
       }

@@ -27,7 +27,7 @@
   "authenticated": "Authentifiziert",
   "loginWithOidc": "Mit OIDC anmelden",
   "validCredentials": "Gültige Anmeldedaten",
-  "nonAdminInfo": "Dieses Konto ist kein Alfresco-Administrator. Suche, Repository-Baum, Insights und der Agent bleiben verfügbar. Administratorwerkzeuge bleiben deaktiviert.",
+  "nonAdminInfo": "Dies ist kein Administratorkonto. Nicht alle Funktionen sind verfügbar.",
   "restrictedAccessTitle": "Eingeschränkter Zugriff",
   "invalidCredentials": "Ungültige Anmeldedaten",
   "failedToValidateCredentials": "Anmeldedaten konnten nicht geprüft werden",

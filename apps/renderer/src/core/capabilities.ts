@@ -15,7 +15,6 @@
  */
 
 import type { CapabilityProfile } from '@app/contracts';
-import { ErrorCode } from '@app/contracts';
 import { backendRpc } from './ipc/backend';
 import { useServersStore } from './store/servers';
 
@@ -28,10 +27,6 @@ export function getRpcErrorCode(error: unknown): string | undefined {
     return typeof code === 'string' ? code : undefined;
   }
   return undefined;
-}
-
-export function isUnauthorizedError(error: unknown): boolean {
-  return getRpcErrorCode(error) === ErrorCode.UNAUTHORIZED;
 }
 
 export async function refreshCapabilitiesDebounced(
@@ -57,7 +52,9 @@ export async function refreshCapabilitiesDebounced(
   }
 }
 
-export async function applyRefreshedCapabilities(serverId: number): Promise<CapabilityProfile | null> {
+export async function applyRefreshedCapabilities(
+  serverId: number
+): Promise<CapabilityProfile | null> {
   try {
     const profile = await backendRpc.servers.refreshCapabilities(serverId);
     useServersStore.getState().updateServer(serverId, {
