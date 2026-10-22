@@ -17,6 +17,8 @@
   "groupSites": "Sites",
   "groupPaths": "Pfade",
   "groupOperators": "Operatoren",
+  "groupNodeBrowser": "Node-Browser",
+  "openInNodeBrowser": "Im Node-Browser öffnen",
   "loadingProperties": "{{prefix}}*-Eigenschaften werden geladen…",
   "loadingTypes": "{{prefix}}*-Typen werden geladen…",
   "loadingAspects": "{{prefix}}*-Aspekte werden geladen…",
