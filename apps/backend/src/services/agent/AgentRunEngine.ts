@@ -95,7 +95,9 @@ import {
   compactToolDataForModel,
   MAX_TOOL_RESULT_JSON_CHARS_FOR_MODEL,
 } from './toolResultCompaction.js';
+import { CALL_TIMEOUT_MS } from './callTimeout.js';
 import { getAllToolSchemas, getToolByName, resolveToolName } from './tools/registry.js';
+import type { RunToolset } from './tools/toolset.js';
 import type { AgentExecutionContext, ResolvedAiRuntime, RunInput } from './types.js';
 
 const log = createLogger('agent.engine');
@@ -106,13 +108,6 @@ const MAX_LOOP_STEPS = (() => {
     return Math.floor(configured);
   }
   return 30;
-})();
-const CALL_TIMEOUT_MS = (() => {
-  const configured = Number(process.env.AGENT_CALL_TIMEOUT_MS);
-  if (Number.isFinite(configured) && configured >= 5_000 && configured <= 300_000) {
-    return Math.floor(configured);
-  }
-  return 60_000;
 })();
 const DEFAULT_AGENT_MAX_TOKENS = (() => {
   const configured = Number(process.env.AGENT_MAX_TOKENS);
@@ -266,7 +261,8 @@ export class AgentRunEngine {
     private repository: AgentRepository,
     private runtime: ResolvedAiRuntime,
     private execCtx: AgentExecutionContext,
-    private signal: AbortSignal
+    private signal: AbortSignal,
+    private toolset?: RunToolset
   ) {}
 
   async execute(input: RunInput): Promise<void> {
@@ -283,12 +279,16 @@ export class AgentRunEngine {
     await this.maybeGenerateInitialChatPresentation(input, recentMessages.length > 0);
 
     // ── Build initial message list ─────────────────────────────────────────────
-    const systemPrompt = await buildSystemPrompt(mentionContext, input.preferredLanguage);
-    const allTools = getAllToolSchemas();
     const allowScriptExecution = isExplicitScriptExecutionRequested(input.content);
-    const tools = allowScriptExecution
+    const systemPrompt = await buildSystemPrompt(mentionContext, input.preferredLanguage, {
+      mcpEnabled: Boolean(this.toolset?.mcpSnapshot?.enabled),
+    });
+    const allTools = this.toolset?.schemas ?? getAllToolSchemas();
+    const tools = this.toolset
       ? allTools
-      : allTools.filter(schema => resolveToolName(schema.name) !== SCRIPT_TOOL_NAME);
+      : allowScriptExecution
+        ? allTools
+        : allTools.filter(schema => resolveToolName(schema.name) !== SCRIPT_TOOL_NAME);
 
     // Inject conversation history as a prior assistant message if available
     const messages: AgentMessageParam[] = [];
@@ -297,6 +297,13 @@ export class AgentRunEngine {
       messages.push({ role: 'assistant', content: historyText });
     }
     messages.push({ role: 'user', content: input.content });
+
+    for (const warning of this.toolset?.warnings ?? []) {
+      await this.emitNote(input.runId, {
+        type: 'run.note',
+        payload: { text: warning },
+      });
+    }
 
     // ── Tool-use loop ─────────────────────────────────────────────────────────
     let stepOrdinal = await this.repository.getMaxRunStepOrdinal(input.runId);
@@ -537,8 +544,8 @@ export class AgentRunEngine {
       for (const [callIndex, call] of response.calls.entries()) {
         this.checkAborted();
 
-        const tool = getToolByName(call.name);
-        const canonicalOperation = resolveToolName(call.name);
+        const tool = this.toolset?.resolve(call.name) ?? getToolByName(call.name);
+        const canonicalOperation = tool?.name ?? resolveToolName(call.name);
         if (!tool) {
           log.warn({ name: call.name }, 'Unknown tool called by model');
           toolResultContents.push({
@@ -597,7 +604,9 @@ export class AgentRunEngine {
         }
 
         const autoApproveEnabledForCall = Boolean(
-          input.autoApproveConfirmations && tool.requiresConfirmation
+          input.autoApproveConfirmations &&
+            tool.requiresConfirmation &&
+            tool.allowAutoApprove !== false
         );
         const requiresManualConfirmation = tool.requiresConfirmation && !autoApproveEnabledForCall;
         const stepSummary = buildStepSummary({
@@ -679,6 +688,11 @@ export class AgentRunEngine {
         const modelPayload = toolResult.ok
           ? compactToolDataForModel(toolResult.data)
           : { error: toolResult.error };
+        const storedOutput = toolResult.ok
+          ? tool.skill.kind === 'mcp'
+            ? modelPayload
+            : toolResult.data
+          : { error: toolResult.error };
         let resultStr = JSON.stringify(modelPayload);
         if (resultStr.length > MAX_TOOL_RESULT_JSON_CHARS_FOR_MODEL) {
           resultStr = `${resultStr.slice(0, MAX_TOOL_RESULT_JSON_CHARS_FOR_MODEL)}\n... [truncated ${resultStr.length - MAX_TOOL_RESULT_JSON_CHARS_FOR_MODEL} chars for model context]`;
@@ -701,14 +715,14 @@ export class AgentRunEngine {
           await this.repository.updateRunStep(input.userId, input.runId, step.id, {
             status: 'completed',
             completedAt: new Date(),
-            output: toolResult.data,
+            output: storedOutput,
           });
           await this.emitEvent(input.runId, 'step.completed', 'info', {
             stepId: step.id,
             operation: canonicalOperation,
             status: 'completed',
             durationMs,
-            output: toolResult.data,
+            output: storedOutput,
           });
         } else {
           await this.repository.updateRunStep(input.userId, input.runId, step.id, {

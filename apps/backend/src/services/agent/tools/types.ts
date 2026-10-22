@@ -19,12 +19,16 @@ import type { AgentExecutionContext } from '../types.js';
 
 export type ToolResult = { ok: true; data: Record<string, unknown> } | { ok: false; error: string };
 
-export type ToolSkillRef = {
-  kind: 'local_md';
-  /** Relative to tools/ directory, or absolute filesystem path */
-  path: string;
-  version?: number;
-};
+export type ToolSkillRef =
+  | {
+      kind: 'local_md';
+      /** Relative to tools/ directory, or absolute filesystem path */
+      path: string;
+      version?: number;
+    }
+  | {
+      kind: 'mcp';
+    };
 
 /**
  * A self-contained tool definition.
@@ -41,6 +45,8 @@ export interface ToolDefinition {
   inputSchema: AgentToolSchema['input_schema'];
   /** If true, the engine pauses before executing and asks the user to confirm */
   requiresConfirmation: boolean;
+  /** When false, chat auto-approve cannot skip confirmation for this tool */
+  allowAutoApprove?: boolean;
   confirmation?: { phrase: string };
   /** Execute the tool server-side */
   execute(ctx: AgentExecutionContext, args: Record<string, unknown>): Promise<ToolResult>;

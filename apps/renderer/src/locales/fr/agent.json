@@ -95,5 +95,66 @@
   "loadingMoreResults": "Chargement de plus de resultats...",
   "qnameGroupTypes": "Types",
   "qnameGroupAspects": "Aspects",
-  "qnameGroupProperties": "Propriétés"
+  "qnameGroupProperties": "Propriétés",
+  "mcp": {
+    "button": "Agent Gateway",
+    "useInChat": "Utiliser MCP dans ce chat",
+    "tools": "Outils",
+    "prompts": "Prompts",
+    "searchTools": "Rechercher des outils",
+    "selectTools": "Sélectionner des outils",
+    "selectReadOnly": "Lecture seule",
+    "groupsByPrefix": "Groupes",
+    "selectNone": "Aucun",
+    "selectedCount": "{{selected}} sur {{total}} outils sélectionnés",
+    "noTools": "Aucun outil disponible.",
+    "noPrompts": "Aucun prompt disponible.",
+    "noDescription": "Aucune description",
+    "insertPrompt": "Préparer comme brouillon",
+    "refresh": "Actualiser",
+    "serverSettings": "Paramètres du serveur",
+    "saveFailed": "Impossible d’enregistrer les paramètres MCP",
+    "promptFailed": "Impossible de charger le prompt",
+    "requiredArgs": "Champs obligatoires : {{names}}",
+    "replaceDraft": "Remplacer le brouillon actuel par ce prompt ?",
+    "policy": {
+      "read": "lecture seule",
+      "write": "écriture",
+      "destructive_or_unknown": "destructif ou inconnu"
+    },
+    "empty": {
+      "notConfigured": "Agent Gateway n’est pas configuré pour ce serveur.",
+      "disabled": "Agent Gateway est désactivé pour ce serveur.",
+      "unauthorized": "La passerelle a rejeté la clé API.",
+      "forbidden": "La passerelle a refusé cette requête.",
+      "unreachable": "La passerelle est injoignable.",
+      "redirectBlocked": "La passerelle a redirigé la requête, ce qui est bloqué.",
+      "protocolError": "La négociation de protocole avec la passerelle a échoué.",
+      "missingCredentials": "Les identifiants Alfresco manquent pour ce serveur.",
+      "environmentMismatch": "L’environnement de la passerelle ne correspond pas à ce serveur Alfresco.",
+      "connected": "Connecté à Agent Gateway."
+    },
+    "promptCatalog": {
+      "alfresco_search_and_analyze": {
+        "title": "Rechercher et analyser",
+        "description": "Recherche des documents dans Alfresco et rédige une analyse étayée des résultats.",
+        "args": {
+          "query": {
+            "label": "Requête de recherche",
+            "description": "Requête AFTS, par exemple TYPE:\"cm:content\" AND cm:name:\"rapport*\""
+          },
+          "analysisType": {
+            "label": "Type d'analyse",
+            "description": "Par défaut : synthèse",
+            "options": {
+              "summary": "Synthèse",
+              "detailed": "Détaillée",
+              "trends": "Tendances",
+              "compliance": "Conformité"
+            }
+          }
+        }
+      }
+    }
+  }
 }

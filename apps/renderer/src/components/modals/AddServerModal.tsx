@@ -151,6 +151,7 @@ export function AddServerModal() {
     isEnabled: isOpen && isDesktopMode,
     containerRef: modalContentRef,
     onInsertText: handleInsertText,
+    enableCopyCut: true,
   });
 
   // Reset form when modal closes

@@ -23,10 +23,16 @@
  */
 
 import type {
+  AgentChatMcpSettings,
+  AgentGatewayConfigView,
+  AgentGatewayConnectionTestResult,
+  AgentGatewayVerifyResult,
   AgentRunEvent,
   AgentRunSummary,
   LocalFile as ContractsLocalFile,
   CreateServer,
+  McpCatalog,
+  McpPromptPreview,
   NodeHistoryActivitySummary,
   PublicServer,
   UpdateServer,
@@ -170,6 +176,44 @@ export const backendRpc = {
       tokens: { accessToken: string; refreshToken?: string; expiresIn?: number }
     ): Promise<AppServer> {
       return rpc<AppServer>('backend.servers.updateOidcTokens', { id, ...tokens });
+    },
+  },
+
+  agentGateway: {
+    async getConfig(serverId: number): Promise<AgentGatewayConfigView> {
+      return rpc('backend.agentGateway.getConfig', { serverId });
+    },
+    async saveConfig(data: {
+      serverId: number;
+      enabled: boolean;
+      endpointUrl?: string | null;
+      apiKey?: string;
+      clearApiKey?: boolean;
+    }): Promise<AgentGatewayConfigView> {
+      return rpc('backend.agentGateway.saveConfig', data);
+    },
+    async testConnection(data: {
+      serverId: number;
+      enabled?: boolean;
+      endpointUrl?: string | null;
+      apiKey?: string;
+      clearApiKey?: boolean;
+    }): Promise<AgentGatewayConnectionTestResult> {
+      return rpc('backend.agentGateway.testConnection', data);
+    },
+    async verifyEnvironment(serverId: number): Promise<AgentGatewayVerifyResult> {
+      return rpc('backend.agentGateway.verifyEnvironment', { serverId });
+    },
+    async getCatalog(serverId: number, refresh = false): Promise<McpCatalog> {
+      return rpc('backend.agentGateway.getCatalog', { serverId, refresh });
+    },
+    async getPrompt(data: {
+      chatId?: number;
+      serverId?: number;
+      name: string;
+      arguments?: Record<string, unknown>;
+    }): Promise<McpPromptPreview> {
+      return rpc('backend.agentGateway.getPrompt', data);
     },
   },
 
@@ -328,7 +372,11 @@ export const backendRpc = {
       return rpc('backend.agent.listChats', params ?? {});
     },
 
-    async createChat(data: { serverId: number; title?: string }): Promise<AgentChatSummary> {
+    async createChat(data: {
+      serverId: number;
+      title?: string;
+      mcp?: AgentChatMcpSettings;
+    }): Promise<AgentChatSummary> {
       return rpc('backend.agent.createChat', data);
     },
 
@@ -404,6 +452,14 @@ export const backendRpc = {
       enabled: boolean;
     }): Promise<{ success: boolean; updatedRuns: number }> {
       return rpc('backend.agent.setChatAutoApproveConfirmations', data);
+    },
+
+    async setChatMcpSettings(data: {
+      chatId: number;
+      enabled: boolean;
+      tools: string[];
+    }): Promise<AgentChatSummary> {
+      return rpc('backend.agent.setChatMcpSettings', data);
     },
 
     async searchMentions(params: {
@@ -1041,6 +1097,7 @@ export interface AgentChatSummary {
   lastMessageAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  mcp?: AgentChatMcpSettings | null;
 }
 
 export interface AgentMessage {
@@ -1051,6 +1108,13 @@ export interface AgentMessage {
   content: string;
   mentions: AgentMention[];
   createdAt: Date;
+  context?: Array<{
+    uri: string;
+    name?: string | null;
+    mimeType?: string | null;
+    chars: number;
+    truncated: boolean;
+  }> | null;
 }
 
 export type { AgentRunEvent, AgentRunSummary } from '@app/contracts';

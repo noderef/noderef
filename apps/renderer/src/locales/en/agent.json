@@ -96,5 +96,66 @@
   "loadingMoreResults": "Loading more results...",
   "qnameGroupTypes": "Types",
   "qnameGroupAspects": "Aspects",
-  "qnameGroupProperties": "Properties"
+  "qnameGroupProperties": "Properties",
+  "mcp": {
+    "button": "Agent Gateway",
+    "useInChat": "Use MCP in this chat",
+    "tools": "Tools",
+    "prompts": "Prompts",
+    "searchTools": "Search tools",
+    "selectTools": "Select tools",
+    "selectReadOnly": "Read-only",
+    "groupsByPrefix": "Groups",
+    "selectNone": "None",
+    "selectedCount": "{{selected}} of {{total}} tools selected",
+    "noTools": "No tools available.",
+    "noPrompts": "No prompts available.",
+    "noDescription": "No description",
+    "insertPrompt": "Insert as draft",
+    "refresh": "Refresh",
+    "serverSettings": "Server settings",
+    "saveFailed": "Could not save MCP settings",
+    "promptFailed": "Could not load prompt",
+    "requiredArgs": "Required fields: {{names}}",
+    "replaceDraft": "Replace the current draft with this prompt?",
+    "policy": {
+      "read": "read-only",
+      "write": "write",
+      "destructive_or_unknown": "destructive or unknown"
+    },
+    "empty": {
+      "notConfigured": "Agent Gateway is not configured for this server.",
+      "disabled": "Agent Gateway is disabled for this server.",
+      "unauthorized": "The gateway rejected the API key.",
+      "forbidden": "The gateway refused this request.",
+      "unreachable": "The gateway could not be reached.",
+      "redirectBlocked": "The gateway redirected the request, which is blocked.",
+      "protocolError": "The gateway protocol handshake failed.",
+      "missingCredentials": "Alfresco credentials are missing for this server.",
+      "environmentMismatch": "The gateway environment does not match this Alfresco server.",
+      "connected": "Connected to Agent Gateway."
+    },
+    "promptCatalog": {
+      "alfresco_search_and_analyze": {
+        "title": "Search and analyze",
+        "description": "Searches Alfresco for documents and writes an evidence-based analysis of what it finds.",
+        "args": {
+          "query": {
+            "label": "Search query",
+            "description": "AFTS query, for example TYPE:\"cm:content\" AND cm:name:\"report*\""
+          },
+          "analysisType": {
+            "label": "Analysis type",
+            "description": "Default: summary",
+            "options": {
+              "summary": "Summary",
+              "detailed": "Detailed",
+              "trends": "Trends",
+              "compliance": "Compliance"
+            }
+          }
+        }
+      }
+    }
+  }
 }
