@@ -16,11 +16,14 @@
 
 import { backendRpc, type SearchHistory } from '@/core/ipc/backend';
 import { isNeutralinoMode } from '@/core/ipc/neutralino';
+import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
 import { useSearchStore } from '@/core/store/search';
 import { useSearchHistoryStore } from '@/core/store/searchHistory';
 import { useServersStore } from '@/core/store/servers';
 import { useDesktopClipboardHandlers } from '@/hooks/useDesktopClipboardHandlers';
+import { useNavigation } from '@/hooks/useNavigation';
 import { useSearchDictionary } from '@/hooks/useSearchDictionary';
+import { getNodeDisplayName, isNodeRefProtocolPrefix, parseNodeRefInput } from '@/utils/nodeRef';
 import {
   Badge,
   Checkbox,
@@ -76,7 +79,16 @@ interface SearchQueryBuilderProps {
   disabled?: boolean;
 }
 
-type SuggestionKind = 'prefix' | 'type' | 'aspect' | 'site' | 'prop' | 'operator' | 'path' | 'text';
+type SuggestionKind =
+  | 'prefix'
+  | 'type'
+  | 'aspect'
+  | 'site'
+  | 'prop'
+  | 'operator'
+  | 'path'
+  | 'text'
+  | 'noderef';
 
 interface SuggestionItem {
   value: string;
@@ -93,6 +105,25 @@ interface SuggestionGroup {
 
 function randomId() {
   return Math.random().toString(36).slice(2, 8);
+}
+
+function firstFulfilled<T>(tasks: Array<Promise<T>>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    if (tasks.length === 0) {
+      reject(new Error('No tasks'));
+      return;
+    }
+
+    let remaining = tasks.length;
+    for (const task of tasks) {
+      task.then(resolve, () => {
+        remaining -= 1;
+        if (remaining === 0) {
+          reject(new Error('All tasks failed'));
+        }
+      });
+    }
+  });
 }
 
 function escapeQuotes(value: string): string {
@@ -202,6 +233,8 @@ export function SearchQueryBuilder({
   disabled = false,
 }: SearchQueryBuilderProps) {
   const { t } = useTranslation(['search', 'common']);
+  const openNodeTab = useNodeBrowserTabsStore(state => state.openTab);
+  const { navigate, activeServerId, setActiveServer } = useNavigation();
   const servers = useServersStore(state => state.servers);
   const explicitServer = useMemo(
     () => (serverId ? servers.find(s => s.id === serverId) || null : null),
@@ -327,6 +360,60 @@ export function SearchQueryBuilder({
     }));
   }, [explicitServer, selectedServerIds, servers, isDisabled]);
 
+  const parsedNodeRef = useMemo(() => parseNodeRefInput(inputValue), [inputValue]);
+
+  const openNodeInBrowserForServer = useCallback(
+    (nodeId: string, targetServerId: number, nodeName?: string) => {
+      openNodeTab({
+        nodeId,
+        nodeName: nodeName || nodeId,
+        serverId: targetServerId,
+      });
+      if (activeServerId) {
+        setActiveServer(targetServerId);
+      }
+      navigate('node-browser');
+      setInputValue('');
+      combobox.closeDropdown();
+    },
+    [openNodeTab, activeServerId, setActiveServer, navigate, combobox]
+  );
+
+  const handleOpenNodeRef = useCallback(
+    async (nodeId: string, explicitTargetServerId?: number) => {
+      if (isDisabled || selectedServers.length === 0) {
+        return;
+      }
+
+      if (typeof explicitTargetServerId === 'number') {
+        openNodeInBrowserForServer(nodeId, explicitTargetServerId);
+        return;
+      }
+
+      if (selectedServers.length === 1) {
+        openNodeInBrowserForServer(nodeId, selectedServers[0].id);
+        return;
+      }
+
+      setInputValue('');
+      combobox.closeDropdown();
+
+      try {
+        const match = await firstFulfilled(
+          selectedServers.map(async server => {
+            const details = await backendRpc.repository.getNodeDetails(server.id, nodeId);
+            const resolvedName = getNodeDisplayName(details.nodeData) || nodeId;
+            return { serverId: server.id, nodeName: resolvedName };
+          })
+        );
+        openNodeInBrowserForServer(nodeId, match.serverId, match.nodeName);
+      } catch {
+        openNodeInBrowserForServer(nodeId, selectedServers[0].id);
+      }
+    },
+    [isDisabled, selectedServers, openNodeInBrowserForServer, combobox]
+  );
+
   useEffect(() => {
     if (pendingPropField) {
       setTimeout(() => pendingInputRef.current?.focus(), 0);
@@ -422,6 +509,9 @@ export function SearchQueryBuilder({
     if (pendingPropField) {
       return null;
     }
+    if (parsedNodeRef || isNodeRefProtocolPrefix(inputValue)) {
+      return null;
+    }
     const match = inputValue.match(/^([a-z0-9_-]+:)/i);
     if (!match) {
       return null;
@@ -440,7 +530,7 @@ export function SearchQueryBuilder({
       return null;
     }
     return prefix;
-  }, [inputValue, pendingPropField, normalizedDefaultPropPrefix]);
+  }, [inputValue, pendingPropField, normalizedDefaultPropPrefix, parsedNodeRef]);
 
   const activeClassPrefix = useMemo(() => {
     if (pendingPropField) {
@@ -894,6 +984,51 @@ export function SearchQueryBuilder({
       });
     };
 
+    if (parsedNodeRef) {
+      const items: SuggestionItem[] =
+        multiServerEnabled && selectedServers.length > 1
+          ? selectedServers.map(server => ({
+              value: `noderef::${server.id}::${parsedNodeRef.nodeId}`,
+              label: t('openInNodeBrowser'),
+              kind: 'noderef',
+              description: parsedNodeRef.nodeRef,
+              meta: {
+                nodeId: parsedNodeRef.nodeId,
+                nodeRef: parsedNodeRef.nodeRef,
+                serverId: String(server.id),
+                serverName: server.name,
+              },
+            }))
+          : [
+              {
+                value: `noderef::default::${parsedNodeRef.nodeId}`,
+                label: t('openInNodeBrowser'),
+                kind: 'noderef',
+                description: parsedNodeRef.nodeRef,
+                meta: {
+                  nodeId: parsedNodeRef.nodeId,
+                  nodeRef: parsedNodeRef.nodeRef,
+                  ...(selectedServers[0]
+                    ? {
+                        serverId: String(selectedServers[0].id),
+                        serverName: selectedServers[0].name,
+                      }
+                    : {}),
+                },
+              },
+            ];
+
+      groups.push({
+        group: t('groupNodeBrowser'),
+        items,
+      });
+      return groups;
+    }
+
+    if (isNodeRefProtocolPrefix(inputValue)) {
+      return [];
+    }
+
     if (normalized.startsWith('type:')) {
       const term = normalized.slice(5);
       const targetPrefix = term.endsWith(':')
@@ -1164,6 +1299,9 @@ export function SearchQueryBuilder({
     t,
     isLoadingHistory,
     searchHistory,
+    parsedNodeRef,
+    selectedServers,
+    multiServerEnabled,
   ]);
 
   const flatSuggestions = useMemo(() => suggestions.flatMap(group => group.items), [suggestions]);
@@ -1306,6 +1444,14 @@ export function SearchQueryBuilder({
         addToken(formatPathToken(pathValue, 'deep', t, qnamePath));
         break;
       }
+      case 'noderef': {
+        const nodeId = item.meta?.nodeId;
+        const targetServerId = item.meta?.serverId ? Number(item.meta.serverId) : undefined;
+        if (nodeId) {
+          void handleOpenNodeRef(nodeId, targetServerId);
+        }
+        return;
+      }
       case 'text': {
         // Handle search history items - submit the stored query directly
         if (item.meta?.query) {
@@ -1364,6 +1510,12 @@ export function SearchQueryBuilder({
     const value = (raw ?? inputValue).trim();
     if (!value) {
       handleSearchSubmit();
+      return;
+    }
+
+    const detectedNodeRef = parseNodeRefInput(value);
+    if (detectedNodeRef) {
+      void handleOpenNodeRef(detectedNodeRef.nodeId);
       return;
     }
 
@@ -1518,7 +1670,6 @@ export function SearchQueryBuilder({
             style={{
               width: '100%',
               minWidth: 200,
-              maxWidth: 400,
               cursor: isDisabled ? 'not-allowed' : undefined,
               opacity: isDisabled ? 0.6 : 1,
             }}
@@ -1543,12 +1694,22 @@ export function SearchQueryBuilder({
                 msOverflowStyle: 'none',
                 gap: 8,
                 width: '100%',
+                minWidth: 0,
+                flex: 1,
                 alignItems: 'center',
                 WebkitOverflowScrolling: 'touch',
               }}
             >
               <Pill.Group
-                style={{ display: 'flex', flexWrap: 'nowrap', gap: 8, alignItems: 'center' }}
+                style={{
+                  display: 'flex',
+                  flexWrap: 'nowrap',
+                  gap: 8,
+                  alignItems: 'center',
+                  width: '100%',
+                  minWidth: 'min-content',
+                  flex: 1,
+                }}
               >
                 {tokens.map(token => {
                   if (token.kind === 'path') {
@@ -1735,8 +1896,8 @@ export function SearchQueryBuilder({
                     autoCapitalize="off"
                     spellCheck={false}
                     style={{
-                      minWidth: 140,
-                      flex: '0 0 auto',
+                      flex: '1 1 auto',
+                      minWidth: `max(8.75rem, ${Math.max(inputValue.length + 1, 12)}ch)`,
                     }}
                   />
                 </Combobox.EventsTarget>
@@ -1760,7 +1921,7 @@ export function SearchQueryBuilder({
               <Combobox.Group label={group.group} key={group.group}>
                 {group.items.map(item => {
                   // Special layout for path items: name on top, path below
-                  if (item.kind === 'path' && item.description) {
+                  if ((item.kind === 'path' || item.kind === 'noderef') && item.description) {
                     return (
                       <Combobox.Option value={item.value} key={item.value}>
                         <Stack gap={4}>

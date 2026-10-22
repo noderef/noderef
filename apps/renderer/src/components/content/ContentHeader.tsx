@@ -165,8 +165,8 @@ export function ContentHeader({
 
         {/* Search Bar */}
         <Box
-          w={400}
-          maw={400}
+          w={560}
+          maw={560}
           miw={200}
           style={{
             flexShrink: 1,
