@@ -92,3 +92,76 @@ export function isNodeRefProtocolPrefix(rawInput: string): boolean {
   const cleaned = cleanNodeRefInput(rawInput);
   return /^(workspace|archive|versionstore|system|user):\//i.test(cleaned);
 }
+
+interface NodeNameSource {
+  type?: { prefixedName?: string };
+  name?: { name?: string; prefixedName?: string };
+  properties?: Array<{
+    name: { name?: string; prefixedName?: string };
+    values?: Array<{ value?: unknown }>;
+  }>;
+}
+
+function readNodeProperty(nodeData: NodeNameSource, keys: string[]): string | undefined {
+  for (const property of nodeData.properties ?? []) {
+    const candidates = [property.name?.prefixedName, property.name?.name];
+    if (!candidates.some(candidate => candidate && keys.includes(candidate))) {
+      continue;
+    }
+    const value = property.values?.[0]?.value;
+    if (typeof value === 'string' && value.trim()) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function localNameFromQName(value?: string): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const clarkMatch = value.match(/^\{[^}]+\}(.+)$/);
+  if (clarkMatch) {
+    return clarkMatch[1];
+  }
+  const prefixMatch = value.match(/^[^:]+:(.+)$/);
+  if (prefixMatch) {
+    return prefixMatch[1];
+  }
+  return value;
+}
+
+/**
+ * Display name for tabs and UI: prefer cm:name (or cm:userName for people),
+ * never the Slingshot QName (`{http://www.alfresco.org/model/...}local`).
+ */
+export function getNodeDisplayName(nodeData: NodeNameSource | null | undefined): string | undefined {
+  if (!nodeData) {
+    return undefined;
+  }
+
+  const typeName = nodeData.type?.prefixedName;
+  if (typeName === 'cm:person') {
+    const username = readNodeProperty(nodeData, [
+      'cm:userName',
+      '{http://www.alfresco.org/model/person/1.0}userName',
+    ]);
+    if (username) {
+      return username;
+    }
+  }
+
+  const cmName = readNodeProperty(nodeData, [
+    'cm:name',
+    '{http://www.alfresco.org/model/content/1.0}name',
+  ]);
+  if (cmName) {
+    return cmName;
+  }
+
+  return (
+    localNameFromQName(nodeData.name?.prefixedName) ||
+    localNameFromQName(nodeData.name?.name) ||
+    undefined
+  );
+}

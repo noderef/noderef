@@ -17,6 +17,7 @@
 import { backendRpc, type AlfrescoNodeDetails } from '@/core/ipc/backend';
 import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
 import { useServersStore } from '@/core/store/servers';
+import { getNodeDisplayName } from '@/utils/nodeRef';
 import { Accordion, Loader, Stack, Text, ThemeIcon } from '@mantine/core';
 import {
   IconArrowLeft,
@@ -86,8 +87,7 @@ export function NodeBrowser({ tabId, serverId, nodeId, nodeName: _nodeName }: No
 
         const mimeType = extractMimeType(response.nodeData);
         const nodeType = response.nodeData.type?.prefixedName ?? null;
-        const resolvedName =
-          response.nodeData.name?.name || response.nodeData.name?.prefixedName || undefined;
+        const resolvedName = getNodeDisplayName(response.nodeData);
         updateTabMetadata(tabId, {
           mimeType,
           nodeType,
@@ -177,13 +177,7 @@ export function NodeBrowser({ tabId, serverId, nodeId, nodeName: _nodeName }: No
               properties={nodeData.properties}
               serverId={serverId}
               nodeId={nodeId}
-              nodeName={(() => {
-                // Extract cm:name from properties array
-                const nameProperty = nodeData.properties.find(
-                  prop => prop.name.prefixedName === 'cm:name'
-                );
-                return (nameProperty?.values?.[0]?.value as string) || nodeData.name.name;
-              })()}
+              nodeName={getNodeDisplayName(nodeData) || _nodeName}
             />
           </Accordion.Panel>
         </Accordion.Item>
@@ -288,7 +282,7 @@ export function NodeBrowser({ tabId, serverId, nodeId, nodeName: _nodeName }: No
               permissions={nodeData.permissions}
               serverId={serverId}
               nodeId={nodeId}
-              nodeName={nodeData.name?.name || nodeData.name?.prefixedName || _nodeName}
+              nodeName={getNodeDisplayName(nodeData) || _nodeName}
               onPermissionsUpdated={handlePermissionsUpdated}
             />
           </Accordion.Panel>

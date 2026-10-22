@@ -23,7 +23,7 @@ import { useServersStore } from '@/core/store/servers';
 import { useDesktopClipboardHandlers } from '@/hooks/useDesktopClipboardHandlers';
 import { useNavigation } from '@/hooks/useNavigation';
 import { useSearchDictionary } from '@/hooks/useSearchDictionary';
-import { isNodeRefProtocolPrefix, parseNodeRefInput } from '@/utils/nodeRef';
+import { getNodeDisplayName, isNodeRefProtocolPrefix, parseNodeRefInput } from '@/utils/nodeRef';
 import {
   Badge,
   Checkbox,
@@ -402,8 +402,7 @@ export function SearchQueryBuilder({
         const match = await firstFulfilled(
           selectedServers.map(async server => {
             const details = await backendRpc.repository.getNodeDetails(server.id, nodeId);
-            const resolvedName =
-              details.nodeData?.name?.name || details.nodeData?.name?.prefixedName || nodeId;
+            const resolvedName = getNodeDisplayName(details.nodeData) || nodeId;
             return { serverId: server.id, nodeName: resolvedName };
           })
         );
@@ -1671,7 +1670,6 @@ export function SearchQueryBuilder({
             style={{
               width: '100%',
               minWidth: 200,
-              maxWidth: 400,
               cursor: isDisabled ? 'not-allowed' : undefined,
               opacity: isDisabled ? 0.6 : 1,
             }}
@@ -1696,12 +1694,22 @@ export function SearchQueryBuilder({
                 msOverflowStyle: 'none',
                 gap: 8,
                 width: '100%',
+                minWidth: 0,
+                flex: 1,
                 alignItems: 'center',
                 WebkitOverflowScrolling: 'touch',
               }}
             >
               <Pill.Group
-                style={{ display: 'flex', flexWrap: 'nowrap', gap: 8, alignItems: 'center' }}
+                style={{
+                  display: 'flex',
+                  flexWrap: 'nowrap',
+                  gap: 8,
+                  alignItems: 'center',
+                  width: '100%',
+                  minWidth: 'min-content',
+                  flex: 1,
+                }}
               >
                 {tokens.map(token => {
                   if (token.kind === 'path') {
@@ -1888,8 +1896,8 @@ export function SearchQueryBuilder({
                     autoCapitalize="off"
                     spellCheck={false}
                     style={{
-                      minWidth: 140,
-                      flex: '0 0 auto',
+                      flex: '1 1 auto',
+                      minWidth: `max(8.75rem, ${Math.max(inputValue.length + 1, 12)}ch)`,
                     }}
                   />
                 </Combobox.EventsTarget>

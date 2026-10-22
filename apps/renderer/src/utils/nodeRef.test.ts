@@ -15,7 +15,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { isNodeRefProtocolPrefix, parseNodeRefInput } from './nodeRef';
+import { getNodeDisplayName, isNodeRefProtocolPrefix, parseNodeRefInput } from './nodeRef';
 
 const UUID = '6f73de1b-d3b4-11db-80cb-112e6c2ea048';
 const FULL = `workspace://SpacesStore/${UUID}`;
@@ -79,5 +79,50 @@ describe('isNodeRefProtocolPrefix', () => {
   it('does not treat property prefixes as nodeRefs', () => {
     expect(isNodeRefProtocolPrefix('cm:')).toBe(false);
     expect(isNodeRefProtocolPrefix('workspace:')).toBe(false);
+  });
+});
+
+describe('getNodeDisplayName', () => {
+  it('prefers cm:name over the Slingshot QName', () => {
+    expect(
+      getNodeDisplayName({
+        name: {
+          name: '{http://www.alfresco.org/model/content/1.0}report.csv',
+          prefixedName: 'cm:report.csv',
+        },
+        properties: [
+          {
+            name: { prefixedName: 'cm:name' },
+            values: [{ value: 'report_09af23ae.csv' }],
+          },
+        ],
+      })
+    ).toBe('report_09af23ae.csv');
+  });
+
+  it('uses cm:userName for people', () => {
+    expect(
+      getNodeDisplayName({
+        type: { prefixedName: 'cm:person' },
+        name: { prefixedName: 'cm:admin' },
+        properties: [
+          {
+            name: { prefixedName: 'cm:userName' },
+            values: [{ value: 'admin' }],
+          },
+        ],
+      })
+    ).toBe('admin');
+  });
+
+  it('strips Clark notation when cm:name is missing', () => {
+    expect(
+      getNodeDisplayName({
+        name: {
+          name: '{http://www.alfresco.org/model/content/1.0}company_home',
+          prefixedName: 'app:company_home',
+        },
+      })
+    ).toBe('company_home');
   });
 });
