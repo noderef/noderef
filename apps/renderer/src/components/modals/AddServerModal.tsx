@@ -14,13 +14,18 @@
  * limitations under the License.
  */
 
+import { canSaveAddServer } from '@/components/modals/addServerForm';
 import { alfrescoRpc } from '@/core/ipc/alfresco';
 import { backendRpc, refreshWorkspace } from '@/core/ipc/backend';
 import { isNeutralinoMode } from '@/core/ipc/neutralino';
 import { getRpcBaseUrl } from '@/core/ipc/rpc';
+import { getAlfrescoLandingPage } from '@/core/serverLanding';
+import { useAgentStore } from '@/core/store/agent';
 import type { ServerType } from '@/core/store/keys';
 import { MODAL_KEYS } from '@/core/store/keys';
 import { useServersStore } from '@/core/store/servers';
+import type { CapabilityProfile } from '@app/contracts';
+import { hasCapability } from '@app/contracts';
 import { useDesktopClipboardHandlers } from '@/hooks/useDesktopClipboardHandlers';
 import { useModal } from '@/hooks/useModal';
 import { useNavigation } from '@/hooks/useNavigation';
@@ -73,7 +78,7 @@ export function AddServerModal() {
   const [password, setPassword] = useState('');
   const [credentialsValidating, setCredentialsValidating] = useState(false);
   const [credentialsValid, setCredentialsValid] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [capabilities, setCapabilities] = useState<CapabilityProfile | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
 
   // OIDC/OAuth2 fields
@@ -165,7 +170,7 @@ export function AddServerModal() {
       setPassword('');
       setCredentialsValidating(false);
       setCredentialsValid(false);
-      setIsAdmin(false);
+      setCapabilities(null);
       setValidationError(null);
       setOidcHost('');
       setOidcRealm('');
@@ -204,14 +209,14 @@ export function AddServerModal() {
   useEffect(() => {
     if (authType !== 'basic' || !baseUrl || !username || !password) {
       setCredentialsValid(false);
-      setIsAdmin(false);
+      setCapabilities(null);
       setValidationError(null);
       return;
     }
 
     if (!validateUrl(baseUrl)) {
       setCredentialsValid(false);
-      setIsAdmin(false);
+      setCapabilities(null);
       setValidationError(null);
       return;
     }
@@ -230,26 +235,23 @@ export function AddServerModal() {
 
         if (result.valid) {
           setCredentialsValid(true);
-          setIsAdmin(result.isAdmin || false);
-          if (!result.isAdmin) {
-            setValidationError('Only admin users can add servers');
-          }
+          setCapabilities(result.capabilities ?? null);
         } else {
           setCredentialsValid(false);
-          setIsAdmin(false);
-          setValidationError(result.error || 'Invalid credentials');
+          setCapabilities(null);
+          setValidationError(result.error || t('addServer:invalidCredentials'));
         }
       } catch (error) {
         setCredentialsValid(false);
-        setIsAdmin(false);
-        setValidationError('Failed to validate credentials');
+        setCapabilities(null);
+        setValidationError(t('addServer:failedToValidateCredentials'));
       } finally {
         setCredentialsValidating(false);
       }
     }, 800); // 800ms debounce
 
     return () => clearTimeout(timeoutId);
-  }, [authType, baseUrl, username, password]);
+  }, [authType, baseUrl, username, password, t]);
 
   const handleCancel = () => {
     close();
@@ -506,30 +508,28 @@ export function AddServerModal() {
                   });
 
                   if (validationResult.valid) {
-                    const adminStatus = validationResult.isAdmin || false;
-                    setIsAdmin(adminStatus);
-                    if (!validationResult.isAdmin) {
+                    setCapabilities(validationResult.capabilities ?? null);
+                    if (!hasCapability(validationResult.capabilities, 'admin')) {
                       notifications.show({
-                        title: 'Admin Access Required',
-                        message: 'Only admin users can add servers',
-                        color: 'yellow',
+                        title: t('addServer:restrictedAccessTitle'),
+                        message: t('addServer:nonAdminInfo'),
+                        color: 'blue',
                       });
                     }
                   } else {
-                    setIsAdmin(false);
+                    setCapabilities(null);
                     notifications.show({
-                      title: 'Validation Failed',
-                      message: validationResult.error || 'Failed to validate credentials',
+                      title: t('addServer:validationFailedTitle'),
+                      message: validationResult.error || t('addServer:failedToValidateCredentials'),
                       color: 'red',
                     });
                   }
                 } catch (validationError) {
                   console.error('Failed to validate OIDC credentials:', validationError);
-                  setIsAdmin(false);
-                  // Don't block the flow, but warn the user
+                  setCapabilities(null);
                   notifications.show({
-                    title: 'Warning',
-                    message: 'Could not verify admin status. The server may not have admin access.',
+                    title: t('common:error'),
+                    message: t('addServer:failedToValidateCredentials'),
                     color: 'yellow',
                   });
                 }
@@ -628,8 +628,8 @@ export function AddServerModal() {
     // Validate baseUrl
     if (!validateUrl(baseUrl)) {
       notifications.show({
-        title: 'Validation Error',
-        message: 'Please enter a valid server URL',
+        title: t('addServer:validationErrorTitle'),
+        message: t('addServer:invalidServerUrl'),
         color: 'red',
       });
       return;
@@ -640,8 +640,8 @@ export function AddServerModal() {
       if (authType === 'basic') {
         if (!username.trim() || !password.trim()) {
           notifications.show({
-            title: 'Validation Error',
-            message: 'Please enter username and password for basic authentication',
+            title: t('addServer:validationErrorTitle'),
+            message: t('addServer:enterUsernamePassword'),
             color: 'red',
           });
           return;
@@ -649,8 +649,8 @@ export function AddServerModal() {
       } else if (authType === 'openid_connect') {
         if (!oidcAuthenticated) {
           notifications.show({
-            title: 'Authentication Required',
-            message: 'Please login with OIDC before adding the server',
+            title: t('addServer:authenticationRequiredTitle'),
+            message: t('addServer:oidcLoginRequired'),
             color: 'red',
           });
           return;
@@ -671,7 +671,8 @@ export function AddServerModal() {
         baseUrl: baseUrl.trim(),
         serverType: serverType as ServerType,
         authType: serverType === 'alfresco' ? authType : null,
-        isAdmin: isAdmin, // Admin flag from validation
+        isAdmin: hasCapability(capabilities, 'admin'),
+        capabilities,
         // Basic auth fields
         username: authType === 'basic' ? username.trim() : null,
         token:
@@ -704,22 +705,26 @@ export function AddServerModal() {
       });
 
       if (newServer.serverType === 'alfresco') {
-        navigate('repo');
+        const landingPage = getAlfrescoLandingPage(newServer.capabilities);
+        if (landingPage === 'agentPage') {
+          useAgentStore.getState().setActiveChatId(null);
+        }
+        navigate(landingPage);
       } else {
         navigate('dashboard');
       }
 
       notifications.show({
-        title: 'Success',
-        message: `Server "${name}" added successfully`,
+        title: t('common:success'),
+        message: t('addServer:serverAdded', { name }),
         color: 'green',
       });
 
       close();
     } catch (error) {
       notifications.show({
-        title: 'Error',
-        message: error instanceof Error ? error.message : 'Failed to add server',
+        title: t('common:error'),
+        message: error instanceof Error ? error.message : t('addServer:failedToAddServer'),
         color: 'red',
       });
     } finally {
@@ -733,14 +738,15 @@ export function AddServerModal() {
     oidcRealm.trim().length > 0 &&
     oidcClientId.trim().length > 0;
 
-  const canSave =
-    name.trim().length > 0 &&
-    validateUrl(baseUrl) &&
-    (serverType === 'alfresco'
-      ? authType === 'basic'
-        ? credentialsValid && isAdmin
-        : oidcAuthenticated && isAdmin
-      : true);
+  const isAdminAccount = hasCapability(capabilities, 'admin');
+  const canSave = canSaveAddServer({
+    name,
+    urlValid: validateUrl(baseUrl),
+    serverType,
+    authType,
+    credentialsValid,
+    oidcAuthenticated,
+  });
 
   const serverTypes = [
     {
@@ -922,22 +928,23 @@ export function AddServerModal() {
                         rightSection={
                           credentialsValidating ? (
                             <Text size="xs">⏳</Text>
-                          ) : credentialsValid && isAdmin ? (
+                          ) : credentialsValid ? (
                             <Text size="xs" c="green">
                               ✓
-                            </Text>
-                          ) : credentialsValid && !isAdmin ? (
-                            <Text size="xs" c="red">
-                              ⚠
                             </Text>
                           ) : null
                         }
                         error={validationError}
                       />
-                      {credentialsValid && isAdmin && (
+                      {credentialsValid && isAdminAccount && (
                         <Text size="xs" c="green" mt={4}>
                           {t('addServer:validAdminCredentials')}
                         </Text>
+                      )}
+                      {credentialsValid && !isAdminAccount && (
+                        <Alert icon={<IconInfoCircle size={16} />} color="blue" mt={8}>
+                          <Text size="xs">{t('addServer:nonAdminInfo')}</Text>
+                        </Alert>
                       )}
                       {credentialsValidating && (
                         <Text size="xs" c="dimmed" mt={4}>

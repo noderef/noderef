@@ -50,8 +50,17 @@ export const nodeListChildrenTool: ToolDefinition = {
       const requestQuery = {
         maxItems,
         skipCount: 0,
-        fields: ['id', 'name', 'nodeType', 'isFolder', 'isFile', 'content', 'path'],
-        include: ['path'],
+        fields: [
+          'id',
+          'name',
+          'nodeType',
+          'isFolder',
+          'isFile',
+          'content',
+          'path',
+          'allowableOperations',
+        ],
+        include: ['path', 'allowableOperations'],
       };
 
       const result = await nodesApi.listNodeChildren(nodeId, requestQuery);

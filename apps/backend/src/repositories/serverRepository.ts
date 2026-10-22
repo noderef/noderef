@@ -20,7 +20,14 @@
  * Note: Encryption/decryption of credentials is handled by the service layer
  */
 
-import type { CreateServer, InsightRangeDays, Server, UpdateServer } from '@app/contracts';
+import type {
+  CapabilityProfile,
+  CreateServer,
+  InsightRangeDays,
+  Server,
+  UpdateServer,
+} from '@app/contracts';
+import { parseCapabilityProfile } from '@app/contracts';
 import type { PrismaClient, Server as PrismaServer } from '@prisma/client';
 import { DEFAULT_INSIGHT_RANGE_DAYS, VALID_INSIGHT_RANGE_DAYS } from '../constants/insights.js';
 
@@ -35,6 +42,24 @@ type CreateServerInput = Omit<CreateServer, 'insightRangeDays'> & {
 type UpdateServerInput = Omit<UpdateServer, 'insightRangeDays'> & {
   insightRangeDays?: number;
 };
+
+function serializeCapabilities(value: CapabilityProfile | null | undefined): string | null {
+  if (value == null) {
+    return null;
+  }
+  return JSON.stringify(value);
+}
+
+function deserializeCapabilities(raw: string | null | undefined): CapabilityProfile | null {
+  if (!raw) {
+    return null;
+  }
+  try {
+    return parseCapabilityProfile(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
 
 function normalizeInsightRangeDays(value: number | null | undefined): InsightRangeDays {
   if (typeof value === 'number' && VALID_INSIGHT_RANGE_DAYS.has(value)) {
@@ -75,7 +100,8 @@ export class ServerRepository {
       baseUrl: server.baseUrl,
       serverType: server.serverType as Server['serverType'],
       authType: server.authType as Server['authType'],
-      isAdmin: server.isAdmin ?? true,
+      isAdmin: server.isAdmin ?? false,
+      capabilities: deserializeCapabilities(server.capabilities),
       username: server.username,
       token: server.token,
       refreshToken: server.refreshToken,
@@ -131,14 +157,15 @@ export class ServerRepository {
    */
   async create(data: CreateServerInput): Promise<ServerEntity> {
     const displayOrder = data.displayOrder ?? (await this.getNextDisplayOrder(data.userId));
-    const { insightRangeDays } = data;
+    const { insightRangeDays, capabilities, ...rest } = data;
 
     const server = await this.prisma.server.create({
       data: {
-        ...data,
+        ...rest,
         serverType: data.serverType ?? 'alfresco',
         authType: data.authType ?? null,
-        isAdmin: data.isAdmin ?? true,
+        isAdmin: data.isAdmin ?? false,
+        capabilities: serializeCapabilities(capabilities),
         username: data.username ?? null,
         token: data.token ?? null,
         refreshToken: data.refreshToken ?? null,
@@ -177,6 +204,11 @@ export class ServerRepository {
 
     const updateData = buildPartialUpdate(data);
     const prismaData: Record<string, unknown> = { ...updateData };
+    if ('capabilities' in prismaData) {
+      prismaData.capabilities = serializeCapabilities(
+        prismaData.capabilities as CapabilityProfile | null
+      );
+    }
     if (prismaData.thumbnail && typeof prismaData.thumbnail === 'string') {
       prismaData.thumbnail = Buffer.from(prismaData.thumbnail, 'base64');
     }

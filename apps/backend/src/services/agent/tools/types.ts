@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import type { Capability } from '@app/contracts';
 import type { AgentToolSchema } from '../../../ai/anthropic.js';
 import type { AgentExecutionContext } from '../types.js';
 
@@ -42,6 +43,8 @@ export interface ToolDefinition {
   /** If true, the engine pauses before executing and asks the user to confirm */
   requiresConfirmation: boolean;
   confirmation?: { phrase: string };
+  /** Capabilities required to advertise and execute this tool. */
+  requires?: Capability[];
   /** Execute the tool server-side */
   execute(ctx: AgentExecutionContext, args: Record<string, unknown>): Promise<ToolResult>;
 }

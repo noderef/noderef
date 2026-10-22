@@ -31,7 +31,8 @@ import type {
   ValidateOidcCredentialsRes,
 } from '@app/contracts';
 import { createLogger } from '../../lib/logger.js';
-import { resolveAlfrescoAdminStatus } from './adminStatus.js';
+import { RESTRICTED_PROFILE } from '@app/contracts';
+import { resolveCapabilityProfile } from './capabilities.js';
 import {
   dropClient,
   getClient,
@@ -122,6 +123,7 @@ export async function validateCredentials(
         return {
           valid: false,
           isAdmin: false,
+          capabilities: RESTRICTED_PROFILE,
           error: 'Invalid username or password',
         };
       }
@@ -130,14 +132,15 @@ export async function validateCredentials(
       throw loginError;
     }
 
-    const { isAdmin, user } = await resolveAlfrescoAdminStatus(api);
+    const { profile, user } = await resolveCapabilityProfile(api);
 
     // Drop the client after validation (we'll create a new one when adding the server)
     dropClient(req.baseUrl);
 
     return {
       valid: true,
-      isAdmin,
+      isAdmin: profile.isAdmin,
+      capabilities: profile,
       user,
     };
   } catch (error: any) {
@@ -206,6 +209,7 @@ export async function validateCredentials(
     return {
       valid: false,
       isAdmin: false,
+      capabilities: RESTRICTED_PROFILE,
       error: errorMessage,
     };
   }
@@ -234,16 +238,17 @@ export async function validateOidcCredentials(
     api = getClient(req.baseUrl, oauth2Auth);
     await ensureEcmTicket(api, req.baseUrl, req.accessToken);
 
-    const { isAdmin, user } = await resolveAlfrescoAdminStatus(api);
+    const { profile, user } = await resolveCapabilityProfile(api);
 
-    log.info({ userId: user.id, isAdmin }, 'OIDC credential validation completed');
+    log.info({ userId: user.id, isAdmin: profile.isAdmin }, 'OIDC credential validation completed');
 
     // Drop only the OIDC client so a basic-auth client for the same host is kept
     dropClient(req.baseUrl, oauth2Auth);
 
     return {
       valid: true,
-      isAdmin,
+      isAdmin: profile.isAdmin,
+      capabilities: profile,
       user,
     };
   } catch (error: any) {
@@ -278,6 +283,7 @@ export async function validateOidcCredentials(
     return {
       valid: false,
       isAdmin: false,
+      capabilities: RESTRICTED_PROFILE,
       error: errorMessage,
     };
   }

@@ -46,5 +46,21 @@
   "noServers": "Aucun serveur disponible",
   "back": "Retour",
   "updateAvailable": "Mise à jour disponible",
-  "updateAvailableMessage": "La version {{version}} est prête à être téléchargée."
+  "updateAvailableMessage": "La version {{version}} est prête à être téléchargée.",
+  "featureUnavailable": "{{feature}} nécessite des droits d’administrateur Alfresco ou un module indisponible sur ce serveur.",
+  "features": {
+    "RepoBrowser": "Dépôt",
+    "NodeBrowser": "Node Browser",
+    "SystemTree": "Arborescence système",
+    "JsConsole": "Console JavaScript",
+    "Logs": "Journaux",
+    "UsersGroups": "Utilisateurs et groupes",
+    "ModelExplorer": "Explorateur de modèles",
+    "RepoAdmin": "Administration du dépôt",
+    "ServerUsage": "Utilisation du serveur",
+    "AgentScripts": "Scripts de l’agent",
+    "Search": "Recherche",
+    "Agent": "Agent",
+    "Insights": "Insights"
+  }
 }

@@ -37,6 +37,7 @@ TYPE:"cm:content" AND @cm:content.mimetype:"application/pdf" AND @cm:created:["2
 - Use `pagination.totalCount` as the true repository total.
 - Never use `sample.length` to answer total count questions.
 - `sample` is a preview of returned items only.
+- Each `sample` item may include `allowableOperations` for that hit. Use it before mutating a search result.
 - For full listings, either:
   - set `collectAllPages=true`, or
   - paginate manually with `skipCount` until `pagination.hasMoreItems=false`.

@@ -23,14 +23,36 @@ export interface NodeSummary {
   path: string | null;
   mimeType: unknown;
   properties: unknown;
+  allowableOperations: string[] | null;
 }
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
+/** Alfresco returns allowableOperations as a string[]; missing/unknown stays null. */
+export const normalizeAllowableOperations = (value: unknown): string[] | null => {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  return value
+    .filter((item): item is string => typeof item === 'string')
+    .map(item => item.trim())
+    .filter(item => item.length > 0);
+};
+
 export const buildNodeMetadataQuery = (): { fields: string[]; include: string[] } => ({
-  fields: ['id', 'name', 'nodeType', 'isFolder', 'isFile', 'path', 'content', 'properties'],
-  include: ['path', 'properties'],
+  fields: [
+    'id',
+    'name',
+    'nodeType',
+    'isFolder',
+    'isFile',
+    'path',
+    'content',
+    'properties',
+    'allowableOperations',
+  ],
+  include: ['path', 'properties', 'allowableOperations'],
 });
 
 export const normalizeNodePath = (pathName: string | undefined): string | null => {
@@ -51,5 +73,6 @@ export const toNodeSummary = (entry: Record<string, unknown> | null | undefined)
     path: normalizeNodePath(typeof pathValue === 'string' ? pathValue : undefined),
     mimeType: mimeValue ?? null,
     properties: entry?.properties ?? null,
+    allowableOperations: normalizeAllowableOperations(entry?.allowableOperations),
   };
 };

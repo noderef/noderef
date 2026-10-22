@@ -21,8 +21,13 @@
 
 import { buildSlingshotNodeUrl } from '../../lib/alfresco-url.js';
 import { createLogger } from '../../lib/logger.js';
+import { throwMappedAlfrescoError } from '../../services/alfresco/errorMapper.js';
 
 const log = createLogger('backend.rpc.helpers');
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+}
 
 /**
  * Fetch node data from Alfresco Slingshot API
@@ -53,7 +58,10 @@ export async function fetchSlingshotNodeData(
 
   if (!response.ok) {
     log.error({ slingshotUrl, status: response.status }, 'Failed to fetch node details');
-    throw new Error(`Failed to fetch node details: ${response.statusText}`);
+    throwMappedAlfrescoError(response.status, {
+      adminWebscript: true,
+      message: `Failed to fetch node details: ${response.statusText}`,
+    });
   }
 
   const nodeData = await response.json();
@@ -222,7 +230,7 @@ export function extractParentRefFromNodeEntry(nodeEntry: any): string | null {
 /**
  * Get a property value from a node's properties object
  */
-export function getNodePropertyValue(node: any, propertyName: string): string | undefined {
+function getNodePropertyValue(node: any, propertyName: string): string | undefined {
   const value = node.properties?.[propertyName];
   if (value == null) return undefined;
 
@@ -243,9 +251,21 @@ export function getNodePropertyValue(node: any, propertyName: string): string | 
 }
 
 /**
- * Map an Alfresco API node entry to a standardized format
+ * Alfresco omits `allowableOperations` when the user has none. Missing must
+ * become `[]` so the UI hides mutate actions instead of treating unknown as
+ * permissive.
  */
-function mapNodeEntry(entry: any) {
+function normalizeRepositoryAllowableOperations(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === 'string' && item.length > 0);
+}
+
+/**
+ * Map an Alfresco Nodes API entry to the repository browser node shape.
+ */
+export function mapNodeEntryToRepositoryNode(entry: any) {
   return {
     id: entry.id,
     name: entry.name,
@@ -260,6 +280,7 @@ function mapNodeEntry(entry: any) {
     modifiedById: entry.modifiedByUser?.id,
     hasChildren: entry.isFolder,
     path: entry.path?.name,
+    allowableOperations: normalizeRepositoryAllowableOperations(entry.allowableOperations),
   };
 }
 
@@ -367,10 +388,7 @@ async function tryListSystemChild(
   try {
     return await listSystemChildId(nodesApi, parentId, assocType);
   } catch (err) {
-    log.warn(
-      { err, parentId, assocType },
-      'Failed to list children while resolving sys:system'
-    );
+    log.warn({ err, parentId, assocType }, 'Failed to list children while resolving sys:system');
     return undefined;
   }
 }
@@ -481,4 +499,192 @@ export async function resolveSystemNodeId(
   }
 
   return null;
+}
+
+function asName(value: string | undefined | null): { name: string; prefixedName: string } {
+  const name = value || '';
+  return { name, prefixedName: name };
+}
+
+function nodeRefFromId(id: string | undefined | null): string {
+  if (!id) {
+    return '';
+  }
+  if (id.includes('://') || id.startsWith('workspace/')) {
+    return normalizeNodeRef(id) ?? id;
+  }
+  return `workspace://SpacesStore/${id}`;
+}
+
+function mapRestProperty(prefixedName: string, value: unknown) {
+  const values = Array.isArray(value) ? value : [value];
+  return {
+    name: asName(prefixedName),
+    values: values.map(item => ({
+      dataType: typeof item,
+      value: item,
+      isContent: prefixedName === 'cm:content',
+      isNodeRef: typeof item === 'string' && String(item).includes('://'),
+      isNullValue: item === null || item === undefined,
+    })),
+    type: asName('d:text'),
+    multiple: Array.isArray(value),
+    residual: false,
+  };
+}
+
+function personLabel(user: unknown): string | undefined {
+  const record = asRecord(user);
+  if (!record) {
+    return undefined;
+  }
+  if (typeof record.displayName === 'string' && record.displayName.trim()) {
+    return record.displayName;
+  }
+  if (typeof record.id === 'string' && record.id.trim()) {
+    return record.id;
+  }
+  return undefined;
+}
+
+/** Slingshot stores cm:content as `mimetype=…|size=…`; the sidebar parses that string. */
+function restContentProperty(content: Record<string, unknown> | null): string | undefined {
+  if (!content) {
+    return undefined;
+  }
+  const mime = typeof content.mimeType === 'string' ? content.mimeType : '';
+  const size =
+    typeof content.sizeInBytes === 'number'
+      ? String(content.sizeInBytes)
+      : typeof content.sizeInBytes === 'string'
+        ? content.sizeInBytes
+        : '';
+  const encoding = typeof content.encoding === 'string' ? content.encoding : '';
+  if (!mime && !size) {
+    return undefined;
+  }
+  return [
+    mime ? `mimetype=${mime}` : null,
+    size ? `size=${size}` : null,
+    encoding ? `encoding=${encoding}` : null,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join('|');
+}
+
+/**
+ * REST Nodes API keeps name/dates/users/content on the entry, not in `properties`.
+ * Fill the slingshot-shaped property list so the metadata sidebar can read them.
+ */
+function withRestStandardProperties(
+  properties: Record<string, unknown>,
+  entry: Record<string, unknown>
+): Record<string, unknown> {
+  const merged = { ...properties };
+  const setIfMissing = (key: string, value: unknown) => {
+    if (merged[key] != null && merged[key] !== '') {
+      return;
+    }
+    if (value == null || value === '') {
+      return;
+    }
+    merged[key] = value;
+  };
+
+  if (typeof entry.name === 'string') {
+    setIfMissing('cm:name', entry.name);
+  }
+  setIfMissing('cm:created', entry.createdAt);
+  setIfMissing('cm:modified', entry.modifiedAt);
+  setIfMissing('cm:creator', personLabel(entry.createdByUser));
+  setIfMissing('cm:modifier', personLabel(entry.modifiedByUser));
+  setIfMissing('cm:content', restContentProperty(asRecord(entry.content)));
+  return merged;
+}
+
+export function mapNodeEntryToSlingshotChild(
+  entry: Record<string, unknown>,
+  index = 0
+): Record<string, unknown> {
+  const id = typeof entry.id === 'string' ? entry.id : '';
+  const name = typeof entry.name === 'string' ? entry.name : id;
+  const nodeType = typeof entry.nodeType === 'string' ? entry.nodeType : '';
+  return {
+    name: asName(name),
+    nodeRef: nodeRefFromId(id),
+    type: asName(nodeType),
+    assocType: asName('cm:contains'),
+    primary: true,
+    index,
+  };
+}
+
+/**
+ * Map a Nodes API entry (+ optional children) onto the slingshot node-details DTO
+ * the renderer already consumes.
+ */
+export function mapNodeEntryToBrowserNode(
+  entry: Record<string, unknown>,
+  childEntries: Array<Record<string, unknown>> = []
+): Record<string, unknown> {
+  const id = typeof entry.id === 'string' ? entry.id : '';
+  const name = typeof entry.name === 'string' ? entry.name : id;
+  const nodeType = typeof entry.nodeType === 'string' ? entry.nodeType : '';
+  const parentId = typeof entry.parentId === 'string' ? entry.parentId : '';
+  const path = asRecord(entry.path);
+  const pathName = typeof path?.name === 'string' ? path.name : '';
+  const aspectNames = Array.isArray(entry.aspectNames) ? (entry.aspectNames as string[]) : [];
+  const properties = withRestStandardProperties(asRecord(entry.properties) ?? {}, entry);
+  const permissions = asRecord(entry.permissions);
+  const locallySet = Array.isArray(permissions?.locallySet)
+    ? (permissions.locallySet as Array<Record<string, unknown>>)
+    : [];
+  const inherited = Array.isArray(permissions?.inherited)
+    ? (permissions.inherited as Array<Record<string, unknown>>)
+    : [];
+  const owner =
+    typeof properties['cm:owner'] === 'string'
+      ? properties['cm:owner']
+      : typeof asRecord(entry.createdByUser)?.id === 'string'
+        ? String(asRecord(entry.createdByUser)?.id)
+        : '';
+
+  const permissionEntries = [...locallySet, ...inherited].map(item => ({
+    permission: typeof item.name === 'string' ? item.name : '',
+    authority: typeof item.authorityId === 'string' ? item.authorityId : '',
+    rel: item.accessStatus === 'DENIED' ? 'DENIED' : 'ALLOWED',
+  }));
+
+  return {
+    nodeRef: nodeRefFromId(id),
+    id,
+    qnamePath: asName(pathName),
+    name: asName(name),
+    parentNodeRef: nodeRefFromId(parentId),
+    type: asName(nodeType),
+    aspects: aspectNames.map(aspect => asName(aspect)),
+    properties: Object.entries(properties).map(([key, value]) => mapRestProperty(key, value)),
+    children: childEntries.map((child, index) =>
+      mapNodeEntryToSlingshotChild(asRecord(child.entry) ?? child, index)
+    ),
+    parents: parentId
+      ? [
+          {
+            name: asName(''),
+            nodeRef: nodeRefFromId(parentId),
+            type: asName('cm:folder'),
+            assocType: asName('cm:contains'),
+            primary: true,
+          },
+        ]
+      : [],
+    assocs: [],
+    sourceAssocs: [],
+    permissions: {
+      entries: permissionEntries,
+      masks: [],
+      inherit: permissions?.isInheritanceEnabled !== false,
+      owner,
+    },
+  };
 }

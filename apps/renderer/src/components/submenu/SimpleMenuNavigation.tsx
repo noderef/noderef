@@ -15,10 +15,12 @@
  */
 
 import { backendRpc } from '@/core/ipc/backend';
+import { getAlfrescoLandingPage, shouldPreservePageOnAlfrescoServer } from '@/core/serverLanding';
 import { useAgentStore } from '@/core/store/agent';
 import type { PageKey } from '@/core/store/keys';
 import { useSavedSearchesStore } from '@/core/store/savedSearches';
-import { useServersStore } from '@/core/store/servers';
+import { useServerCapabilities, useServersStore } from '@/core/store/servers';
+import { Feature, isFeatureAvailable } from '@app/contracts';
 import { useNavigation } from '@/hooks/useNavigation';
 import type { MenuItem as MenuItemType, MenuSection as MenuSectionType } from '@/types/menu';
 import { ScrollArea, Stack, Text } from '@mantine/core';
@@ -140,6 +142,14 @@ export function SimpleMenuNavigation() {
 
   const server = getServerById(activeServerId);
   const isNodeRefSpace = !server || !server.serverType;
+  const profile = useServerCapabilities(activeServerId);
+  const serverJsConsoleAvailable = isFeatureAvailable(profile, Feature.JsConsole);
+  const jsConsoleAvailable = isNodeRefSpace || serverJsConsoleAvailable;
+  const systemTreeAvailable =
+    !isNodeRefSpace &&
+    server?.serverType === 'alfresco' &&
+    isFeatureAvailable(profile, Feature.SystemTree);
+  const capabilitiesReady = isNodeRefSpace || server?.serverType !== 'alfresco' || profile !== null;
 
   // Load saved searches when component mounts or when activeServerId changes
   useEffect(() => {
@@ -165,15 +175,16 @@ export function SimpleMenuNavigation() {
           }
 
           if (serverInitializationRef.current !== activeServerId) {
+            if (!capabilitiesReady) {
+              return;
+            }
             serverInitializationRef.current = activeServerId;
-            const shouldPreservePage =
-              activePage === 'jsconsole' ||
-              activePage === 'text-editor' ||
-              activePage === 'agentPage' ||
-              activePage === 'insights';
-
-            if (!shouldPreservePage) {
-              navigate('jsconsole');
+            if (!shouldPreservePageOnAlfrescoServer(activePage, profile)) {
+              const landingPage = getAlfrescoLandingPage(profile);
+              if (landingPage === 'agentPage') {
+                setActiveChatId(null);
+              }
+              navigate(landingPage);
             }
           }
         } else {
@@ -196,6 +207,30 @@ export function SimpleMenuNavigation() {
     activeSavedSearchId,
     activePage,
     navigate,
+    profile,
+    capabilitiesReady,
+    setActiveChatId,
+  ]);
+
+  // Leave JS Console when the active Alfresco server cannot open it.
+  // NodeRef space always exposes JS Console, so switching back to a non-admin
+  // server must not keep that page just because it was "global".
+  useEffect(() => {
+    if (isNodeRefSpace || !capabilitiesReady || !activeServerId) {
+      return;
+    }
+    if (activePage === 'jsconsole' && !serverJsConsoleAvailable) {
+      setActiveChatId(null);
+      navigate('agentPage');
+    }
+  }, [
+    isNodeRefSpace,
+    capabilitiesReady,
+    activeServerId,
+    activePage,
+    serverJsConsoleAvailable,
+    navigate,
+    setActiveChatId,
   ]);
 
   // Load agent chats for active server or all servers in NodeRef space.
@@ -524,14 +559,16 @@ export function SimpleMenuNavigation() {
   // Repository Admin is now in the submenu header dropdown as an external link
 
   // Alfresco top-level items (not in sections)
-  const alfrescoPrimaryTopLevelItems: MenuItemType[] = [
-    {
-      id: 'jsconsole',
-      label: t('submenu:jsConsole'),
-      icon: 'code',
-      viewMode: 'monaco',
-    },
-  ];
+  const alfrescoPrimaryTopLevelItems: MenuItemType[] = jsConsoleAvailable
+    ? [
+        {
+          id: 'jsconsole',
+          label: t('submenu:jsConsole'),
+          icon: 'code',
+          viewMode: 'monaco',
+        },
+      ]
+    : [];
 
   const alfrescoSecondaryTopLevelItems: MenuItemType[] = [
     {
@@ -573,8 +610,6 @@ export function SimpleMenuNavigation() {
   if (isNodeRefSpace) {
     sections = [...agentSections, ...alfrescoSections];
   } else if (server.serverType === 'alfresco') {
-    // Show all Alfresco menu items for any Alfresco server
-    // Feature availability should be handled at runtime, not by hiding menu items
     sections = [...agentSections, ...alfrescoSections];
     topLevelItems = alfrescoPrimaryTopLevelItems;
     secondaryTopLevelItems = alfrescoSecondaryTopLevelItems;
@@ -721,7 +756,7 @@ export function SimpleMenuNavigation() {
             />
           )}
           {/* System Section for Alfresco servers */}
-          {!isNodeRefSpace && server?.serverType === 'alfresco' && (
+          {!isNodeRefSpace && server?.serverType === 'alfresco' && systemTreeAvailable && (
             <SystemTreeSection
               key={`system-${server?.id ?? 'none'}`}
               label={t('submenu:system')}
