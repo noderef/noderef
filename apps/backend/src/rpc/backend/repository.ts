@@ -24,6 +24,7 @@ import { z } from 'zod';
 import { buildSlingshotContentUrl } from '../../lib/alfresco-url.js';
 import { AppErrors } from '../../lib/errors.js';
 import { createLogger } from '../../lib/logger.js';
+import { getEditablePropertyDefinitions } from '../../services/alfresco/dictionaryService.js';
 import {
   extractMimeTypeFromSlingshotNode,
   extractNodeNameFromSlingshotNode,
@@ -33,6 +34,7 @@ import {
   normalizeNodeRef,
   resolveSystemNodeId,
 } from './helpers.js';
+import { extractAlfrescoErrorMessage, prepareNodeUpdateBody } from './nodeUpdate.js';
 import type { Routes, RpcContext } from './types.js';
 import { getCurrentUserId, withAuth, withAuthAndCredentials, withCredentials } from './withAuth.js';
 
@@ -468,6 +470,108 @@ export function registerRepositoryHandlers(routes: Routes, ctx: RpcContext): voi
         log.debug({ serverId, nodeId, newName }, 'Node renamed successfully');
 
         return { success: true, node: result.entry };
+      });
+    },
+  };
+
+  routes['backend.repository.updateNode'] = {
+    schema: z
+      .object({
+        serverId: z.number(),
+        nodeId: z.string(),
+        properties: z.record(z.unknown().nullable()).optional(),
+        nodeType: z.string().min(1).optional(),
+        addAspects: z.array(z.string().min(1)).optional(),
+        removeAspects: z.array(z.string().min(1)).optional(),
+      })
+      .refine(
+        data =>
+          (data.properties && Object.keys(data.properties).length > 0) ||
+          Boolean(data.nodeType) ||
+          (data.addAspects && data.addAspects.length > 0) ||
+          (data.removeAspects && data.removeAspects.length > 0),
+        {
+          message: 'At least one of properties, nodeType, addAspects, or removeAspects is required',
+        }
+      ),
+    handler: async params => {
+      const { serverId, nodeId, properties, nodeType, addAspects, removeAspects } = params as {
+        serverId: number;
+        nodeId: string;
+        properties?: Record<string, unknown | null>;
+        nodeType?: string;
+        addAspects?: string[];
+        removeAspects?: string[];
+      };
+
+      return withAuth(ctx, serverId, async api => {
+        const nodesApi = new NodesApi(api);
+        try {
+          const body = await prepareNodeUpdateBody(nodesApi, nodeId, {
+            properties,
+            nodeType,
+            addAspects,
+            removeAspects,
+          });
+
+          if (Object.keys(body).length === 0) {
+            return AppErrors.invalidInput('No changes provided');
+          }
+
+          const result = await nodesApi.updateNode(
+            nodeId,
+            body as Parameters<NodesApi['updateNode']>[1]
+          );
+
+          log.debug(
+            {
+              serverId,
+              nodeId,
+              propertyCount: properties ? Object.keys(properties).length : 0,
+              nodeType,
+              addAspects: addAspects?.length ?? 0,
+              removeAspects: removeAspects?.length ?? 0,
+            },
+            'Node updated successfully'
+          );
+
+          return { success: true, node: result.entry };
+        } catch (error) {
+          log.error({ serverId, nodeId, error }, 'Failed to update node');
+          return AppErrors.invalidInput(extractAlfrescoErrorMessage(error));
+        }
+      });
+    },
+  };
+
+  routes['backend.repository.getNodeEditMetadata'] = {
+    schema: z.object({
+      serverId: z.number(),
+      nodeId: z.string(),
+    }),
+    handler: async params => {
+      const { serverId, nodeId } = params as { serverId: number; nodeId: string };
+
+      return withAuth(ctx, serverId, async api => {
+        const nodesApi = new NodesApi(api);
+        const node = await nodesApi.getNode(nodeId, { include: ['aspectNames'] });
+        const nodeType = node.entry?.nodeType ?? '';
+        const aspectNames = node.entry?.aspectNames ?? [];
+        const classNames = [nodeType, ...aspectNames].filter(Boolean);
+        const properties = await getEditablePropertyDefinitions(api, classNames);
+
+        log.debug(
+          {
+            serverId,
+            nodeId,
+            nodeType,
+            aspectCount: aspectNames.length,
+            propertyCount: properties.length,
+          },
+          'Fetched node edit metadata'
+        );
+
+        return { nodeType, aspectNames, properties };
       });
     },
   };

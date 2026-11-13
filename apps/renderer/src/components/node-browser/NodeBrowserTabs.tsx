@@ -18,15 +18,19 @@ import { BrandLogo } from '@/components/BrandLogo';
 import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
 import { useDesktopClipboardHandlers } from '@/hooks/useDesktopClipboardHandlers';
 import { Tabs, Text } from '@mantine/core';
+import { modals } from '@mantine/modals';
 import { IconX } from '@tabler/icons-react';
 import { useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { NodeBrowser } from './NodeBrowser';
 
 export function NodeBrowserTabs() {
+  const { t } = useTranslation(['nodeBrowser', 'common']);
   const tabs = useNodeBrowserTabsStore(state => state.tabs);
   const activeTabId = useNodeBrowserTabsStore(state => state.activeTabId);
   const setActiveTab = useNodeBrowserTabsStore(state => state.setActiveTab);
   const closeTab = useNodeBrowserTabsStore(state => state.closeTab);
+  const isTabDirty = useNodeBrowserTabsStore(state => state.isTabDirty);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const isClipboardEnabled = useMemo(() => typeof window !== 'undefined', []);
@@ -86,6 +90,19 @@ export function NodeBrowserTabs() {
                 <span
                   onClick={e => {
                     e.stopPropagation();
+                    if (isTabDirty(tab.id)) {
+                      modals.openConfirmModal({
+                        title: t('nodeBrowser:unsavedChangesTitle'),
+                        children: <Text size="sm">{t('nodeBrowser:unsavedChangesConfirm')}</Text>,
+                        labels: {
+                          confirm: t('nodeBrowser:discardChanges'),
+                          cancel: t('common:cancel'),
+                        },
+                        confirmProps: { color: 'red' },
+                        onConfirm: () => closeTab(tab.id),
+                      });
+                      return;
+                    }
                     closeTab(tab.id);
                   }}
                   style={{

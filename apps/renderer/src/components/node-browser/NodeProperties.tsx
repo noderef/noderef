@@ -15,7 +15,7 @@
  */
 
 import { buildStreamUrl } from '@/core/ipc/alfresco';
-import type { AlfrescoNodeDetails } from '@/core/ipc/backend';
+import type { AlfrescoNodeDetails, EditablePropertyDefinition } from '@/core/ipc/backend';
 import { backendRpc } from '@/core/ipc/backend';
 import { ensureNeutralinoReady, getSaveDialogPaths } from '@/core/ipc/neutralino';
 import { backendFetch } from '@/core/ipc/rpc';
@@ -29,6 +29,7 @@ import {
   Code,
   Group,
   Paper,
+  Select,
   Stack,
   Table,
   Text,
@@ -43,27 +44,62 @@ import {
   IconChevronDown,
   IconChevronUp,
   IconDownload,
+  IconPencil,
+  IconRestore,
   IconSearch,
   IconSelector,
+  IconTrash,
 } from '@tabler/icons-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PropertyValueEditor } from './PropertyValueEditor';
+import {
+  formatEditorValue,
+  isPropertyEditable,
+  resolvePropertyDefinition,
+  slingshotValuesToEditorValue,
+} from './propertyEditing';
 
 interface NodePropertiesProps {
   properties: AlfrescoNodeDetails['properties'];
   serverId: number;
   nodeId: string;
   nodeName: string;
+  stagedProperties?: Record<string, unknown | null>;
+  propertyDefinitions?: Map<string, EditablePropertyDefinition>;
+  onStartEditing?: () => Promise<unknown>;
+  onSetProperty?: (name: string, value: unknown | null) => void;
+  onUndoProperty?: (name: string) => void;
 }
 
 type SortColumn = 'name' | 'type' | 'value';
 type SortDirection = 'asc' | 'desc';
 
-export function NodeProperties({ properties, serverId, nodeId, nodeName }: NodePropertiesProps) {
+const EMPTY_PROPERTY_DEFINITIONS = new Map<string, EditablePropertyDefinition>();
+
+export function NodeProperties({
+  properties,
+  serverId,
+  nodeId,
+  nodeName,
+  stagedProperties = {},
+  propertyDefinitions = EMPTY_PROPERTY_DEFINITIONS,
+  onStartEditing,
+  onSetProperty,
+  onUndoProperty,
+}: NodePropertiesProps) {
   const { t } = useTranslation(['nodeBrowser']);
   const [sortColumn, setSortColumn] = useState<SortColumn>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [filterText, setFilterText] = useState('');
+  const [editingName, setEditingName] = useState<string | null>(null);
+  const [addedNames, setAddedNames] = useState<string[]>([]);
+  const canEdit = Boolean(onSetProperty);
+
+  useEffect(() => {
+    setEditingName(null);
+    setAddedNames([]);
+  }, [properties, nodeId]);
   const notificationPosition: NotificationsProps['position'] = 'bottom-center';
   const showNotification = (data: NotificationData) =>
     notifications.show({
@@ -83,16 +119,51 @@ export function NodeProperties({ properties, serverId, nodeId, nodeName }: NodeP
     }
   };
 
+  const formatValueForSort = (values: any[]): string => {
+    if (values.length === 0) return '';
+    const val = values[0].value;
+    if (typeof val === 'boolean') return val ? 'true' : 'false';
+    if (typeof val === 'object') return JSON.stringify(val);
+    return String(val).toLowerCase();
+  };
+
+  const displayProperties = useMemo(() => {
+    const byName = new Map(properties.map(property => [property.name.prefixedName, property]));
+    const extras = addedNames.filter(name => !byName.has(name));
+    const extraRows: AlfrescoNodeDetails['properties'] = extras.map(name => {
+      const definition = propertyDefinitions.get(name);
+      const dataType = definition?.dataType ?? 'd:text';
+      return {
+        name: { name, prefixedName: name },
+        values: [],
+        type: { name: dataType, prefixedName: dataType },
+        multiple: Boolean(definition?.multiValued),
+        residual: false,
+      };
+    });
+    return [...properties, ...extraRows];
+  }, [addedNames, properties, propertyDefinitions]);
+
+  const addableProperties = useMemo(() => {
+    const existing = new Set(displayProperties.map(property => property.name.prefixedName));
+    return [...propertyDefinitions.values()]
+      .filter(
+        definition =>
+          !existing.has(definition.name) && isPropertyEditable(definition.name, definition)
+      )
+      .map(definition => ({ value: definition.name, label: definition.name }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [displayProperties, propertyDefinitions]);
+
   const filteredAndSortedProperties = useMemo(() => {
-    // First filter
-    let filtered = properties;
+    let filtered = displayProperties;
     if (filterText.trim()) {
       const lowerFilter = filterText.toLowerCase();
-      filtered = properties.filter(prop => {
-        // Search in property name
+      filtered = displayProperties.filter(prop => {
         const nameMatches = prop.name.prefixedName.toLowerCase().includes(lowerFilter);
-
-        // Search in property values
+        const staged = stagedProperties[prop.name.prefixedName];
+        const stagedMatches =
+          staged !== undefined && formatEditorValue(staged).toLowerCase().includes(lowerFilter);
         const valueMatches = prop.values.some(v => {
           const val = v.value;
           if (typeof val === 'boolean') {
@@ -104,11 +175,10 @@ export function NodeProperties({ properties, serverId, nodeId, nodeName }: NodeP
           return String(val).toLowerCase().includes(lowerFilter);
         });
 
-        return nameMatches || valueMatches;
+        return nameMatches || valueMatches || stagedMatches;
       });
     }
 
-    // Then sort
     const sorted = [...filtered].sort((a, b) => {
       let aValue: string;
       let bValue: string;
@@ -120,28 +190,18 @@ export function NodeProperties({ properties, serverId, nodeId, nodeName }: NodeP
         aValue = a.type.prefixedName.toLowerCase();
         bValue = b.type.prefixedName.toLowerCase();
       } else {
-        // Sort by value
         aValue = formatValueForSort(a.values);
         bValue = formatValueForSort(b.values);
       }
 
       if (sortDirection === 'asc') {
         return aValue.localeCompare(bValue);
-      } else {
-        return bValue.localeCompare(aValue);
       }
+      return bValue.localeCompare(aValue);
     });
 
     return sorted;
-  }, [properties, sortColumn, sortDirection, filterText]);
-
-  const formatValueForSort = (values: any[]): string => {
-    if (values.length === 0) return '';
-    const val = values[0].value;
-    if (typeof val === 'boolean') return val ? 'true' : 'false';
-    if (typeof val === 'object') return JSON.stringify(val);
-    return String(val).toLowerCase();
-  };
+  }, [displayProperties, filterText, sortColumn, sortDirection, stagedProperties]);
 
   const handleDownloadContent = async (propertyName: string = 'cm:content') => {
     const nlPort = (window as any).NL_PORT;
@@ -360,10 +420,45 @@ export function NodeProperties({ properties, serverId, nodeId, nodeName }: NodeP
     return sortDirection === 'asc' ? <IconChevronUp size={14} /> : <IconChevronDown size={14} />;
   };
 
+  const startEditing = async (propertyName: string) => {
+    if (!canEdit) {
+      return;
+    }
+    try {
+      await onStartEditing?.();
+    } catch {
+      showNotification({
+        title: t('nodeBrowser:saveError'),
+        message: t('nodeBrowser:editMetadataError'),
+        color: 'red',
+      });
+      return;
+    }
+    setEditingName(propertyName);
+  };
+
+  const handleAddProperty = async (name: string | null) => {
+    if (!name || !canEdit) {
+      return;
+    }
+    try {
+      await onStartEditing?.();
+    } catch {
+      showNotification({
+        title: t('nodeBrowser:saveError'),
+        message: t('nodeBrowser:editMetadataError'),
+        color: 'red',
+      });
+      return;
+    }
+    setAddedNames(current => (current.includes(name) ? current : [...current, name]));
+    setEditingName(name);
+  };
+
   return (
     <Stack gap="md" p="md">
       <Paper withBorder p="md">
-        <Group justify="space-between" mb="md">
+        <Group justify="space-between" mb="md" align="flex-end">
           <TextInput
             placeholder={t('nodeBrowser:filterProperties')}
             leftSection={<IconSearch size={16} />}
@@ -371,12 +466,29 @@ export function NodeProperties({ properties, serverId, nodeId, nodeName }: NodeP
             onChange={e => setFilterText(e.currentTarget.value)}
             style={{ flex: 1, maxWidth: 400 }}
           />
+          {canEdit && (
+            <Select
+              placeholder={t('nodeBrowser:addPropertyPlaceholder')}
+              data={addableProperties}
+              searchable
+              clearable
+              value={null}
+              onChange={handleAddProperty}
+              nothingFoundMessage={t('nodeBrowser:noPropertiesToAdd')}
+              style={{ minWidth: 240 }}
+            />
+          )}
           <Text size="sm" c="dimmed">
-            {filteredAndSortedProperties.length === properties.length
-              ? `${properties.length} ${t('nodeBrowser:propertiesCount')}`
-              : `${filteredAndSortedProperties.length} / ${properties.length}`}
+            {filteredAndSortedProperties.length === displayProperties.length
+              ? `${displayProperties.length} ${t('nodeBrowser:propertiesCount')}`
+              : `${filteredAndSortedProperties.length} / ${displayProperties.length}`}
           </Text>
         </Group>
+        {canEdit && (
+          <Text size="xs" c="dimmed" mb="sm">
+            {t('nodeBrowser:editPropertyHint')}
+          </Text>
+        )}
         <Table>
           <Table.Thead>
             <Table.Tr>
@@ -416,17 +528,18 @@ export function NodeProperties({ properties, serverId, nodeId, nodeName }: NodeP
                   </Group>
                 </UnstyledButton>
               </Table.Th>
-              <Table.Th style={{ width: '15%' }}>
+              <Table.Th style={{ width: '12%' }}>
                 <Text fw={700} size="sm">
                   {t('nodeBrowser:readonly')}
                 </Text>
               </Table.Th>
+              {canEdit && <Table.Th style={{ width: '8%' }} />}
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
             {filteredAndSortedProperties.length === 0 ? (
               <Table.Tr>
-                <Table.Td colSpan={4} style={{ textAlign: 'center' }}>
+                <Table.Td colSpan={canEdit ? 5 : 4} style={{ textAlign: 'center' }}>
                   <Text c="dimmed" size="sm">
                     {filterText.trim()
                       ? t('nodeBrowser:noMatchingProperties')
@@ -435,38 +548,154 @@ export function NodeProperties({ properties, serverId, nodeId, nodeName }: NodeP
                 </Table.Td>
               </Table.Tr>
             ) : (
-              filteredAndSortedProperties.map((prop, idx) => (
-                <Table.Tr key={idx}>
-                  <Table.Td>
-                    <Text size="sm" fw={500}>
-                      {prop.name.prefixedName}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Badge
-                      variant="light"
-                      color="gray"
-                      size="sm"
-                      radius="sm"
-                      style={{ textTransform: 'none' }}
-                    >
-                      {prop.type.prefixedName}
-                    </Badge>
-                  </Table.Td>
-                  <Table.Td>
-                    <Box
-                      style={{ fontSize: 'var(--mantine-font-size-sm)', wordBreak: 'break-word' }}
-                    >
-                      {formatValue(prop.values, prop.name.prefixedName)}
-                    </Box>
-                  </Table.Td>
-                  <Table.Td>
-                    <Badge color={prop.residual ? 'red' : 'gray'} size="sm" radius="sm">
-                      {prop.residual ? t('nodeBrowser:false') : t('nodeBrowser:false')}
-                    </Badge>
-                  </Table.Td>
-                </Table.Tr>
-              ))
+              filteredAndSortedProperties.map(prop => {
+                const propertyName = prop.name.prefixedName;
+                const definition = resolvePropertyDefinition(prop, propertyDefinitions);
+                const isContentValue = prop.values.some(value => value.isContent);
+                const editable =
+                  canEdit &&
+                  isPropertyEditable(propertyName, definition, { isContent: isContentValue });
+                const staged = stagedProperties[propertyName];
+                const isChanged = propertyName in stagedProperties;
+                const isRemoved = isChanged && staged === null;
+                const editorValue =
+                  staged !== undefined
+                    ? staged
+                    : slingshotValuesToEditorValue(prop.values, definition);
+
+                return (
+                  <Table.Tr
+                    key={propertyName}
+                    style={
+                      isChanged
+                        ? { backgroundColor: 'var(--mantine-color-yellow-light)' }
+                        : undefined
+                    }
+                  >
+                    <Table.Td>
+                      <Text
+                        size="sm"
+                        fw={500}
+                        td={isRemoved ? 'line-through' : undefined}
+                        c={isRemoved ? 'dimmed' : undefined}
+                      >
+                        {propertyName}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Badge
+                        variant="light"
+                        color="gray"
+                        size="sm"
+                        radius="sm"
+                        style={{ textTransform: 'none' }}
+                      >
+                        {definition.dataType ?? prop.type.prefixedName}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      {editingName === propertyName && editable ? (
+                        <PropertyValueEditor
+                          definition={definition}
+                          value={editorValue}
+                          onCommit={next => {
+                            onSetProperty?.(propertyName, next);
+                            setEditingName(null);
+                          }}
+                          onCancel={() => {
+                            setEditingName(null);
+                            if (
+                              addedNames.includes(propertyName) &&
+                              !(propertyName in stagedProperties)
+                            ) {
+                              setAddedNames(current =>
+                                current.filter(name => name !== propertyName)
+                              );
+                            }
+                          }}
+                        />
+                      ) : (
+                        <Box
+                          onDoubleClick={() => {
+                            if (editable) {
+                              void startEditing(propertyName);
+                            }
+                          }}
+                          style={{
+                            fontSize: 'var(--mantine-font-size-sm)',
+                            wordBreak: 'break-word',
+                            cursor: editable ? 'text' : 'default',
+                            minHeight: 24,
+                          }}
+                        >
+                          <Group gap="xs" wrap="nowrap" justify="space-between" align="flex-start">
+                            <Box style={{ flex: 1, minWidth: 0, opacity: isRemoved ? 0.55 : 1 }}>
+                              {isChanged
+                                ? formatEditorValue(staged)
+                                : formatValue(prop.values, propertyName)}
+                            </Box>
+                            {editable && (
+                              <Tooltip label={t('nodeBrowser:editValue')}>
+                                <ActionIcon
+                                  variant="subtle"
+                                  size="sm"
+                                  onClick={() => void startEditing(propertyName)}
+                                >
+                                  <IconPencil size={14} />
+                                </ActionIcon>
+                              </Tooltip>
+                            )}
+                          </Group>
+                        </Box>
+                      )}
+                    </Table.Td>
+                    <Table.Td>
+                      <Badge color={editable ? 'teal' : 'gray'} size="sm" radius="sm">
+                        {editable ? t('nodeBrowser:editable') : t('nodeBrowser:protected')}
+                      </Badge>
+                    </Table.Td>
+                    {canEdit && (
+                      <Table.Td>
+                        <Group gap={4} wrap="nowrap" justify="flex-end">
+                          {isChanged && (
+                            <Tooltip label={t('nodeBrowser:undoChange')}>
+                              <ActionIcon
+                                variant="subtle"
+                                color="gray"
+                                size="sm"
+                                onClick={() => {
+                                  onUndoProperty?.(propertyName);
+                                  setAddedNames(current =>
+                                    current.filter(name => name !== propertyName)
+                                  );
+                                }}
+                              >
+                                <IconRestore size={14} />
+                              </ActionIcon>
+                            </Tooltip>
+                          )}
+                          {editable && !definition.mandatory && !isRemoved && (
+                            <Tooltip label={t('nodeBrowser:removeProperty')}>
+                              <ActionIcon
+                                variant="subtle"
+                                color="red"
+                                size="sm"
+                                onClick={() => {
+                                  void onStartEditing?.();
+                                  onSetProperty?.(propertyName, null);
+                                  setEditingName(null);
+                                }}
+                              >
+                                <IconTrash size={14} />
+                              </ActionIcon>
+                            </Tooltip>
+                          )}
+                        </Group>
+                      </Table.Td>
+                    )}
+                  </Table.Tr>
+                );
+              })
             )}
           </Table.Tbody>
         </Table>
