@@ -15,39 +15,150 @@
  */
 
 import type { AlfrescoNodeDetails } from '@/core/ipc/backend';
-import { Badge, Group, Paper, Stack, Text } from '@mantine/core';
+import { ActionIcon, Badge, Group, Paper, Select, Stack, Text } from '@mantine/core';
+import { IconPlus, IconRestore, IconX } from '@tabler/icons-react';
 import { useTranslation } from 'react-i18next';
 
 interface NodeAspectsProps {
   aspects: AlfrescoNodeDetails['aspects'];
   compact?: boolean;
+  editable?: boolean;
+  pendingAdd?: string[];
+  pendingRemove?: string[];
+  availableAspects?: string[];
+  aspectsLoading?: boolean;
+  onRequestAspects?: () => void;
+  onAdd?: (name: string) => void;
+  onRemove?: (name: string) => void;
 }
 
-export function NodeAspects({ aspects, compact = false }: NodeAspectsProps) {
-  const { t } = useTranslation(['nodeBrowser']);
+export function NodeAspects({
+  aspects,
+  compact = false,
+  editable = false,
+  pendingAdd = [],
+  pendingRemove = [],
+  availableAspects = [],
+  aspectsLoading = false,
+  onRequestAspects,
+  onAdd,
+  onRemove,
+}: NodeAspectsProps) {
+  const { t } = useTranslation(['nodeBrowser', 'common']);
+
+  const currentNames = aspects.map(aspect => aspect.prefixedName);
+  const visibleCurrent = currentNames.filter(name => !pendingRemove.includes(name));
+  const addable = availableAspects.filter(
+    name => !currentNames.includes(name) && !pendingAdd.includes(name)
+  );
 
   const content =
-    aspects.length === 0 ? (
+    visibleCurrent.length === 0 && pendingAdd.length === 0 ? (
       <Text size={compact ? 'sm' : undefined} c="dimmed">
         {t('nodeBrowser:noAspects')}
       </Text>
     ) : (
       <Group gap="xs">
-        {aspects.map((aspect, idx) => (
+        {visibleCurrent.map(name => (
           <Badge
-            key={idx}
+            key={name}
             variant="light"
             color="blue"
             size="lg"
             radius="sm"
-            title={aspect.prefixedName}
+            title={name}
+            rightSection={
+              editable ? (
+                <ActionIcon
+                  size="xs"
+                  color="blue"
+                  variant="transparent"
+                  aria-label={t('nodeBrowser:removeAspect')}
+                  onClick={() => onRemove?.(name)}
+                >
+                  <IconX size={12} />
+                </ActionIcon>
+              ) : undefined
+            }
             style={{ textTransform: 'none', maxWidth: '100%' }}
           >
-            {aspect.prefixedName}
+            {name}
+          </Badge>
+        ))}
+        {pendingAdd.map(name => (
+          <Badge
+            key={`add-${name}`}
+            variant="outline"
+            color="teal"
+            size="lg"
+            radius="sm"
+            title={name}
+            rightSection={
+              editable ? (
+                <ActionIcon
+                  size="xs"
+                  color="teal"
+                  variant="transparent"
+                  aria-label={t('nodeBrowser:removeAspect')}
+                  onClick={() => onRemove?.(name)}
+                >
+                  <IconX size={12} />
+                </ActionIcon>
+              ) : undefined
+            }
+            style={{ textTransform: 'none', maxWidth: '100%' }}
+          >
+            {name}
+          </Badge>
+        ))}
+        {pendingRemove.map(name => (
+          <Badge
+            key={`remove-${name}`}
+            variant="light"
+            color="red"
+            size="lg"
+            radius="sm"
+            title={name}
+            rightSection={
+              editable ? (
+                <ActionIcon
+                  size="xs"
+                  color="red"
+                  variant="transparent"
+                  aria-label={t('nodeBrowser:undoRemoveAspect')}
+                  onClick={() => onAdd?.(name)}
+                >
+                  <IconRestore size={12} />
+                </ActionIcon>
+              ) : undefined
+            }
+            style={{ textTransform: 'none', maxWidth: '100%', textDecoration: 'line-through' }}
+          >
+            {name}
           </Badge>
         ))}
       </Group>
     );
+
+  const editor = editable ? (
+    <Select
+      placeholder={t('nodeBrowser:addAspectPlaceholder')}
+      data={addable.map(name => ({ value: name, label: name }))}
+      searchable
+      clearable
+      value={null}
+      onDropdownOpen={() => onRequestAspects?.()}
+      onChange={value => {
+        if (value) {
+          onAdd?.(value);
+        }
+      }}
+      leftSection={<IconPlus size={14} />}
+      nothingFoundMessage={t('common:nothingFound')}
+      disabled={aspectsLoading && addable.length === 0}
+      style={{ maxWidth: 360 }}
+    />
+  ) : null;
 
   if (compact) {
     return (
@@ -60,7 +171,10 @@ export function NodeAspects({ aspects, compact = false }: NodeAspectsProps) {
   return (
     <Stack gap="md" p="md">
       <Paper withBorder p="md">
-        {content}
+        <Stack gap="md">
+          {editor}
+          {content}
+        </Stack>
       </Paper>
     </Stack>
   );
