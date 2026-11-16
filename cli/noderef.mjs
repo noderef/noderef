@@ -168,13 +168,16 @@ function getScriptError(result) {
   if (result.error)
     return typeof result.error === 'string' ? result.error : JSON.stringify(result.error);
   if (result.status?.code >= 400 || result.callstack) {
-    const stack = Array.isArray(result.callstack) ? result.callstack.join('\n') : result.callstack;
-    return [result.message, stack].filter(Boolean).join('\n') || `HTTP ${result.status?.code}`;
+    // The callstack is a full Java stack trace; keep it out of the default output.
+    return `${result.message || `HTTP ${result.status?.code}`}\n(use --json for the full stack trace)`;
   }
   return null;
 }
 
-async function runScript(serverId, script, documentNodeRef) {
+async function runScript(serverId, rawScript, documentNodeRef) {
+  // The console appends its own code right after the script; without a final newline that
+  // fails to parse ("missing ; before statement").
+  const script = rawScript.endsWith('\n') ? rawScript : `${rawScript}\n`;
   const started = await rpc('backend.jsconsole.execute', {
     serverId,
     script,
