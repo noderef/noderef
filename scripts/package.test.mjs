@@ -39,6 +39,21 @@ test('Windows MSI defaults to per-user install without elevation', () => {
   assert.doesNotMatch(xml, /InstallScope="perMachine"/);
 });
 
+test('Windows MSI adds the CLI directory to the per-user PATH', () => {
+  const xml = generateWixXml('/tmp/noderef-win', 'x64', '0.13.1', '', '', true);
+
+  assert.match(xml, /<ComponentRef Id="CliPath" \/>/);
+  assert.match(
+    xml,
+    /<Environment Id="NodeRefCliPath" Name="PATH" Value="\[APPLICATIONFOLDER\]node-src\\cli"/
+  );
+  assert.match(xml, /Part="last" Action="set" System="no" Permanent="no"/);
+  assert.match(
+    xml,
+    /<RegistryValue Root="HKCU" Key="Software\\NodeRef" Name="cliPath" Type="integer" Value="1" KeyPath="yes" \/>/
+  );
+});
+
 test('macOS keeps its bundle icon and Windows exe keeps the NodeRef icon', () => {
   const config = JSON.parse(readFileSync(join(rootDir, 'neutralino.config.json'), 'utf8'));
 

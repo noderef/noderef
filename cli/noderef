@@ -1,0 +1,13 @@
+#!/bin/sh
+# Resolve this script's directory when invoked through a symlink (macOS PATH install).
+SOURCE=$0
+while [ -L "$SOURCE" ]; do
+  DIR=$(CDPATH= cd -P "$(dirname "$SOURCE")" && pwd)
+  LINK=$(readlink "$SOURCE")
+  case "$LINK" in
+    /*) SOURCE=$LINK ;;
+    *) SOURCE="$DIR/$LINK" ;;
+  esac
+done
+DIR=$(CDPATH= cd -P "$(dirname "$SOURCE")" && pwd)
+exec "$DIR/../../node" "$DIR/noderef.mjs" "$@"

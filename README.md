@@ -107,28 +107,24 @@ If you prefer to run NodeRef inside your infrastructure instead of a local deskt
 
 ### ⌨️ **Command line (CLI)**
 
-`cli/noderef.mjs` drives a running NodeRef from the terminal, so scripts and AI coding tools (Claude Code, etc.) can act on your Alfresco servers without ever seeing a username or password. You only name a saved server; NodeRef authenticates with the credentials it already stores.
+The desktop app ships a `noderef` command that talks to the running NodeRef. You name a saved server; NodeRef authenticates with the credentials it already stores.
+
+| Package | How to get `noderef` |
+| ------- | -------------------- |
+| Windows MSI | On PATH after install (new terminal). |
+| Linux `.deb` | `/usr/bin/noderef` |
+| macOS | Settings → About → Install command |
+| Windows ZIP / Linux `.tar.gz` | Add `node-src/cli` inside the app folder to PATH |
+| From this repo | `node cli/noderef.mjs …` or `pnpm cli …` |
 
 ```bash
-# NodeRef (desktop app, dev mode, or Docker) must be running
-node cli/noderef.mjs servers                               # list saved servers
-node cli/noderef.mjs js localhost -e 'print(companyhome.name)'
-node cli/noderef.mjs js TEST ./cleanup.js                  # run a script file
-node cli/noderef.mjs scripts list TEST                     # scripts in Data Dictionary/Scripts
-node cli/noderef.mjs scripts get TEST cleanup.js > cleanup.js
-node cli/noderef.mjs scripts save TEST cleanup.js ./cleanup.js   # save as a new version
-node cli/noderef.mjs js TEST --saved cleanup.js            # run a stored script
-node cli/noderef.mjs rpc backend.servers.list              # raw backend RPC call
+# NodeRef must be running
+noderef servers
+noderef js localhost -e 'print(companyhome.name)'
+noderef scripts list TEST
 ```
 
-- `<server>` is a server id or a unique part of its name, label, or URL.
-- `js` and `scripts` need the JavaScript Console endpoint configured for that server.
-- `scripts save` keeps the previous content in the script's version history.
-- Only Node.js 18+ is required (no dependencies). Run `npm link` in the repo root to get a global `noderef` command.
-
-See [docs/cli.md](./docs/cli.md) for all commands and options, backend discovery, security notes, and troubleshooting.
-
-The CLI runs whatever it is asked to run with the rights of the saved account, so point AI tools at a test server rather than production.
+See [docs/cli.md](./docs/cli.md) for commands, options, and troubleshooting. Point AI tools at a test server rather than production.
 
 ### 🐳 **Docker**
 

@@ -1,6 +1,6 @@
 # NodeRef CLI
 
-`cli/noderef.mjs` drives a running NodeRef from the terminal. Shell scripts and AI coding tools (Claude Code and similar) can run actions on your Alfresco servers by naming a server that is saved in NodeRef. The NodeRef backend authenticates with the credentials it already stores, so the caller never handles a username or password.
+The `noderef` command drives a running NodeRef from the terminal. Shell scripts and AI coding tools (Claude Code and similar) can run actions on your Alfresco servers by naming a server that is saved in NodeRef. The NodeRef backend authenticates with the credentials it already stores, so the caller never handles a username or password.
 
 - [Requirements](#requirements)
 - [Installation](#installation)
@@ -13,20 +13,31 @@
 
 ## Requirements
 
-- Node.js 18 or newer. The CLI has no dependencies.
 - A running NodeRef (desktop app or dev mode) with at least one saved server.
 - For `js` and `scripts`: the JavaScript Console endpoint configured on that server in NodeRef, which needs the [OOTBee Support Tools](https://github.com/OrderOfTheBee/ootbee-support-tools) module on the Alfresco side.
+- From a repository checkout only: Node.js 18 or newer.
 
 ## Installation
 
-Run it straight from a checkout:
+The packaged desktop app ships the CLI and runs it with the Node binary already in the app. You do not need a separate Node.js install.
+
+| Package | How `noderef` gets on PATH |
+| ------- | -------------------------- |
+| Windows MSI | Added to the user PATH. Open a new terminal after install. |
+| Linux `.deb` | `/usr/bin/noderef` is the CLI. The desktop file still starts the app. |
+| macOS DMG | Settings → About → **Install command**. Creates `/usr/local/bin/noderef`. |
+| Windows ZIP | Add `<install dir>\node-src\cli` to PATH. |
+| Linux `.tar.gz` | Add `<app dir>/node-src/cli` to PATH. |
+| Linux AppImage | Not included. |
+
+From a repository checkout:
 
 ```bash
 node cli/noderef.mjs help
 pnpm cli help            # same thing through the workspace script
 ```
 
-For a global `noderef` command, link the repository once:
+For a global `noderef` command from the checkout, link the repository once:
 
 ```bash
 npm link                 # in the repository root
@@ -187,7 +198,6 @@ noderef scripts save TEST cleanup.js ./cleanup.js -m "Describe the change"
 - **Scripts run with the saved account's rights.** For most saved servers that is an admin account, and scripts run in a read-write transaction. Point automated tools at a test server, not production.
 - **Access is limited to your OS user.** The desktop backend only accepts requests that carry the launch token, and on macOS and Linux the token file is readable by your user account only. Any process running as you, including an AI tool with shell access, can read it.
 - **`rpc` is unrestricted.** It can call every backend method, including ones that change saved server settings such as a server's URL. Only allow it for tools you trust with that.
-- **Backend logs can contain credentials.** When a login to Alfresco fails, the backend currently logs the failed request including its credentials. Keep NodeRef's log files out of reach of tools that should not see them.
 
 ## Troubleshooting
 
