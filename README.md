@@ -105,6 +105,25 @@ Desktop dev mode opens:
 
 If you prefer to run NodeRef inside your infrastructure instead of a local desktop shell, see [Docker](#-docker).
 
+### ⌨️ **Command line (CLI)**
+
+`cli/noderef.mjs` drives a running NodeRef from the terminal, so scripts and AI coding tools (Claude Code, etc.) can act on your Alfresco servers without ever seeing a username or password. You only name a saved server; NodeRef authenticates with the credentials it already stores.
+
+```bash
+# NodeRef (desktop app, dev mode, or Docker) must be running
+node cli/noderef.mjs servers                               # list saved servers
+node cli/noderef.mjs js localhost -e 'print(companyhome.name)'
+node cli/noderef.mjs js TEST ./cleanup.js                  # run a script file
+node cli/noderef.mjs rpc backend.servers.list              # raw backend RPC call
+```
+
+- `<server>` is a server id or a unique part of its name, label, or URL.
+- `js` needs the JavaScript Console endpoint configured for that server; it prints the script's `print()` output and exits non-zero when the script fails. Add `--json` for the full result.
+- Only Node.js 18+ is required (no dependencies). Run `npm link` in the repo root to get a global `noderef` command.
+- The backend is found automatically; set `NODEREF_URL` (e.g. `http://localhost:5111`) to point at a specific instance.
+
+The CLI runs whatever it is asked to run with the rights of the saved account, so point AI tools at a test server rather than production.
+
 ### 🐳 **Docker**
 
 Deploy inside your infrastructure when network policies block the desktop app or when teams prefer a browser-based rollout:
