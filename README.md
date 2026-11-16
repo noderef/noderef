@@ -114,10 +114,15 @@ If you prefer to run NodeRef inside your infrastructure instead of a local deskt
 node cli/noderef.mjs servers                               # list saved servers
 node cli/noderef.mjs js localhost -e 'print(companyhome.name)'
 node cli/noderef.mjs js TEST ./cleanup.js                  # run a script file
+node cli/noderef.mjs scripts list TEST                     # scripts in Data Dictionary/Scripts
+node cli/noderef.mjs scripts get TEST cleanup.js > cleanup.js
+node cli/noderef.mjs scripts save TEST cleanup.js ./cleanup.js   # overwrite the stored script
+node cli/noderef.mjs js TEST --saved cleanup.js            # run a stored script
 node cli/noderef.mjs rpc backend.servers.list              # raw backend RPC call
 ```
 
 - `<server>` is a server id or a unique part of its name, label, or URL.
+- `scripts save` overwrites an existing script; Alfresco only keeps the previous content as a version when the node is versionable.
 - `js` needs the JavaScript Console endpoint configured for that server; it prints the script's `print()` output and exits non-zero when the script fails. Add `--json` for the full result.
 - Only Node.js 18+ is required (no dependencies). Run `npm link` in the repo root to get a global `noderef` command.
 - The backend is found automatically; set `NODEREF_URL` (e.g. `http://localhost:5111`) to point at a specific instance.
