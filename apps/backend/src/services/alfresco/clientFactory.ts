@@ -16,6 +16,7 @@
 
 import { AlfrescoApi } from '@alfresco/js-api';
 import { DEFAULT_OIDC_SCOPE, DEFAULT_REDIRECT_URI } from './constants.js';
+import { ensureEcmTicket } from './oidcTicketService.js';
 
 /**
  * Client factory for AlfrescoApi instances
@@ -202,7 +203,9 @@ export async function getAuthenticatedClient(
 
     // Get client with OAuth2 configuration
     // The js-api will use Bearer token for authentication
-    return getClient(baseUrl, oauth2Auth);
+    const client = getClient(baseUrl, oauth2Auth);
+    await ensureEcmTicket(client, baseUrl, creds.token);
+    return client;
   }
 
   // Basic Auth: get client and call login()

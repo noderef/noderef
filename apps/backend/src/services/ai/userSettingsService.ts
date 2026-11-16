@@ -33,6 +33,7 @@ export interface SaveUserAiSettingsInput {
   label?: string;
   metadata?: Record<string, unknown> | null;
   isDefault?: boolean;
+  allowEmptyToken?: boolean;
 }
 
 let defaultPrisma: Awaited<ReturnType<typeof getPrismaClient>> | null = null;
@@ -66,7 +67,10 @@ export async function upsertUserAiSettings(userId: number, input: SaveUserAiSett
   }
 
   if (!encryptedToken) {
-    throw new Error('AI provider token is required.');
+    if (!input.allowEmptyToken) {
+      throw new Error('AI provider token is required.');
+    }
+    encryptedToken = '';
   }
 
   return repository.upsert(userId, {
@@ -115,21 +119,22 @@ async function toUserAiConfig(record: {
   metadata: string | null;
 }): Promise<UserAiConfig> {
   const decryptedToken = await decryptSecret(record.token);
-  const metadata =
-    typeof record.metadata === 'string' && record.metadata.trim().length
-      ? safeParseMetadata(record.metadata)
-      : null;
 
   return {
     provider: record.provider,
     model: record.model,
     apiKey: decryptedToken,
     label: record.label ?? undefined,
-    metadata,
+    metadata: parseAiSettingsMetadata(record.metadata),
   };
 }
 
-function safeParseMetadata(raw: string): Record<string, unknown> | null {
+export function parseAiSettingsMetadata(
+  raw: string | null | undefined
+): Record<string, unknown> | null {
+  if (typeof raw !== 'string' || !raw.trim().length) {
+    return null;
+  }
   try {
     return JSON.parse(raw);
   } catch {

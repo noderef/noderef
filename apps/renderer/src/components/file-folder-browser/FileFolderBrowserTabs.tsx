@@ -64,9 +64,15 @@ export function FileFolderBrowserTabs() {
     <Tabs
       value={activeTabId}
       onChange={value => value && setActiveTab(value)}
-      style={{ height: '100%' }}
+      style={{
+        height: '100%',
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}
     >
-      <Tabs.List>
+      <Tabs.List style={{ flexShrink: 0 }}>
         {tabs.map(tab => (
           <Tabs.Tab
             key={tab.id}
@@ -113,7 +119,7 @@ export function FileFolderBrowserTabs() {
         <Tabs.Panel
           key={tab.id}
           value={tab.id}
-          style={{ height: 'calc(100% - 42px)', overflow: 'auto' }}
+          style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}
         >
           <FileFolderBrowserView
             serverId={tab.serverId}

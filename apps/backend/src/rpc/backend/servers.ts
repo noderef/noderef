@@ -21,8 +21,10 @@
 
 import type { CreateServer, UpdateServer } from '@app/contracts';
 import { z } from 'zod';
+import { resolveAlfrescoAdminStatus } from '../../services/alfresco/adminStatus.js';
+import { exchangeOidcTokenForTicket } from '../../services/alfresco/oidcTicketService.js';
 import type { Routes, RpcContext } from './types.js';
-import { getCurrentUserId, withAuth } from './withAuth.js';
+import { getCurrentUserId, withAuth, withAuthAndCredentials } from './withAuth.js';
 import { InsightRangeDaysSchema } from '../../constants/insights.js';
 
 type RpcCreateServerInput = Omit<CreateServer, 'userId' | 'insightRangeDays'> & {
@@ -205,6 +207,29 @@ export function registerServersHandlers(routes: Routes, ctx: RpcContext): void {
     },
   };
 
+  routes['backend.servers.refreshAdminStatus'] = {
+    schema: z.object({
+      id: z.number(),
+    }),
+    handler: async params => {
+      const userId = await getCurrentUserId();
+      const { id } = params as { id: number };
+
+      return withAuth(ctx, id, async (api, server) => {
+        try {
+          const { isAdmin } = await resolveAlfrescoAdminStatus(api);
+          if (isAdmin !== server.isAdmin) {
+            const updated = await serverService.update(userId, id, { isAdmin });
+            return { isAdmin: updated?.isAdmin ?? isAdmin };
+          }
+          return { isAdmin };
+        } catch {
+          return { isAdmin: server.isAdmin };
+        }
+      });
+    },
+  };
+
   routes['backend.servers.getAuthTicket'] = {
     schema: z.object({
       serverId: z.number(),
@@ -212,12 +237,21 @@ export function registerServersHandlers(routes: Routes, ctx: RpcContext): void {
     handler: async params => {
       const { serverId } = params as { serverId: number };
 
-      return withAuth(ctx, serverId, async api => {
-        // Get the authentication ticket
-        const ticket = api.config?.ticketEcm || api.getTicket();
+      return withAuthAndCredentials(ctx, serverId, async ({ api, token, authType, server }) => {
+        let ticket = api.config?.ticketEcm || api.getTicketEcm?.() || null;
+
+        if (!ticket && authType === 'openid_connect' && token) {
+          ticket = await exchangeOidcTokenForTicket(server.baseUrl, token);
+          if (ticket) {
+            api.setTicket(ticket, '');
+            if (api.config) {
+              api.config.ticketEcm = ticket;
+            }
+          }
+        }
 
         return {
-          ticket: ticket || null,
+          ticket,
         };
       });
     },

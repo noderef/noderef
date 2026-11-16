@@ -14,51 +14,13 @@
  * limitations under the License.
  */
 
-/**
- * CORS middleware for Neutralino-friendly cross-origin handling
- */
-
 import type { RequestHandler } from 'express';
+import { localRequestGuardMiddleware } from './requestGate.js';
 
 /**
- * Strict but Neutralino-friendly CORS middleware
- * - Allows loopback origins (localhost, 127.0.0.1)
- * - Allows null origin for Neutralino desktop app
- * - Blocks everything else
+ * Request gate (Host, Origin, launch token) plus CORS headers.
+ * Previously a CORS-only middleware that still executed disallowed requests.
  */
 export function corsMiddleware(): RequestHandler {
-  return (req, res, next) => {
-    const origin = req.headers.origin;
-
-    // CORS leniency for dev: accept any loopback port (Vite can run on 3000, 5173, etc.)
-    // In prod (Neutralino), origin is often 'null' - allow it for loopback-only service
-    const isLoopback =
-      typeof origin === 'string' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
-
-    if (!origin || origin === 'null' || isLoopback) {
-      // Echo allowed origins so credentialed requests can be used when needed.
-      res.setHeader('Access-Control-Allow-Origin', origin || '*');
-      if (origin) {
-        res.setHeader('Access-Control-Allow-Credentials', 'true');
-      }
-    } else {
-      // Block everything else - don't set CORS header, let browser block it
-      // This prevents the backend from being accessed from arbitrary web origins
-      res.setHeader('Access-Control-Allow-Origin', 'null');
-    }
-
-    res.setHeader('Vary', 'Origin');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader(
-      'Access-Control-Allow-Headers',
-      'Content-Type, Authorization, X-Requested-With, Last-Event-ID'
-    );
-    res.setHeader('X-NodeRef', 'backend@dev');
-
-    if (req.method === 'OPTIONS') {
-      return res.sendStatus(200);
-    }
-
-    next();
-  };
+  return localRequestGuardMiddleware();
 }

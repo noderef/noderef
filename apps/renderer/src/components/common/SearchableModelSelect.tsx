@@ -25,8 +25,8 @@ export type ModelSelectOption = {
   dropdownLabel?: string;
 };
 
-const MODEL_SELECT_DISPLAY_LIMIT = 80;
-const MODEL_SELECT_DROPDOWN_MAX_HEIGHT = 280;
+export const MODEL_SELECT_DISPLAY_LIMIT = 80;
+export const MODEL_SELECT_DROPDOWN_MAX_HEIGHT = 280;
 
 function flattenSelectOptions(options: Parameters<OptionsFilter>[0]['options']): ComboboxItem[] {
   const flattened: ComboboxItem[] = [];

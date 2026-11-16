@@ -8,6 +8,8 @@
   "parents": "Bovenliggende elementen",
   "permissions": "Rechten",
   "reference": "Verwijzing",
+  "copyReference": "Kopieer nodeRef",
+  "copied": "Gekopieerd",
   "primaryPath": "Primair pad",
   "type": "Type",
   "parentNode": "Bovenliggend element",

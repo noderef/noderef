@@ -8,6 +8,8 @@
   "parents": "Parents",
   "permissions": "Permissions",
   "reference": "Reference",
+  "copyReference": "Copy nodeRef",
+  "copied": "Copied",
   "primaryPath": "Primary path",
   "type": "Type",
   "parentNode": "Parent node",

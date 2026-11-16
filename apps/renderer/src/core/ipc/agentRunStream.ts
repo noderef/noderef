@@ -15,17 +15,20 @@
  */
 
 import type { AgentStreamEvent } from '@app/contracts';
-import { getRpcBaseUrl, waitForBackend } from './rpc.js';
+import { appendLaunchTokenToUrl, getCachedLaunchToken } from './launchToken.js';
+import { getRpcBaseUrl, loadLaunchToken, waitForBackend } from './rpc.js';
 
 export async function buildAgentRunStreamUrl(runId: number, afterId?: number): Promise<string> {
   await waitForBackend();
+  await loadLaunchToken();
   const baseUrl = getRpcBaseUrl();
   const params = new URLSearchParams();
   if (afterId !== undefined && afterId > 0) {
     params.set('afterId', String(afterId));
   }
   const query = params.toString();
-  return `${baseUrl}/rpc/agent/runs/${runId}/stream${query ? `?${query}` : ''}`;
+  const url = `${baseUrl}/rpc/agent/runs/${runId}/stream${query ? `?${query}` : ''}`;
+  return appendLaunchTokenToUrl(url, getCachedLaunchToken());
 }
 
 export function parseAgentStreamPayload(raw: string): AgentStreamEvent | null {

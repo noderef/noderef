@@ -17,6 +17,8 @@
   "groupSites": "Sitios",
   "groupPaths": "Rutas",
   "groupOperators": "Operadores",
+  "groupNodeBrowser": "Navegador de nodos",
+  "openInNodeBrowser": "Abrir en el navegador de nodos",
   "loadingProperties": "Cargando propiedades {{prefix}}*…",
   "loadingTypes": "Cargando tipos {{prefix}}*…",
   "loadingAspects": "Cargando aspectos {{prefix}}*…",

@@ -18,7 +18,7 @@ import { execSync } from 'child_process';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -262,9 +262,9 @@ function generateWixXml(buildPath, arch, version, iconPath, licensePath, useHeat
     : dirStructure.componentRefs;
 
   // When using heat.exe, the directory structure is defined in the harvested fragment
-  // We still need to define INSTALLFOLDER in the main Product
+  // We still need to define APPLICATIONFOLDER in the main Product
   const directoryStructure = useHeat
-    ? '          <!-- Files harvested by heat.exe will be installed to INSTALLFOLDER -->'
+    ? '          <!-- Files harvested by heat.exe will be installed to APPLICATIONFOLDER -->'
     : dirStructure.directoryStructure;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -275,7 +275,19 @@ function generateWixXml(buildPath, arch, version, iconPath, licensePath, useHeat
            Version="${msiVersion}"
            Manufacturer="NodeRef"
            UpgradeCode="${upgradeCode}">
-    <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
+    <Package InstallerVersion="500" Compressed="yes" InstallPrivileges="limited" />
+
+    <!-- Dual-purpose package (Windows Installer 5 single-package authoring):
+         ALLUSERS=2 + MSIINSTALLPERUSER=1 defaults to per-user with no UAC, so a
+         locked-down PC can install into %LocalAppData%. Omitting MSIINSTALLPERUSER
+         makes Windows treat ALLUSERS=2 as per-machine and prompt for admin.
+         InstallPrivileges=limited sets the LUA summary bit so launch is not
+         auto-elevated. WixUI_Advanced still offers "all users" when the MSI is
+         already elevated (Run as administrator). -->
+    <Property Id="ALLUSERS" Secure="yes" Value="2" />
+    <Property Id="MSIINSTALLPERUSER" Secure="yes" Value="1" />
+    <Property Id="ApplicationFolderName" Value="NodeRef" />
+    <Property Id="WixAppFolder" Value="WixPerUserFolder" />
     
     <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
     
@@ -289,7 +301,7 @@ ${componentRefs}
     
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFilesFolder">
-        <Directory Id="INSTALLFOLDER" Name="NodeRef">
+        <Directory Id="APPLICATIONFOLDER" Name="NodeRef">
 ${directoryStructure}
         </Directory>
       </Directory>
@@ -299,8 +311,8 @@ ${directoryStructure}
             <Shortcut Id="ApplicationStartMenuShortcut"
                       Name="NodeRef"
                       Description="NodeRef - The desktop app every Alfresco admin deserves"
-                      Target="[INSTALLFOLDER]NodeRef.exe"
-                      WorkingDirectory="INSTALLFOLDER"${normalizedIconPath ? '\n                      Icon="AppIcon"' : ''} />
+                      Target="[APPLICATIONFOLDER]NodeRef.exe"
+                      WorkingDirectory="APPLICATIONFOLDER"${normalizedIconPath ? '\n                      Icon="AppIcon"' : ''} />
             <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
             <RegistryValue Root="HKCU" Key="Software\\NodeRef" Name="installed" Type="integer" Value="1" KeyPath="yes" />
           </Component>
@@ -310,8 +322,15 @@ ${directoryStructure}
     ${normalizedIconPath ? `<Icon Id="AppIcon" SourceFile="${normalizedIconPath}" />` : ''}
     ${normalizedIconPath ? '<Property Id="ARPPRODUCTICON" Value="AppIcon" />' : ''}
     ${normalizedLicensePath ? `<WixVariable Id="WixUILicenseRtf" Value="${normalizedLicensePath}" />` : ''}
-    
-    <UIRef Id="WixUI_Minimal" />
+
+    <!-- WixUI_Advanced sets ALLUSERS on InstallScopeDlg but not MSIINSTALLPERUSER.
+         Keep the two properties in sync so "just me" stays unelevated and
+         "all users" is a true per-machine install when already elevated. -->
+    <UI>
+      <Publish Dialog="InstallScopeDlg" Control="Next" Property="MSIINSTALLPERUSER" Value="1" Order="8">WixAppFolder = "WixPerUserFolder"</Publish>
+      <Publish Dialog="InstallScopeDlg" Control="Next" Property="MSIINSTALLPERUSER" Value="{}" Order="9">WixAppFolder = "WixPerMachineFolder"</Publish>
+    </UI>
+    <UIRef Id="WixUI_Advanced" />
   </Product>
 </Wix>`;
 }
@@ -325,7 +344,7 @@ function generateDirectoryStructure(buildPath) {
   const rootGuid = `{${crypto.randomUUID().toUpperCase()}}`;
   const rootComponentId = 'Component_Root';
   directories.set('', {
-    id: 'INSTALLFOLDER',
+    id: 'APPLICATIONFOLDER',
     guid: rootGuid,
     components: [
       `          <Component Id="${rootComponentId}" Guid="${rootGuid}">
@@ -350,7 +369,7 @@ function generateDirectoryStructure(buildPath) {
           if (!directories.has(dirKey)) {
             const dirId = dirKey
               ? `Dir_${dirKey.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50)}`
-              : 'INSTALLFOLDER';
+              : 'APPLICATIONFOLDER';
             const dirGuid = `{${crypto.randomUUID().toUpperCase()}}`;
             directories.set(dirKey, { id: dirId, guid: dirGuid, components: [] });
           }
@@ -453,7 +472,7 @@ async function createMsiInstaller(buildPath, arch, version, iconPath, wixTools) 
         // -var: use variable for source directory (allows -b flag in light.exe)
         // Note: We don't use -sfrag because we need the Fragment wrapper for ComponentGroup
         run(
-          `"${wixTools.heat}" dir "${buildPath}" -nologo -gg -g1 -srd -sreg -scom -ke -out "${harvestedWxsPath}" -cg ApplicationFiles -dr INSTALLFOLDER -var var.SourceDir`
+          `"${wixTools.heat}" dir "${buildPath}" -nologo -gg -g1 -srd -sreg -scom -ke -out "${harvestedWxsPath}" -cg ApplicationFiles -dr APPLICATIONFOLDER -var var.SourceDir`
         );
         useHeat = true;
       } catch (err) {
@@ -899,7 +918,13 @@ async function main() {
   }
 }
 
-main().catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+const isDirectRun =
+  Boolean(process.argv[1]) && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+if (isDirectRun) {
+  main().catch(err => {
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+export { generateWixXml };

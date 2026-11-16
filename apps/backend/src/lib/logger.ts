@@ -62,6 +62,8 @@ export const log = pino({
       'cookie',
       'req.headers.authorization',
       'req.headers.cookie',
+      'req.headers["x-noderef-token"]',
+      'req.query.nr_token',
       'res.headers["set-cookie"]',
       // Alfresco API fields
       'username',

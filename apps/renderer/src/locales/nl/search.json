@@ -17,6 +17,8 @@
   "groupSites": "Sites",
   "groupPaths": "Paden",
   "groupOperators": "Operatoren",
+  "groupNodeBrowser": "Node Browser",
+  "openInNodeBrowser": "Openen in Node Browser",
   "loadingProperties": "{{prefix}}* eigenschappen laden…",
   "loadingTypes": "{{prefix}}* typen laden…",
   "loadingAspects": "{{prefix}}* aspecten laden…",

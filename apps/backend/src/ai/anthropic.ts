@@ -20,16 +20,32 @@ import type { AiInputImage, AiListedModel } from './types.js';
 const LICENSE_HEADER = '';
 void LICENSE_HEADER;
 
-export interface AnthropicRequest {
+interface AnthropicClientOptions {
   apiKey: string;
+  baseURL?: string;
+  /** Sent as `Authorization: Bearer`, in addition to `x-api-key`. */
+  authToken?: string;
+}
+
+function createAnthropicClient({ apiKey, baseURL, authToken }: AnthropicClientOptions): Anthropic {
+  return new Anthropic({
+    apiKey: apiKey || null,
+    authToken: authToken || null,
+    ...(baseURL ? { baseURL } : {}),
+    // Keyless local servers: the SDK refuses to send a request unless the auth header is explicitly omitted.
+    ...(!apiKey && !authToken ? { defaultHeaders: { 'X-Api-Key': null } } : {}),
+  });
+}
+
+export interface AnthropicRequest extends AnthropicClientOptions {
   model: string;
   prompt: string;
   system?: string;
   prefill?: string;
   maxTokens?: number;
   temperature?: number;
-  baseURL?: string;
   images?: AiInputImage[];
+  signal?: AbortSignal;
 }
 
 export async function callAnthropic({
@@ -41,12 +57,11 @@ export async function callAnthropic({
   maxTokens = 1024,
   temperature = 0,
   baseURL,
+  authToken,
   images = [],
+  signal,
 }: AnthropicRequest): Promise<string> {
-  const client = new Anthropic({
-    apiKey,
-    ...(baseURL ? { baseURL } : {}),
-  });
+  const client = createAnthropicClient({ apiKey, baseURL, authToken });
 
   const content = [
     { type: 'text' as const, text: prompt },
@@ -68,13 +83,16 @@ export async function callAnthropic({
     messages.push({ role: 'assistant', content: prefill });
   }
 
-  const response = await client.messages.create({
-    model,
-    max_tokens: maxTokens,
-    ...samplingParamsForModel(model, temperature),
-    ...(system ? { system } : {}),
-    messages,
-  });
+  const response = await client.messages.create(
+    {
+      model,
+      max_tokens: maxTokens,
+      ...samplingParamsForModel(model, temperature),
+      ...(system ? { system } : {}),
+      messages,
+    },
+    { signal }
+  );
 
   const text = response.content
     .map(item => ('text' in item ? item.text : ''))
@@ -135,34 +153,35 @@ export async function callWithTools({
   apiKey,
   model,
   baseURL,
+  authToken,
   system,
   messages,
   tools,
   maxTokens = 1024,
   temperature = 0,
-}: {
-  apiKey: string;
+  signal,
+}: AnthropicClientOptions & {
   model: string;
-  baseURL?: string;
   system: string;
   messages: AgentMessageParam[];
   tools: AgentToolSchema[];
   maxTokens?: number;
   temperature?: number;
+  signal?: AbortSignal;
 }): Promise<AgentCallResult> {
-  const client = new Anthropic({
-    apiKey,
-    ...(baseURL ? { baseURL } : {}),
-  });
+  const client = createAnthropicClient({ apiKey, baseURL, authToken });
 
-  const response = await client.messages.create({
-    model,
-    max_tokens: maxTokens,
-    ...samplingParamsForModel(model, temperature),
-    system,
-    messages,
-    tools: tools as Anthropic.Tool[],
-  } as any);
+  const response = await client.messages.create(
+    {
+      model,
+      max_tokens: maxTokens,
+      ...samplingParamsForModel(model, temperature),
+      system,
+      messages,
+      tools: tools as Anthropic.Tool[],
+    } as any,
+    { signal }
+  );
   const usageRaw = (response as any)?.usage as
     | {
         input_tokens?: unknown;
@@ -225,10 +244,8 @@ export async function callWithTools({
   };
 }
 
-export interface CallWithToolsStreamOptions {
-  apiKey: string;
+export interface CallWithToolsStreamOptions extends AnthropicClientOptions {
   model: string;
-  baseURL?: string;
   system: string;
   messages: AgentMessageParam[];
   tools: AgentToolSchema[];
@@ -236,6 +253,7 @@ export interface CallWithToolsStreamOptions {
   temperature?: number;
   onTextDelta?: (delta: string) => void;
   onToolUseStarted?: () => void;
+  signal?: AbortSignal;
 }
 
 /**
@@ -245,6 +263,7 @@ export async function callWithToolsStream({
   apiKey,
   model,
   baseURL,
+  authToken,
   system,
   messages,
   tools,
@@ -252,20 +271,21 @@ export async function callWithToolsStream({
   temperature = 0,
   onTextDelta,
   onToolUseStarted,
+  signal,
 }: CallWithToolsStreamOptions): Promise<AgentCallResult> {
-  const client = new Anthropic({
-    apiKey,
-    ...(baseURL ? { baseURL } : {}),
-  });
+  const client = createAnthropicClient({ apiKey, baseURL, authToken });
 
-  const stream = client.messages.stream({
-    model,
-    max_tokens: maxTokens,
-    ...samplingParamsForModel(model, temperature),
-    system,
-    messages,
-    tools: tools as Anthropic.Tool[],
-  } as any);
+  const stream = client.messages.stream(
+    {
+      model,
+      max_tokens: maxTokens,
+      ...samplingParamsForModel(model, temperature),
+      system,
+      messages,
+      tools: tools as Anthropic.Tool[],
+    } as any,
+    { signal }
+  );
 
   let toolUseNotified = false;
   for await (const event of stream) {
@@ -380,11 +400,9 @@ function buildToolResultTurn(
 export async function listAnthropicModels({
   apiKey,
   baseURL,
-}: {
-  apiKey: string;
-  baseURL?: string;
-}): Promise<AiListedModel[]> {
-  const client = new Anthropic({ apiKey, ...(baseURL ? { baseURL } : {}) });
+  authToken,
+}: AnthropicClientOptions): Promise<AiListedModel[]> {
+  const client = createAnthropicClient({ apiKey, baseURL, authToken });
   const response = await client.models.list();
   return response.data.map(model => ({
     id: model.id,
@@ -411,7 +429,7 @@ function modelSupportsAnthropicPrefill(model: string): boolean {
  * Claude Opus 4.7+ (and later families such as Fable/Mythos) reject temperature/top_p/top_k.
  * Omit those params entirely; Sonnet and earlier Opus models still accept them.
  */
-export function modelSupportsSamplingParams(model: string): boolean {
+function modelSupportsSamplingParams(model: string): boolean {
   const modelName = normalizeAnthropicModelName(model);
   if (!modelName) {
     return true;

@@ -231,7 +231,9 @@ export function useAgentModelSelection({
             const remote = await listAiModels({ provider: provider.value }).catch(() => null);
             const models = remote?.models?.length
               ? remote.models
-              : [{ id: provider.defaultModel, displayName: provider.defaultModel }];
+              : provider.defaultModel
+                ? [{ id: provider.defaultModel, displayName: provider.defaultModel }]
+                : [];
             return models.map(model => {
               const modelLabel = model.displayName || model.id;
               return {
@@ -249,7 +251,9 @@ export function useAgentModelSelection({
           return;
         }
 
-        const options = optionGroups.flat();
+        // The selector only renders the first N options until the user searches, so a large
+        // catalog (e.g. OpenRouter) must not push smaller providers out of view.
+        const options = [...optionGroups].sort((a, b) => a.length - b.length).flat();
         setAiModelOptions(options);
         setDefaultAiSelection({
           provider: currentSettings.provider ?? null,

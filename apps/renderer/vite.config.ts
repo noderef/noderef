@@ -19,9 +19,35 @@ import strip from '@rollup/plugin-strip';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { copyFileSync, existsSync, readFileSync } from 'fs';
 import { createRequire } from 'module';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { defineConfig } from 'vite';
+
+function resolveBackendTokenPath(): string {
+  const dataDir =
+    process.env.DATA_DIR ||
+    (process.platform === 'darwin'
+      ? path.join(os.homedir(), 'Library', 'Application Support', 'nl.noderef.desktop')
+      : process.platform === 'win32'
+        ? path.join(os.homedir(), 'AppData', 'Roaming', 'nl.noderef.desktop')
+        : path.join(os.homedir(), '.local', 'share', 'nl.noderef.desktop'));
+  return path.join(dataDir, '.runtime', 'backend-token');
+}
+
+function isLoopbackHost(host: string | undefined): boolean {
+  if (!host) {
+    return false;
+  }
+  return /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i.test(host.trim());
+}
+
+function isLoopbackOrigin(origin: string | undefined): boolean {
+  if (!origin) {
+    return true;
+  }
+  return /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i.test(origin.trim());
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -70,6 +96,30 @@ export default defineConfig(({ command }) => ({
         } catch (err) {
           console.warn('⚠ Failed to copy neutralino.js to public:', err);
         }
+
+        // Per-launch backend token for browser/Vite dev. Not reachable from a
+        // foreign origin; Neutralino reads the token file via native APIs instead.
+        server.middlewares.use('/.tmp/backend-token', (req, res) => {
+          const origin = typeof req.headers.origin === 'string' ? req.headers.origin : undefined;
+          if (
+            !isLoopbackHost(req.headers.host) ||
+            !isLoopbackOrigin(origin) ||
+            (origin && origin.trim().toLowerCase() === 'null')
+          ) {
+            res.statusCode = 403;
+            res.end('Forbidden');
+            return;
+          }
+          const tokenPath = resolveBackendTokenPath();
+          if (!existsSync(tokenPath)) {
+            res.statusCode = 404;
+            res.end('Not found');
+            return;
+          }
+          res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-store');
+          res.end(readFileSync(tokenPath, 'utf-8').trim());
+        });
 
         // Serve .tmp/auth_info.json for Neutralino detection
         server.middlewares.use('/.tmp/auth_info.json', (req, res, _next) => {

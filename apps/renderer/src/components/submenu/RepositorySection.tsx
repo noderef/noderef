@@ -61,6 +61,7 @@ import {
   IconFolder,
   IconFolderOpen,
   IconLock,
+  IconRefresh,
   IconTextWrap,
   IconTrash,
   IconWorld,
@@ -173,6 +174,21 @@ const findTreeNodeChildren = (nodes: TreeNode[], targetNodeId: string): TreeNode
     }
   }
   return null;
+};
+
+const collectDescendantIds = (nodes: TreeNode[] | null | undefined): string[] => {
+  if (!nodes) {
+    return [];
+  }
+  const ids: string[] = [];
+  for (const node of nodes) {
+    if (node.isLoadMorePlaceholder) {
+      continue;
+    }
+    ids.push(node.value);
+    ids.push(...collectDescendantIds(node.children));
+  }
+  return ids;
 };
 
 interface LoadMoreTreeRowProps {
@@ -518,6 +534,22 @@ export function RepositorySection({
       { pinned: true }
     );
     navigate('node-browser');
+  };
+
+  const handleRefreshFolder = async () => {
+    if (!selectedNode || !activeServerId) return;
+    if (
+      !selectedNode.isFolder &&
+      selectedNode.nodeType !== 'st:sites' &&
+      selectedNode.nodeType !== 'st:site'
+    ) {
+      return;
+    }
+
+    const nodeId = selectedNode.value;
+    setContextMenuOpened(false);
+    await loadNodeChildren(nodeId, { forceReload: true });
+    tree.expand(nodeId);
   };
 
   const handleOpenInTextEditor = async () => {
@@ -952,11 +984,38 @@ export function RepositorySection({
     }
 
     if (options?.forceReload) {
+      const descendantIds = collectDescendantIds(findTreeNodeChildren(treeData, nodeId));
+
       setPaginationState(prev => {
         const next = { ...prev };
         delete next[nodeId];
+        for (const id of descendantIds) {
+          delete next[id];
+        }
         return next;
       });
+      setLoadedNodes(prev => {
+        const next = new Set(prev);
+        next.delete(nodeId);
+        for (const id of descendantIds) {
+          next.delete(id);
+        }
+        return next;
+      });
+      setLoadingMoreNodes(prev => {
+        if (!prev.has(nodeId) && descendantIds.every(id => !prev.has(id))) {
+          return prev;
+        }
+        const next = new Set(prev);
+        next.delete(nodeId);
+        for (const id of descendantIds) {
+          next.delete(id);
+        }
+        return next;
+      });
+      for (const id of descendantIds) {
+        tree.collapse(id);
+      }
     }
 
     // Mark node as loading
@@ -1354,6 +1413,7 @@ export function RepositorySection({
                     const actions = getAvailableActions(context);
                     const canOpenContextMenu =
                       actions.length > 0 ||
+                      treeNode.isFolder ||
                       treeNode.nodeType === 'st:sites' ||
                       treeNode.nodeType === 'st:site';
 
@@ -1691,7 +1751,26 @@ export function RepositorySection({
                           return [...divider, ...section];
                         });
 
-                        return <>{flattened}</>;
+                        const canRefresh = selectedNode.isFolder || isSitesRoot || isSiteNode;
+                        const refreshItem = canRefresh ? (
+                          <Menu.Item
+                            key="refresh"
+                            leftSection={<IconRefresh size={14} />}
+                            onClick={handleRefreshFolder}
+                          >
+                            {t('submenu:refreshAction')}
+                          </Menu.Item>
+                        ) : null;
+
+                        return (
+                          <>
+                            {refreshItem}
+                            {refreshItem && flattened.length > 0 ? (
+                              <Menu.Divider key="refresh-divider" />
+                            ) : null}
+                            {flattened}
+                          </>
+                        );
                       })()}
                   </Menu.Dropdown>
                 </Menu>

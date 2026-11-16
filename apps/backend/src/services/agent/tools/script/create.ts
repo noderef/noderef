@@ -166,6 +166,7 @@ async function callTextModel(
     apiKey: runtime.apiKey,
     model: runtime.model,
     baseURL: runtime.baseURL,
+    authToken: runtime.authToken,
     temperature: runtime.temperature,
     prompt,
     maxTokens,

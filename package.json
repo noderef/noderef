@@ -1,6 +1,6 @@
 {
   "name": "noderef",
-  "version": "0.11.1",
+  "version": "0.15.0",
   "private": true,
   "license": "Apache-2.0",
   "description": "NodeRef - The desktop app every Alfresco admin deserves",
@@ -11,6 +11,7 @@
   "scripts": {
     "cli": "node ./cli/noderef.mjs",
     "test": "pnpm --filter @app/backend test:run",
+    "test:scripts": "node --test scripts/package.test.mjs",
     "sync:meta": "node ./scripts/sync-meta.mjs",
     "predev:app": "pnpm sync:meta && node ./scripts/bin/preflight.mjs && pnpm --filter @app/contracts build && pnpm --filter @app/backend prisma:migrate",
     "dev:app": "pnpm predev:app && run-p --print-label dev:renderer:open dev:backend dev:neutralino:open",

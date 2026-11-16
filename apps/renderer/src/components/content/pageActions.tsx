@@ -234,18 +234,19 @@ export function getPageActions(
           onClick: defaultHandlers.onRefreshNodeBrowser,
           disabled: !context?.nodeBrowserNodeId,
         },
-        {
-          icon: <IconFileText size={18} />,
-          label: t('submenu:textEditor'),
-          onClick: defaultHandlers.onOpenInTextEditor,
-          disabled: !(
-            context?.nodeBrowserNodeType !== 'cm:folder' &&
-            isTextLikeFile(
-              context?.nodeBrowserNodeName || null,
-              context?.nodeBrowserMimeType || null
-            )
-          ),
-        },
+        ...(context?.nodeBrowserNodeType !== 'cm:folder' &&
+        isTextLikeFile(
+          context?.nodeBrowserNodeName || null,
+          context?.nodeBrowserMimeType || null
+        )
+          ? [
+              {
+                icon: <IconFileText size={18} />,
+                label: t('submenu:textEditor'),
+                onClick: defaultHandlers.onOpenInTextEditor,
+              },
+            ]
+          : []),
         {
           icon: <IconCode size={18} />,
           label: t('submenu:jsConsole'),

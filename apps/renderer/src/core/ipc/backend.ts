@@ -149,6 +149,13 @@ export const backendRpc = {
     },
 
     /**
+     * Re-check Alfresco admin status for a server and persist it
+     */
+    async refreshAdminStatus(id: number): Promise<{ isAdmin: boolean }> {
+      return rpc<{ isAdmin: boolean }>('backend.servers.refreshAdminStatus', { id });
+    },
+
+    /**
      * Get Alfresco authentication ticket for a server
      */
     async getAuthTicket(serverId: number): Promise<{ ticket: string | null }> {

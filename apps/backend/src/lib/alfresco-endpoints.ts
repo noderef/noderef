@@ -298,3 +298,9 @@ export function getAlfrescoNodeTargetPath(nodeId: string, targetId: string): str
 export function getAlfrescoNodeSourcesPath(nodeId: string): string {
   return ALFRESCO_NODE_SOURCES_PATH_TEMPLATE.replace('{nodeId}', encodeURIComponent(nodeId));
 }
+
+const ALFRESCO_DISCOVERY_PATH = '/alfresco/api/discovery';
+
+export function getAlfrescoDiscoveryPath(): string {
+  return ALFRESCO_DISCOVERY_PATH;
+}

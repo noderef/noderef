@@ -19,7 +19,19 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { cleanupRuntimeFiles, publishPort } from '../../src/lib/port.js';
+import { cleanupRuntimeFiles, isRetryableBindError, publishPort } from '../../src/lib/port.js';
+
+describe('retryable bind errors', () => {
+  it('treats a busy port and a Windows excluded port as retryable', () => {
+    expect(isRetryableBindError('EADDRINUSE')).toBe(true);
+    expect(isRetryableBindError('EACCES')).toBe(true);
+  });
+
+  it('does not retry other bind failures', () => {
+    expect(isRetryableBindError('EADDRNOTAVAIL')).toBe(false);
+    expect(isRetryableBindError(undefined)).toBe(false);
+  });
+});
 
 describe('port runtime files', () => {
   let prevDataDir: string | undefined;
@@ -49,6 +61,8 @@ describe('port runtime files', () => {
     expect(readFileSync(path.join(runtimeDir, 'backend-pid'), 'utf8').trim()).toBe(
       String(process.pid)
     );
+    const token = readFileSync(path.join(runtimeDir, 'backend-token'), 'utf8').trim();
+    expect(token.length).toBeGreaterThanOrEqual(32);
   });
 
   it('cleanupRuntimeFiles removes backend-port and backend-pid', () => {
@@ -60,9 +74,11 @@ describe('port runtime files', () => {
     const runtimeDir = path.join(tmpBase, '.runtime');
     expect(existsSync(path.join(runtimeDir, 'backend-port'))).toBe(true);
     expect(existsSync(path.join(runtimeDir, 'backend-pid'))).toBe(true);
+    expect(existsSync(path.join(runtimeDir, 'backend-token'))).toBe(true);
 
     cleanupRuntimeFiles();
     expect(existsSync(path.join(runtimeDir, 'backend-port'))).toBe(false);
     expect(existsSync(path.join(runtimeDir, 'backend-pid'))).toBe(false);
+    expect(existsSync(path.join(runtimeDir, 'backend-token'))).toBe(false);
   });
 });

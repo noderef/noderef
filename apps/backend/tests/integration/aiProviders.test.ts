@@ -20,7 +20,9 @@ import {
   getDefaultAiProvider,
   inferModelCapabilities,
   listAiProviders,
+  normalizeCustomBaseUrl,
   providerSupportsCapability,
+  resolveProviderEndpoint,
 } from '../../src/ai/providers.js';
 
 describe('ai providers catalog', () => {
@@ -80,5 +82,70 @@ describe('ai providers catalog', () => {
   it('allows vision capability at provider level for openrouter', () => {
     expect(providerSupportsCapability('openrouter', 'text')).toBe(true);
     expect(providerSupportsCapability('openrouter', 'vision')).toBe(true);
+  });
+
+  it('exposes a custom provider with user-supplied base URL and optional token', () => {
+    const provider = getAiProvider('Custom');
+    expect(provider?.id).toBe('custom');
+    expect(provider?.requiresBaseUrl).toBe(true);
+    expect(provider?.tokenOptional).toBe(true);
+    expect(provider?.baseURL).toBeUndefined();
+  });
+});
+
+describe('normalizeCustomBaseUrl', () => {
+  it('strips trailing slashes and OpenAI-style /v1 suffixes', () => {
+    expect(normalizeCustomBaseUrl('http://localhost:11434')).toBe('http://localhost:11434');
+    expect(normalizeCustomBaseUrl(' http://localhost:11434/ ')).toBe('http://localhost:11434');
+    expect(normalizeCustomBaseUrl('http://localhost:11434/v1')).toBe('http://localhost:11434');
+    expect(normalizeCustomBaseUrl('http://localhost:4000/v1/messages')).toBe(
+      'http://localhost:4000'
+    );
+    expect(normalizeCustomBaseUrl('https://llm.example.com/litellm/v1/')).toBe(
+      'https://llm.example.com/litellm'
+    );
+  });
+
+  it('rejects empty and non-http URLs', () => {
+    expect(normalizeCustomBaseUrl('')).toBeNull();
+    expect(normalizeCustomBaseUrl(undefined)).toBeNull();
+    expect(normalizeCustomBaseUrl('localhost:11434')).toBeNull();
+    expect(normalizeCustomBaseUrl('file:///etc/passwd')).toBeNull();
+    expect(normalizeCustomBaseUrl('not a url')).toBeNull();
+  });
+});
+
+describe('resolveProviderEndpoint', () => {
+  it('uses the built-in base URL for hosted providers and never sends a bearer token', () => {
+    const provider = getAiProvider('openrouter')!;
+    expect(
+      resolveProviderEndpoint(provider, {
+        apiKey: 'sk-test',
+        metadata: { baseURL: 'http://evil.local' },
+      })
+    ).toEqual({ baseURL: 'https://openrouter.ai/api' });
+  });
+
+  it('reads the stored base URL for the custom provider and forwards the key as bearer', () => {
+    const provider = getAiProvider('custom')!;
+    expect(
+      resolveProviderEndpoint(provider, {
+        apiKey: 'sk-local',
+        metadata: { baseURL: 'http://localhost:4000/v1' },
+      })
+    ).toEqual({ baseURL: 'http://localhost:4000', authToken: 'sk-local' });
+  });
+
+  it('omits auth for keyless custom endpoints and leaves base URL unset when missing', () => {
+    const provider = getAiProvider('custom')!;
+    expect(
+      resolveProviderEndpoint(provider, {
+        apiKey: '',
+        metadata: { baseURL: 'http://localhost:11434' },
+      })
+    ).toEqual({ baseURL: 'http://localhost:11434', authToken: undefined });
+    expect(resolveProviderEndpoint(provider, { apiKey: '', metadata: null }).baseURL).toBe(
+      undefined
+    );
   });
 });

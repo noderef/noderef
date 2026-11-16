@@ -161,6 +161,36 @@ export function SubmenuHeader() {
   const title = server?.name ?? (spaceTitle || t('submenu:nodeRefSpace'));
   const subtitle = server ? server.baseUrl : t('submenu:noServerSelected');
 
+  useEffect(() => {
+    if (!activeServerId) {
+      return;
+    }
+
+    const activeServer = useServersStore.getState().getServerById(activeServerId);
+    if (!activeServer || activeServer.serverType !== 'alfresco') {
+      return;
+    }
+
+    let cancelled = false;
+
+    backendRpc.servers
+      .refreshAdminStatus(activeServerId)
+      .then(result => {
+        if (cancelled) return;
+        const current = useServersStore.getState().getServerById(activeServerId);
+        if (current && current.isAdmin !== result.isAdmin) {
+          useServersStore.getState().updateServer(activeServerId, { isAdmin: result.isAdmin });
+        }
+      })
+      .catch(error => {
+        console.error('Failed to refresh admin status:', error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeServerId]);
+
   const userThumbnailDataUrl = useMemo(() => {
     if (!userThumbnail) return null;
     const isJpeg = userThumbnail.startsWith('/9j/');

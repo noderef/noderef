@@ -153,12 +153,28 @@ const EXPLICIT_CONTENT_REQUEST_PATTERNS: RegExp[] = [
   /\b(inhoud|file\s+content|file\s+contents)\b/i,
 ];
 
-const withTimeout = <T>(p: Promise<T>, ms: number, label: string): Promise<T> => {
+/**
+ * Aborts the underlying request on timeout; otherwise a single-slot local server
+ * (e.g. Ollama) keeps generating and queues every following call behind it.
+ */
+const withTimeout = <T>(
+  run: (signal: AbortSignal) => Promise<T>,
+  ms: number,
+  label: string,
+  parentSignal?: AbortSignal
+): Promise<T> => {
+  const controller = new AbortController();
+  const signal = parentSignal
+    ? AbortSignal.any([controller.signal, parentSignal])
+    : controller.signal;
   let h: ReturnType<typeof setTimeout> | null = null;
   return Promise.race([
-    p,
+    run(signal),
     new Promise<T>((_, rej) => {
-      h = setTimeout(() => rej(new Error(`${label} timed out after ${ms}ms`)), ms);
+      h = setTimeout(() => {
+        controller.abort();
+        rej(new Error(`${label} timed out after ${ms}ms`));
+      }, ms);
     }),
   ]).finally(() => {
     if (h) clearTimeout(h);
@@ -356,17 +372,22 @@ export class AgentRunEngine {
 
         let streamAssistantText = true;
         let composingNoteEmitted = false;
-        const invokeModel = async (): Promise<AgentCallResult> => {
+        const invokeModel = async (signal: AbortSignal): Promise<AgentCallResult> => {
+          const request = {
+            apiKey: this.runtime.apiKey,
+            model: this.runtime.model,
+            baseURL: this.runtime.baseURL,
+            authToken: this.runtime.authToken,
+            system: maskedSystem,
+            messages: maskedMessages,
+            tools,
+            maxTokens: nextCallMaxTokens,
+            temperature: this.runtime.temperature,
+            signal,
+          };
           try {
             return await callWithToolsStream({
-              apiKey: this.runtime.apiKey,
-              model: this.runtime.model,
-              baseURL: this.runtime.baseURL,
-              system: maskedSystem,
-              messages: maskedMessages,
-              tools,
-              maxTokens: nextCallMaxTokens,
-              temperature: this.runtime.temperature,
+              ...request,
               onTextDelta: delta => {
                 if (!composingNoteEmitted) {
                   composingNoteEmitted = true;
@@ -385,27 +406,22 @@ export class AgentRunEngine {
               },
             });
           } catch (streamError) {
+            if (signal.aborted) {
+              throw streamError;
+            }
             log.warn(
               { err: streamError, iteration: iterationIndex },
               'Streaming call failed; falling back'
             );
-            return callWithTools({
-              apiKey: this.runtime.apiKey,
-              model: this.runtime.model,
-              baseURL: this.runtime.baseURL,
-              system: maskedSystem,
-              messages: maskedMessages,
-              tools,
-              maxTokens: nextCallMaxTokens,
-              temperature: this.runtime.temperature,
-            });
+            return callWithTools(request);
           }
         };
 
         response = await withTimeout(
-          invokeModel(),
-          CALL_TIMEOUT_MS,
-          `Agent call (iteration ${iterationIndex})`
+          invokeModel,
+          Math.max(CALL_TIMEOUT_MS, this.runtime.callTimeoutMs ?? 0),
+          `Agent call (iteration ${iterationIndex})`,
+          this.signal
         );
         if (response.type === 'tool_calls') {
           publishAssistantClear(input.runId);
@@ -778,17 +794,21 @@ export class AgentRunEngine {
 
     try {
       const generated = await withTimeout(
-        callAnthropic({
-          apiKey: this.runtime.apiKey,
-          model: this.runtime.model,
-          baseURL: this.runtime.baseURL,
-          system: CHAT_TITLE_SYSTEM_PROMPT,
-          prompt: buildChatPresentationPrompt(input.content, input.preferredLanguage),
-          maxTokens: CHAT_TITLE_MAX_TOKENS,
-          temperature: 0,
-        }),
+        signal =>
+          callAnthropic({
+            apiKey: this.runtime.apiKey,
+            model: this.runtime.model,
+            baseURL: this.runtime.baseURL,
+            authToken: this.runtime.authToken,
+            system: CHAT_TITLE_SYSTEM_PROMPT,
+            prompt: buildChatPresentationPrompt(input.content, input.preferredLanguage),
+            maxTokens: CHAT_TITLE_MAX_TOKENS,
+            temperature: 0,
+            signal,
+          }),
         CHAT_TITLE_CALL_TIMEOUT_MS,
-        'chat presentation generation'
+        'chat presentation generation',
+        this.signal
       );
       const parsed = parseChatPresentationFromModel(generated, input.content);
       nextTitle = parsed.title;

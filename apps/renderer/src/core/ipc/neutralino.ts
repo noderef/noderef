@@ -16,8 +16,15 @@
 
 /* eslint-disable no-console */
 // Shared Neutralino initialization and utilities
-import { app, events, init as neutralinoInit, os } from '@neutralinojs/lib';
+import {
+  app,
+  events,
+  init as neutralinoInit,
+  os,
+  window as neutralinoWindow,
+} from '@neutralinojs/lib';
 import { getBackendUrl, isBackendReady, setBackendReady } from './backendConnection';
+import { getCachedLaunchToken, LAUNCH_TOKEN_HEADER } from './launchToken';
 
 let ready = false;
 let initPromise: Promise<void> | null = null;
@@ -45,6 +52,8 @@ export async function ensureNeutralinoReady(): Promise<void> {
     events.on('ready', () => {
       clearTimeout(timeout);
       ready = true;
+
+      setupWindowIcon();
 
       // Set up quit-on-close behavior (backend shutdown + full exit)
       setupQuitOnClose();
@@ -74,6 +83,20 @@ export async function ensureNeutralinoReady(): Promise<void> {
   });
 
   return initPromise;
+}
+
+function setupWindowIcon(): void {
+  const platform = (window as Window & { NL_OS?: string }).NL_OS;
+  // On macOS, setIcon replaces the padded .icns Dock icon with the unpadded PNG.
+  // Leave the bundle icon in place there; other desktop platforms need the PNG.
+  // External dev URLs may not have the framework's NL_OS global.
+  if (platform === 'Darwin' || (!platform && isMacOS())) {
+    return;
+  }
+
+  neutralinoWindow.setIcon('/resources/icons/appIcon.png').catch(error => {
+    console.warn('[Neutralino] Failed to set window icon:', error);
+  });
 }
 
 /**
@@ -187,9 +210,15 @@ async function shutdownBackend(): Promise<void> {
       const url = getBackendUrl();
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 2000);
+      const shutdownHeaders: Record<string, string> = {};
+      const token = getCachedLaunchToken();
+      if (token) {
+        shutdownHeaders[LAUNCH_TOKEN_HEADER] = token;
+      }
       await fetch(`${url}/shutdown`, {
         method: 'POST',
         signal: controller.signal,
+        headers: shutdownHeaders,
       });
       clearTimeout(timeout);
       console.log('[Neutralino] Backend shutdown requested via HTTP');

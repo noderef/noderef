@@ -142,13 +142,13 @@ export async function buildSystemPrompt(
     : '';
   const toolSkillsSection = await buildToolSkillsSection();
 
+  // Per-run content (current time, mentions) goes last so servers can reuse the cached prompt prefix across runs.
   return `You are the NodeRef assistant — an Alfresco Content Services repository agent.
 You help users search, browse, and manage content in their Alfresco repository.
 
 Before calling any tool, write ONE short sentence explaining what you are about to do (in the language from the Language directive).
 Then call the tool. After all tools are done, write your final answer.
 ${languageDirective}
-${temporalDirective}
 
 CRITICAL RULES — you MUST follow these:
 1. For count/total questions: always read result.pagination.totalCount — that is the TRUE repository total.
@@ -184,6 +184,7 @@ CRITICAL RULES — you MUST follow these:
    - node_lock, node_unlock for document locks; version_revert, version_delete after node_versions
    - association_list, association_manage for peer and secondary associations
    - comment_list, comment_manage for node comments
+   - get_installed_modules for complete AMP/module listings, versions, and repository edition; include every returned module in one list/table regardless of installState
    - search for repository-wide queries
    - hyland_docs_list_publications then hyland_docs_search then hyland_docs_get_topic for Hyland product docs on docs.hyland.com (pick the guide first, then topics) — not for repository node content
    - search_export_text for text exports saved as repository files (csv/tsv/jsonl/md/xml/plain/custom), especially for large result sets
@@ -212,7 +213,8 @@ CRITICAL RULES — you MUST follow these:
    - prefer node name over bare UUID
    - when nodeId is known, include a markdown link using this format:
      [Node Name](nodebrowser://node/<nodeId>)
-${mentionBlock}
 
-${toolSkillsSection}`.trim();
+${toolSkillsSection}
+
+${temporalDirective}${mentionBlock}`.trim();
 }

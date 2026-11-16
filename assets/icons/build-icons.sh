@@ -20,7 +20,8 @@ resize_into() { # $1=src $2=size $3=dest
   "${MAGICK[@]}" "$1" -resize "${2}x${2}" "$3"
 }
 resize_padded() { # $1=src $2=size $3=dest
-  local pad_size=$(($2 * 82 / 100))
+  # Keep more transparent space around the artwork in the macOS Dock icon.
+  local pad_size=$(($2 * 70 / 100))
   "${MAGICK[@]}" "$1" -resize "${pad_size}x${pad_size}" -background none -gravity center -extent "${2}x${2}" "$3"
 }
 KEEP_ICONSET="${KEEP_ICONSET:-0}"

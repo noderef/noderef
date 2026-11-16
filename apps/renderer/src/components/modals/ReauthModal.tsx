@@ -333,6 +333,14 @@ export function ReauthModal() {
                 expiresIn: tokenResponse.expiresIn,
               });
 
+              let nextServer = updatedServer;
+              try {
+                const adminStatus = await backendRpc.servers.refreshAdminStatus(serverId);
+                nextServer = { ...updatedServer, isAdmin: adminStatus.isAdmin };
+              } catch (adminError) {
+                console.error('Failed to refresh admin status after reauth:', adminError);
+              }
+
               // eslint-disable-next-line no-console
               console.log('[ReauthModal] Server tokens updated successfully');
 
@@ -347,7 +355,7 @@ export function ReauthModal() {
               setAuthenticated(true);
               setAuthenticating(false);
 
-              updateServer(serverId, updatedServer);
+              updateServer(serverId, nextServer);
 
               // Trigger repository reload by dispatching a custom event
               window.dispatchEvent(new CustomEvent('reauth-success', { detail: { serverId } }));

@@ -231,6 +231,7 @@ export function BackendGate({
         withCloseButton: true,
         autoClose: false,
         position: 'bottom-right',
+        style: { width: 'fit-content', maxWidth: 360, marginLeft: 'auto' },
       });
     };
 

@@ -223,6 +223,10 @@ const OPERATION_FAILURE_LABELS: Record<string, { title: string; action: string }
   association_manage: { title: 'Association change failed', action: 'change associations' },
   comment_list: { title: 'List comments failed', action: 'list comments' },
   comment_manage: { title: 'Comment change failed', action: 'change comments' },
+  get_installed_modules: {
+    title: 'List installed modules failed',
+    action: 'read installed repository modules',
+  },
 };
 
 const OPERATION_SUCCESS_LABELS: Record<string, string> = {
@@ -270,6 +274,7 @@ const OPERATION_SUCCESS_LABELS: Record<string, string> = {
   association_manage: 'Associations updated',
   comment_list: 'Comments listed',
   comment_manage: 'Comments updated',
+  get_installed_modules: 'Installed modules listed',
 };
 
 export function buildOperationFailureMessage(operation: string, rawMessage: string): string {

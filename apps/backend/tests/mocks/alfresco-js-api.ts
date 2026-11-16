@@ -18,10 +18,17 @@ import { vi } from 'vitest';
 
 export const mockListNodeChildren = vi.fn();
 export const mockGetNodeContent = vi.fn();
+export const mockGetRepositoryInformation = vi.fn();
 
 export class NodesApi {
   listNodeChildren = mockListNodeChildren;
   getNodeContent = mockGetNodeContent;
+
+  constructor(_api: unknown) {}
+}
+
+export class DiscoveryApi {
+  getRepositoryInformation = mockGetRepositoryInformation;
 
   constructor(_api: unknown) {}
 }

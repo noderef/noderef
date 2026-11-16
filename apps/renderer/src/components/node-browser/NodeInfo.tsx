@@ -18,9 +18,21 @@ import type { AlfrescoNodeDetails } from '@/core/ipc/backend';
 import { useFileFolderBrowserTabsStore } from '@/core/store/fileFolderBrowserTabs';
 import { useNavigationStore } from '@/core/store/navigation';
 import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
-import { Anchor, Badge, Group, Menu, Paper, Stack, Table, Text } from '@mantine/core';
-import { IconFileSearch, IconFolder } from '@tabler/icons-react';
-import { useState } from 'react';
+import { writeClipboardText } from '@/core/utils/clipboard';
+import {
+  ActionIcon,
+  Anchor,
+  Badge,
+  Group,
+  Menu,
+  Paper,
+  Stack,
+  Table,
+  Text,
+  Tooltip,
+} from '@mantine/core';
+import { IconCheck, IconCopy, IconFileSearch, IconFolder } from '@tabler/icons-react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface NodeInfoProps {
@@ -36,6 +48,16 @@ export function NodeInfo({ nodeData, serverId }: NodeInfoProps) {
   const [contextMenuOpened, setContextMenuOpened] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
   const [selectedNodeRef, setSelectedNodeRef] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const copiedTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimeoutRef.current !== null) {
+        window.clearTimeout(copiedTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Extract node ID from nodeRef (workspace://SpacesStore/{nodeId})
   const extractNodeId = (nodeRef: string): string => {
@@ -84,6 +106,21 @@ export function NodeInfo({ nodeData, serverId }: NodeInfoProps) {
     setContextMenuOpened(true);
   };
 
+  const handleCopyNodeRef = async (nodeRef: string) => {
+    const success = await writeClipboardText(nodeRef);
+    if (!success) {
+      return;
+    }
+    setCopied(true);
+    if (copiedTimeoutRef.current !== null) {
+      window.clearTimeout(copiedTimeoutRef.current);
+    }
+    copiedTimeoutRef.current = window.setTimeout(() => {
+      setCopied(false);
+      copiedTimeoutRef.current = null;
+    }, 2000);
+  };
+
   const handleOpenInNewTab = () => {
     if (selectedNodeRef) {
       const nodeId = extractNodeId(selectedNodeRef);
@@ -109,6 +146,7 @@ export function NodeInfo({ nodeData, serverId }: NodeInfoProps) {
       value: nodeData.nodeRef,
       isNodeRef: false,
       isParent: false,
+      canCopy: true,
     },
     {
       label: t('nodeBrowser:primaryPath'),
@@ -187,6 +225,27 @@ export function NodeInfo({ nodeData, serverId }: NodeInfoProps) {
                   ) : (
                     <Text size="sm" style={{ wordBreak: 'break-all' }}>
                       {row.value}
+                      {row.canCopy && (
+                        <Tooltip
+                          label={copied ? t('nodeBrowser:copied') : t('nodeBrowser:copyReference')}
+                          withArrow
+                        >
+                          <ActionIcon
+                            size="sm"
+                            variant="subtle"
+                            color={copied ? 'teal' : 'gray'}
+                            onClick={() => handleCopyNodeRef(row.value)}
+                            aria-label={t('nodeBrowser:copyReference')}
+                            display="inline-flex"
+                            style={{
+                              verticalAlign: 'middle',
+                              marginLeft: 6,
+                            }}
+                          >
+                            {copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
+                          </ActionIcon>
+                        </Tooltip>
+                      )}
                     </Text>
                   )}
                 </Table.Td>
