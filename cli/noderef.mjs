@@ -40,7 +40,7 @@ Usage:
   noderef js <server> [file] [-e <code>] [--saved <script>] [--doc <nodeRef>] [--json]
   noderef scripts list <server> [--json]
   noderef scripts get <server> <script>
-  noderef scripts save <server> <script> [file]
+  noderef scripts save <server> <script> [file] [-m <comment>]
   noderef rpc <method> [json-params]
 
 Commands:
@@ -48,7 +48,7 @@ Commands:
   js        Run JavaScript in the server's JavaScript Console.
             Script comes from -e, a file, stdin, or --saved (a script stored in the repository).
   scripts   Work with the .js files in the repository's Data Dictionary/Scripts folder:
-            list them, print one (get), or overwrite one with a file or stdin (save).
+            list them, print one (get), or save a file or stdin as a new version of one (save).
   rpc       Call any backend RPC method and print the JSON result.
 
 <server> is a server id, or a unique part of its name, label, or URL (e.g. "localhost").
@@ -286,11 +286,19 @@ async function cmdJs(args) {
 
 async function cmdScripts(args) {
   const json = args.includes('--json');
-  const [action, serverRef, scriptRef, file, ...extra] = args.filter(a => a !== '--json');
+  const rest = args.filter(a => a !== '--json');
+  const commentAt = rest.findIndex(a => a === '-m' || a === '--message');
+  const [, versionComment] = commentAt >= 0 ? rest.splice(commentAt, 2) : [];
+  if (commentAt >= 0 && !versionComment) fail('-m needs a comment');
+  const [action, serverRef, scriptRef, file, ...extra] = rest;
   const usage =
-    'Usage: noderef scripts list <server> | get <server> <script> | save <server> <script> [file]';
+    'Usage: noderef scripts list <server> | get <server> <script> | save <server> <script> [file] [-m <comment>]';
   if (!['list', 'get', 'save'].includes(action) || !serverRef || extra.length) fail(usage);
-  if ((action === 'list') !== (scriptRef === undefined) || (file && action !== 'save')) fail(usage);
+  if (
+    (action === 'list') !== (scriptRef === undefined) ||
+    ((file || versionComment) && action !== 'save')
+  )
+    fail(usage);
   const server = await resolveServer(serverRef);
 
   if (action === 'list') {
@@ -307,12 +315,18 @@ async function cmdScripts(args) {
   } else {
     const target = await resolveScript(server.id, scriptRef);
     const content = readScriptInput(file);
-    await rpc('backend.jsconsole.saveScriptFile', {
+    const saved = await rpc('backend.jsconsole.saveScriptFile', {
       serverId: server.id,
       nodeId: target.id,
       content,
+      createVersion: true,
+      versionComment: versionComment || 'Saved with the NodeRef CLI',
     });
-    console.log(`Saved ${target.name} (${target.id}) on ${server.name}.`);
+    if (!saved.versionLabel) {
+      // An older NodeRef ignores createVersion and silently overwrites.
+      fail(`Saved ${target.name}, but no version was created. Update NodeRef to version saves.`);
+    }
+    console.log(`Saved ${target.name} as version ${saved.versionLabel} on ${server.name}.`);
   }
 }
 
