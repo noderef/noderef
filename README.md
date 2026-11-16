@@ -122,10 +122,11 @@ node cli/noderef.mjs rpc backend.servers.list              # raw backend RPC cal
 ```
 
 - `<server>` is a server id or a unique part of its name, label, or URL.
-- `scripts save` stores the new content as a new version of an existing script (the node is made versionable if needed, so the previous content stays in its version history). Add `-m <comment>` for a version comment.
-- `js` needs the JavaScript Console endpoint configured for that server; it prints the script's `print()` output and exits non-zero when the script fails. Add `--json` for the full result.
+- `js` and `scripts` need the JavaScript Console endpoint configured for that server.
+- `scripts save` keeps the previous content in the script's version history.
 - Only Node.js 18+ is required (no dependencies). Run `npm link` in the repo root to get a global `noderef` command.
-- The backend is found automatically; set `NODEREF_URL` (e.g. `http://localhost:5111`) to point at a specific instance.
+
+See [docs/cli.md](./docs/cli.md) for all commands and options, backend discovery, security notes, and troubleshooting.
 
 The CLI runs whatever it is asked to run with the rights of the saved account, so point AI tools at a test server rather than production.
 
