@@ -5,7 +5,11 @@
   "license": "Apache-2.0",
   "description": "NodeRef - The desktop app every Alfresco admin deserves",
   "packageManager": "pnpm@10.27.0",
+  "bin": {
+    "noderef": "./cli/noderef.mjs"
+  },
   "scripts": {
+    "cli": "node ./cli/noderef.mjs",
     "test": "pnpm --filter @app/backend test:run",
     "test:scripts": "node --test scripts/package.test.mjs",
     "sync:meta": "node ./scripts/sync-meta.mjs",
