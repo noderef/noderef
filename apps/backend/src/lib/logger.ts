@@ -20,6 +20,7 @@
  */
 
 import pino from 'pino';
+import { redactLogObject } from './logRedaction.js';
 
 // Determine environment
 const isTest = process.env.NODE_ENV === 'test';
@@ -77,6 +78,10 @@ export const log = pino({
     ],
     censor: '***REDACTED***',
   },
+
+  // Scrub credentials nested inside logged errors (failed HTTP requests carry their own
+  // body and headers), which the fixed paths above cannot reach.
+  formatters: { log: redactLogObject },
 
   // Pretty print in development
   transport: prettyTarget
