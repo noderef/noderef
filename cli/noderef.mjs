@@ -73,11 +73,21 @@ function getDataDir() {
   return path.join(home, '.local', 'share', APP_ID);
 }
 
+function readRuntimeFile(name) {
+  const file = path.join(getDataDir(), '.runtime', name);
+  return existsSync(file) ? readFileSync(file, 'utf8').trim() : '';
+}
+
 function getBackendUrl() {
   if (process.env.NODEREF_URL) return process.env.NODEREF_URL.replace(/\/+$/, '');
-  const portFile = path.join(getDataDir(), '.runtime', 'backend-port');
-  const port = existsSync(portFile) ? Number(readFileSync(portFile, 'utf8').trim()) : DEV_PORT;
-  return `http://127.0.0.1:${port || DEV_PORT}`;
+  return `http://127.0.0.1:${Number(readRuntimeFile('backend-port')) || DEV_PORT}`;
+}
+
+/** Per-launch token the desktop backend writes next to its port file; only ever sent to loopback. */
+function launchTokenHeader(url) {
+  const token = readRuntimeFile('backend-token');
+  const isLoopback = ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(url).hostname);
+  return token && isLoopback ? { 'X-NodeRef-Token': token } : {};
 }
 
 async function rpc(method, params = {}) {
@@ -86,7 +96,7 @@ async function rpc(method, params = {}) {
   try {
     res = await fetch(`${url}/rpc`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...launchTokenHeader(url) },
       body: JSON.stringify({ method, params }),
     });
   } catch {
