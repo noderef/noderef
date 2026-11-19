@@ -54,6 +54,7 @@ const log = createLogger('alfresco.auth');
  */
 export async function login(req: LoginReq): Promise<LoginRes> {
   try {
+    dropClient(req.baseUrl);
     const api = getClient(req.baseUrl);
 
     // Perform login - extra defensive against superagent errors
@@ -109,12 +110,13 @@ export async function validateCredentials(
   let api: any;
 
   try {
-    api = getClient(req.baseUrl);
-
     // Perform login - wrap in additional try-catch
     try {
+      dropClient(req.baseUrl);
+      api = getClient(req.baseUrl);
       await api.login(req.username, req.password);
     } catch (loginError: any) {
+      dropClient(req.baseUrl);
       // Login failed - determine the reason
       const status = loginError?.status;
 
