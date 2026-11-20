@@ -22,6 +22,7 @@ import { startBackend } from '@/core/ipc/rpc';
 import { ThemeProvider } from '@/core/theme';
 import '@/styles/global.css';
 import '@mantine/core/styles.css';
+import '@mantine/dates/styles.css';
 import '@mantine/notifications/styles.css';
 import '@mantine/spotlight/styles.css';
 import 'flag-icons/css/flag-icons.min.css';

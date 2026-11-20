@@ -22,7 +22,11 @@ import {
 } from '@/core/ipc/backend';
 import { useServersStore } from '@/core/store/servers';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { listTypeAndAspectNames, parseClassPropertyDefs } from './dictionaryClasses';
+import {
+  extractClassName,
+  listTypeAndAspectNames,
+  parseClassPropertyDefs,
+} from './dictionaryClasses';
 import {
   countNodeEdits,
   editorValueToRest,
@@ -136,20 +140,33 @@ export function useNodeEdits({ serverId, nodeId, nodeData }: UseNodeEditsOptions
     for (const definition of metadata?.properties ?? []) {
       map.set(definition.name, definition);
     }
-    if (dictionaryClasses && edits.addAspects.length > 0) {
+    if (dictionaryClasses) {
       const byName = new Map<string, unknown>();
       for (const classDef of dictionaryClasses) {
-        const record = classDef as { name?: string | { prefixedName?: string; name?: string } };
-        const name =
-          typeof record?.name === 'string'
-            ? record.name
-            : record?.name?.prefixedName || record?.name?.name;
-        if (typeof name === 'string') {
+        const name = extractClassName(classDef);
+        if (name) {
           byName.set(name, classDef);
         }
       }
+
+      const classNames = new Set<string>();
+      if (currentType) {
+        classNames.add(currentType);
+      }
+      if (edits.nodeType) {
+        classNames.add(edits.nodeType);
+      }
+      for (const aspect of currentAspects) {
+        if (!edits.removeAspects.includes(aspect)) {
+          classNames.add(aspect);
+        }
+      }
       for (const aspect of edits.addAspects) {
-        const classDef = byName.get(aspect);
+        classNames.add(aspect);
+      }
+
+      for (const className of classNames) {
+        const classDef = byName.get(className);
         if (!classDef) {
           continue;
         }
@@ -161,7 +178,15 @@ export function useNodeEdits({ serverId, nodeId, nodeData }: UseNodeEditsOptions
       }
     }
     return map;
-  }, [dictionaryClasses, edits.addAspects, metadata]);
+  }, [
+    currentAspects,
+    currentType,
+    dictionaryClasses,
+    edits.addAspects,
+    edits.nodeType,
+    edits.removeAspects,
+    metadata,
+  ]);
 
   const originalPropertyValues = useMemo(() => {
     const values: Record<string, unknown | null> = {};
@@ -258,6 +283,20 @@ export function useNodeEdits({ serverId, nodeId, nodeData }: UseNodeEditsOptions
     setEdits(cloneEmpty());
   }, []);
 
+  const resetProperties = useCallback(() => {
+    setEdits(current =>
+      Object.keys(current.properties).length === 0 ? current : { ...current, properties: {} }
+    );
+  }, []);
+
+  const resetAspects = useCallback(() => {
+    setEdits(current =>
+      current.addAspects.length === 0 && current.removeAspects.length === 0
+        ? current
+        : { ...current, addAspects: [], removeAspects: [] }
+    );
+  }, []);
+
   const save = useCallback(async () => {
     const propertyCount = Object.keys(edits.properties).length;
     if (
@@ -313,6 +352,8 @@ export function useNodeEdits({ serverId, nodeId, nodeData }: UseNodeEditsOptions
     removeAspect,
     setNodeType,
     reset,
+    resetProperties,
+    resetAspects,
     save,
   };
 }

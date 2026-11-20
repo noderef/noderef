@@ -32,7 +32,17 @@ const COMPLEX_TYPES = new Set([
 ]);
 
 const NUMBER_TYPES = new Set(['d:int', 'd:long', 'd:float', 'd:double']);
-const NON_EDITABLE_PROPERTIES = new Set(['cm:name', 'cm:content', 'cm:preferencevalues']);
+const NON_EDITABLE_PROPERTIES = new Set([
+  'cm:name',
+  'cm:content',
+  'cm:preferencevalues',
+  // cm:auditable — Alfresco maintains these; they are never user-editable.
+  'cm:created',
+  'cm:creator',
+  'cm:modified',
+  'cm:modifier',
+  'cm:accessed',
+]);
 
 export function normalizeDataType(dataType?: string | null): string {
   if (!dataType) {
@@ -240,6 +250,44 @@ export function isValidDateInput(value: string, includeTime: boolean): boolean {
     return !Number.isNaN(parsed.getTime());
   }
   return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) || !Number.isNaN(new Date(trimmed).getTime());
+}
+
+function pad2(value: number): string {
+  return String(value).padStart(2, '0');
+}
+
+/** Calendar date for Mantine DatePickerInput (`YYYY-MM-DD`), without timezone shift. */
+export function toDatePickerValue(value: unknown): string | null {
+  if (value == null || value === '') {
+    return null;
+  }
+  const match = String(value).match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : null;
+}
+
+/** Local `YYYY-MM-DD HH:mm:ss` for Mantine DateTimePicker. */
+export function toDateTimePickerValue(value: unknown): string | null {
+  if (value == null || value === '') {
+    return null;
+  }
+  const parsed = new Date(String(value));
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return `${parsed.getFullYear()}-${pad2(parsed.getMonth() + 1)}-${pad2(parsed.getDate())} ${pad2(parsed.getHours())}:${pad2(parsed.getMinutes())}:${pad2(parsed.getSeconds())}`;
+}
+
+/** Convert DateTimePicker value back to UTC ISO-8601. */
+export function fromDateTimePickerValue(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T');
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed.toISOString();
 }
 
 export function valuesAreEqual(left: unknown, right: unknown): boolean {

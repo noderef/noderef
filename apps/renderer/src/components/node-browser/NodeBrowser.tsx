@@ -36,7 +36,6 @@ import { useTranslation } from 'react-i18next';
 import { NodeAspects } from './NodeAspects';
 import { NodeAssociations } from './NodeAssociations';
 import { NodeChildren } from './NodeChildren';
-import { NodeEditBar } from './NodeEditBar';
 import { NodeInfo } from './NodeInfo';
 import { NodeParents } from './NodeParents';
 import { NodePermissions } from './NodePermissions';
@@ -212,12 +211,18 @@ function NodeBrowserContent({
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = async (section: 'properties' | 'aspects') => {
     try {
       await edits.save();
       showNotification({
-        title: t('nodeBrowser:saveSuccess'),
-        message: t('nodeBrowser:saveSuccessMessage'),
+        title:
+          section === 'aspects'
+            ? t('nodeBrowser:saveAspectsSuccess')
+            : t('nodeBrowser:savePropertiesSuccess'),
+        message:
+          section === 'aspects'
+            ? t('nodeBrowser:saveAspectsSuccessMessage')
+            : t('nodeBrowser:savePropertiesSuccessMessage'),
         color: 'green',
       });
       onReload();
@@ -234,14 +239,6 @@ function NodeBrowserContent({
 
   return (
     <Stack style={{ height: '100%', overflow: 'hidden' }}>
-      {edits.isDirty && (
-        <NodeEditBar
-          changeCount={edits.changeCount}
-          saving={edits.saving}
-          onSave={() => void handleSave()}
-          onCancel={edits.reset}
-        />
-      )}
       <Accordion
         multiple
         defaultValue={['info', 'properties']}
@@ -297,6 +294,9 @@ function NodeBrowserContent({
               }}
               onSetProperty={edits.setPropertyValue}
               onUndoProperty={edits.undoProperty}
+              saving={edits.saving}
+              onSave={() => void handleSave('properties')}
+              onCancelEdits={edits.resetProperties}
             />
           </Accordion.Panel>
         </Accordion.Item>
@@ -323,6 +323,9 @@ function NodeBrowserContent({
               onRequestAspects={() => void loadDictionary()}
               onAdd={edits.addAspect}
               onRemove={edits.removeAspect}
+              saving={edits.saving}
+              onSave={() => void handleSave('aspects')}
+              onCancelEdits={edits.resetAspects}
             />
           </Accordion.Panel>
         </Accordion.Item>

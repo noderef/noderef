@@ -17,8 +17,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   editorValueToRest,
+  fromDateTimePickerValue,
   isPropertyEditable,
   slingshotValuesToEditorValue,
+  toDatePickerValue,
+  toDateTimePickerValue,
   valuesAreEqual,
 } from './propertyEditing';
 
@@ -96,6 +99,29 @@ describe('isPropertyEditable', () => {
     expect(isPropertyEditable('cm:content', { dataType: 'd:content' })).toBe(false);
     expect(isPropertyEditable('cm:categories', { dataType: 'd:category' })).toBe(false);
     expect(isPropertyEditable('cm:title', { dataType: 'd:mltext' })).toBe(true);
+  });
+
+  it('blocks auditable metadata even without a protected flag', () => {
+    expect(isPropertyEditable('cm:created', { dataType: 'd:datetime' })).toBe(false);
+    expect(isPropertyEditable('cm:creator', { dataType: 'd:text' })).toBe(false);
+    expect(isPropertyEditable('cm:modified', { dataType: 'd:datetime' })).toBe(false);
+    expect(isPropertyEditable('cm:modifier', { dataType: 'd:text' })).toBe(false);
+    expect(isPropertyEditable('cm:accessed', { dataType: 'd:datetime' })).toBe(false);
+  });
+});
+
+describe('date picker conversion', () => {
+  it('keeps calendar dates as YYYY-MM-DD', () => {
+    expect(toDatePickerValue('2026-11-20T08:17:59.000Z')).toBe('2026-11-20');
+    expect(toDatePickerValue(null)).toBeNull();
+  });
+
+  it('round-trips datetime values through the picker format', () => {
+    const iso = '2026-03-01T12:30:00.000Z';
+    const picker = toDateTimePickerValue(iso);
+    expect(picker).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    expect(fromDateTimePickerValue(picker)).toBe(new Date(iso).toISOString());
+    expect(fromDateTimePickerValue(null)).toBeNull();
   });
 });
 

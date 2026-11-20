@@ -27,15 +27,16 @@ import {
   Box,
   Center,
   Code,
+  Combobox,
   Group,
   Paper,
-  Select,
   Stack,
   Table,
   Text,
   TextInput,
   Tooltip,
   UnstyledButton,
+  useCombobox,
 } from '@mantine/core';
 import type { NotificationData, NotificationsProps } from '@mantine/notifications';
 import { notifications } from '@mantine/notifications';
@@ -45,13 +46,14 @@ import {
   IconChevronUp,
   IconDownload,
   IconPencil,
+  IconPlus,
   IconRestore,
   IconSearch,
   IconSelector,
-  IconTrash,
 } from '@tabler/icons-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { NodeSaveActions } from './NodeSaveActions';
 import { PropertyValueEditor } from './PropertyValueEditor';
 import {
   formatEditorValue,
@@ -70,6 +72,9 @@ interface NodePropertiesProps {
   onStartEditing?: () => Promise<unknown>;
   onSetProperty?: (name: string, value: unknown | null) => void;
   onUndoProperty?: (name: string) => void;
+  saving?: boolean;
+  onSave?: () => void;
+  onCancelEdits?: () => void;
 }
 
 type SortColumn = 'name' | 'type' | 'value';
@@ -87,6 +92,9 @@ export function NodeProperties({
   onStartEditing,
   onSetProperty,
   onUndoProperty,
+  saving = false,
+  onSave,
+  onCancelEdits,
 }: NodePropertiesProps) {
   const { t } = useTranslation(['nodeBrowser']);
   const [sortColumn, setSortColumn] = useState<SortColumn>('name');
@@ -94,12 +102,30 @@ export function NodeProperties({
   const [filterText, setFilterText] = useState('');
   const [editingName, setEditingName] = useState<string | null>(null);
   const [addedNames, setAddedNames] = useState<string[]>([]);
+  const [addPropertyQuery, setAddPropertyQuery] = useState('');
   const canEdit = Boolean(onSetProperty);
+  const hasPropertyEdits = Object.keys(stagedProperties).length > 0;
+  const addPropertyCombobox = useCombobox({
+    onDropdownClose: () => {
+      addPropertyCombobox.resetSelectedOption();
+      setAddPropertyQuery('');
+    },
+  });
 
   useEffect(() => {
     setEditingName(null);
     setAddedNames([]);
   }, [properties, nodeId]);
+
+  const onStartEditingRef = useRef(onStartEditing);
+  onStartEditingRef.current = onStartEditing;
+
+  useEffect(() => {
+    if (!canEdit) {
+      return;
+    }
+    void onStartEditingRef.current?.();
+  }, [canEdit, nodeId, properties]);
   const notificationPosition: NotificationsProps['position'] = 'bottom-center';
   const showNotification = (data: NotificationData) =>
     notifications.show({
@@ -154,6 +180,14 @@ export function NodeProperties({
       .map(definition => ({ value: definition.name, label: definition.name }))
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [displayProperties, propertyDefinitions]);
+
+  const filteredAddableProperties = useMemo(() => {
+    const query = addPropertyQuery.trim().toLowerCase();
+    if (!query) {
+      return addableProperties;
+    }
+    return addableProperties.filter(property => property.label.toLowerCase().includes(query));
+  }, [addableProperties, addPropertyQuery]);
 
   const filteredAndSortedProperties = useMemo(() => {
     let filtered = displayProperties;
@@ -458,31 +492,84 @@ export function NodeProperties({
   return (
     <Stack gap="md" p="md">
       <Paper withBorder p="md">
-        <Group justify="space-between" mb="md" align="flex-end">
-          <TextInput
-            placeholder={t('nodeBrowser:filterProperties')}
-            leftSection={<IconSearch size={16} />}
-            value={filterText}
-            onChange={e => setFilterText(e.currentTarget.value)}
-            style={{ flex: 1, maxWidth: 400 }}
-          />
-          {canEdit && (
-            <Select
-              placeholder={t('nodeBrowser:addPropertyPlaceholder')}
-              data={addableProperties}
-              searchable
-              clearable
-              value={null}
-              onChange={handleAddProperty}
-              nothingFoundMessage={t('nodeBrowser:noPropertiesToAdd')}
-              style={{ minWidth: 240 }}
+        <Group justify="space-between" mb="md" align="center" wrap="nowrap">
+          <Group gap="xs" wrap="nowrap" style={{ flex: 1, minWidth: 0, maxWidth: 448 }}>
+            <TextInput
+              placeholder={t('nodeBrowser:filterProperties')}
+              leftSection={<IconSearch size={16} />}
+              value={filterText}
+              onChange={e => setFilterText(e.currentTarget.value)}
+              style={{ flex: 1, minWidth: 180 }}
             />
+            {canEdit && addableProperties.length > 0 && (
+              <Combobox
+                store={addPropertyCombobox}
+                withinPortal
+                width={320}
+                position="bottom-start"
+                onOptionSubmit={name => {
+                  void handleAddProperty(name);
+                  addPropertyCombobox.closeDropdown();
+                }}
+              >
+                <Tooltip label={t('nodeBrowser:addPropertyPlaceholder')}>
+                  <Combobox.Target>
+                    <ActionIcon
+                      variant="default"
+                      size="input-sm"
+                      aria-label={t('nodeBrowser:addPropertyPlaceholder')}
+                      onClick={() => {
+                        void onStartEditing?.().catch(() => {
+                          showNotification({
+                            title: t('nodeBrowser:saveError'),
+                            message: t('nodeBrowser:editMetadataError'),
+                            color: 'red',
+                          });
+                        });
+                        addPropertyCombobox.toggleDropdown();
+                      }}
+                    >
+                      <IconPlus size={16} />
+                    </ActionIcon>
+                  </Combobox.Target>
+                </Tooltip>
+                <Combobox.Dropdown miw={320} w={320}>
+                  <Combobox.Search
+                    value={addPropertyQuery}
+                    onChange={event => setAddPropertyQuery(event.currentTarget.value)}
+                    placeholder={t('nodeBrowser:addPropertyPlaceholder')}
+                  />
+                  <Combobox.Options mah={240} style={{ overflowY: 'auto' }}>
+                    {filteredAddableProperties.length === 0 ? (
+                      <Combobox.Empty>{t('nodeBrowser:noPropertiesToAdd')}</Combobox.Empty>
+                    ) : (
+                      filteredAddableProperties.map(property => (
+                        <Combobox.Option value={property.value} key={property.value}>
+                          {property.label}
+                        </Combobox.Option>
+                      ))
+                    )}
+                  </Combobox.Options>
+                </Combobox.Dropdown>
+              </Combobox>
+            )}
+          </Group>
+          {hasPropertyEdits ? (
+            <NodeSaveActions
+              saving={saving}
+              onSave={onSave}
+              onCancel={() => {
+                setAddedNames([]);
+                onCancelEdits?.();
+              }}
+            />
+          ) : (
+            <Text size="sm" c="dimmed">
+              {filteredAndSortedProperties.length === displayProperties.length
+                ? `${displayProperties.length} ${t('nodeBrowser:propertiesCount')}`
+                : `${filteredAndSortedProperties.length} / ${displayProperties.length}`}
+            </Text>
           )}
-          <Text size="sm" c="dimmed">
-            {filteredAndSortedProperties.length === displayProperties.length
-              ? `${displayProperties.length} ${t('nodeBrowser:propertiesCount')}`
-              : `${filteredAndSortedProperties.length} / ${displayProperties.length}`}
-          </Text>
         </Group>
         {canEdit && (
           <Text size="xs" c="dimmed" mb="sm">
@@ -530,16 +617,15 @@ export function NodeProperties({
               </Table.Th>
               <Table.Th style={{ width: '12%' }}>
                 <Text fw={700} size="sm">
-                  {t('nodeBrowser:readonly')}
+                  {t('nodeBrowser:editability')}
                 </Text>
               </Table.Th>
-              {canEdit && <Table.Th style={{ width: '8%' }} />}
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
             {filteredAndSortedProperties.length === 0 ? (
               <Table.Tr>
-                <Table.Td colSpan={canEdit ? 5 : 4} style={{ textAlign: 'center' }}>
+                <Table.Td colSpan={4} style={{ textAlign: 'center' }}>
                   <Text c="dimmed" size="sm">
                     {filterText.trim()
                       ? t('nodeBrowser:noMatchingProperties')
@@ -566,11 +652,7 @@ export function NodeProperties({
                 return (
                   <Table.Tr
                     key={propertyName}
-                    style={
-                      isChanged
-                        ? { backgroundColor: 'var(--mantine-color-yellow-light)' }
-                        : undefined
-                    }
+                    bg={isChanged ? 'var(--mantine-primary-color-light)' : undefined}
                   >
                     <Table.Td>
                       <Text
@@ -634,17 +716,36 @@ export function NodeProperties({
                                 ? formatEditorValue(staged)
                                 : formatValue(prop.values, propertyName)}
                             </Box>
-                            {editable && (
-                              <Tooltip label={t('nodeBrowser:editValue')}>
-                                <ActionIcon
-                                  variant="subtle"
-                                  size="sm"
-                                  onClick={() => void startEditing(propertyName)}
-                                >
-                                  <IconPencil size={14} />
-                                </ActionIcon>
-                              </Tooltip>
-                            )}
+                            <Group gap={4} wrap="nowrap">
+                              {isChanged && (
+                                <Tooltip label={t('nodeBrowser:undoChange')}>
+                                  <ActionIcon
+                                    variant="subtle"
+                                    color="gray"
+                                    size="sm"
+                                    onClick={() => {
+                                      onUndoProperty?.(propertyName);
+                                      setAddedNames(current =>
+                                        current.filter(name => name !== propertyName)
+                                      );
+                                    }}
+                                  >
+                                    <IconRestore size={14} />
+                                  </ActionIcon>
+                                </Tooltip>
+                              )}
+                              {editable && (
+                                <Tooltip label={t('nodeBrowser:editValue')}>
+                                  <ActionIcon
+                                    variant="subtle"
+                                    size="sm"
+                                    onClick={() => void startEditing(propertyName)}
+                                  >
+                                    <IconPencil size={14} />
+                                  </ActionIcon>
+                                </Tooltip>
+                              )}
+                            </Group>
                           </Group>
                         </Box>
                       )}
@@ -654,45 +755,6 @@ export function NodeProperties({
                         {editable ? t('nodeBrowser:editable') : t('nodeBrowser:protected')}
                       </Badge>
                     </Table.Td>
-                    {canEdit && (
-                      <Table.Td>
-                        <Group gap={4} wrap="nowrap" justify="flex-end">
-                          {isChanged && (
-                            <Tooltip label={t('nodeBrowser:undoChange')}>
-                              <ActionIcon
-                                variant="subtle"
-                                color="gray"
-                                size="sm"
-                                onClick={() => {
-                                  onUndoProperty?.(propertyName);
-                                  setAddedNames(current =>
-                                    current.filter(name => name !== propertyName)
-                                  );
-                                }}
-                              >
-                                <IconRestore size={14} />
-                              </ActionIcon>
-                            </Tooltip>
-                          )}
-                          {editable && !definition.mandatory && !isRemoved && (
-                            <Tooltip label={t('nodeBrowser:removeProperty')}>
-                              <ActionIcon
-                                variant="subtle"
-                                color="red"
-                                size="sm"
-                                onClick={() => {
-                                  void onStartEditing?.();
-                                  onSetProperty?.(propertyName, null);
-                                  setEditingName(null);
-                                }}
-                              >
-                                <IconTrash size={14} />
-                              </ActionIcon>
-                            </Tooltip>
-                          )}
-                        </Group>
-                      </Table.Td>
-                    )}
                   </Table.Tr>
                 );
               })

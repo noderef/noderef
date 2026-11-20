@@ -16,14 +16,22 @@
 
 import type { EditablePropertyDefinition } from '@/core/ipc/backend';
 import { NumberInput, Select, Switch, TagsInput, Textarea, TextInput } from '@mantine/core';
+import { DatePickerInput, DatesProvider, DateTimePicker } from '@mantine/dates';
+import 'dayjs/locale/de';
+import 'dayjs/locale/es';
+import 'dayjs/locale/fr';
+import 'dayjs/locale/nl';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   editorValueToRest,
+  fromDateTimePickerValue,
   getEditorKind,
   isValidDateInput,
   normalizeDataType,
   normalizeDateInput,
+  toDatePickerValue,
+  toDateTimePickerValue,
 } from './propertyEditing';
 
 interface PropertyValueEditorProps {
@@ -39,11 +47,14 @@ export function PropertyValueEditor({
   onCommit,
   onCancel,
 }: PropertyValueEditorProps) {
-  const { t } = useTranslation(['nodeBrowser']);
+  const { t, i18n } = useTranslation(['nodeBrowser']);
   const kind = getEditorKind(definition);
+  const datesLocale = (i18n.resolvedLanguage || i18n.language || 'en').split('-')[0];
   const [draft, setDraft] = useState<unknown>(value);
   const [error, setError] = useState<string | null>(null);
   const cancelledRef = useRef(false);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
 
   useEffect(() => {
     setDraft(value);
@@ -90,7 +101,7 @@ export function PropertyValueEditor({
     return (
       <TagsInput
         autoFocus
-        size="xs"
+        size="sm"
         data={definition.allowedValues ?? []}
         value={tags}
         onChange={next => setDraft(next)}
@@ -119,7 +130,7 @@ export function PropertyValueEditor({
     return (
       <NumberInput
         autoFocus
-        size="xs"
+        size="sm"
         value={
           typeof draft === 'number' ? draft : draft == null || draft === '' ? '' : Number(draft)
         }
@@ -138,7 +149,7 @@ export function PropertyValueEditor({
     return (
       <Select
         autoFocus
-        size="xs"
+        size="sm"
         searchable
         clearable
         data={definition.allowedValues ?? []}
@@ -152,11 +163,84 @@ export function PropertyValueEditor({
     );
   }
 
+  if (kind === 'date' || kind === 'datetime') {
+    const pickerValue =
+      kind === 'datetime' ? toDateTimePickerValue(draft) : toDatePickerValue(draft);
+    const originalPickerValue =
+      kind === 'datetime' ? toDateTimePickerValue(value) : toDatePickerValue(value);
+    const commitPickerValue = (next: string | null) => {
+      if (cancelledRef.current) {
+        return;
+      }
+      if (kind === 'datetime') {
+        onCommit(editorValueToRest(fromDateTimePickerValue(next), definition));
+        return;
+      }
+      onCommit(editorValueToRest(next, definition));
+    };
+
+    const picker =
+      kind === 'datetime' ? (
+        <DateTimePicker
+          autoFocus
+          size="sm"
+          clearable
+          withSeconds
+          value={pickerValue}
+          valueFormat="D MMM YYYY HH:mm:ss"
+          placeholder={t('nodeBrowser:pickDateTime')}
+          aria-label={t('nodeBrowser:pickDateTime')}
+          popoverProps={{ withinPortal: true }}
+          onChange={next => {
+            const value = typeof next === 'string' ? next : toDateTimePickerValue(next);
+            setDraft(value);
+            setError(null);
+          }}
+          onDropdownClose={() => {
+            const current =
+              typeof draftRef.current === 'string'
+                ? draftRef.current
+                : toDateTimePickerValue(draftRef.current);
+            if (current === originalPickerValue) {
+              cancel();
+              return;
+            }
+            commitPickerValue(current);
+          }}
+          onKeyDown={handleKeyDown}
+        />
+      ) : (
+        <DatePickerInput
+          autoFocus
+          size="sm"
+          clearable
+          value={pickerValue}
+          valueFormat="D MMM YYYY"
+          placeholder={t('nodeBrowser:pickDate')}
+          aria-label={t('nodeBrowser:pickDate')}
+          popoverProps={{ withinPortal: true }}
+          onChange={next => {
+            const value = typeof next === 'string' ? next : toDatePickerValue(next);
+            setDraft(value);
+            setError(null);
+            commitPickerValue(value);
+          }}
+          onKeyDown={handleKeyDown}
+        />
+      );
+
+    return (
+      <DatesProvider settings={{ locale: datesLocale, firstDayOfWeek: 1 }}>
+        {picker}
+      </DatesProvider>
+    );
+  }
+
   if (kind === 'textarea') {
     return (
       <Textarea
         autoFocus
-        size="xs"
+        size="sm"
         minRows={2}
         autosize
         value={draft == null ? '' : String(draft)}
@@ -171,7 +255,7 @@ export function PropertyValueEditor({
   return (
     <TextInput
       autoFocus
-      size="xs"
+      size="sm"
       value={draft == null ? '' : String(draft)}
       onChange={event => {
         setDraft(event.currentTarget.value);
@@ -180,9 +264,6 @@ export function PropertyValueEditor({
       onBlur={() => commit()}
       onKeyDown={handleKeyDown}
       error={error}
-      placeholder={
-        kind === 'date' ? 'YYYY-MM-DD' : kind === 'datetime' ? 'YYYY-MM-DDTHH:mm:ss' : undefined
-      }
     />
   );
 }

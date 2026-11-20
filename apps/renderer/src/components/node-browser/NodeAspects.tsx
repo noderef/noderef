@@ -18,6 +18,7 @@ import type { AlfrescoNodeDetails } from '@/core/ipc/backend';
 import { ActionIcon, Badge, Group, Paper, Select, Stack, Text } from '@mantine/core';
 import { IconPlus, IconRestore, IconX } from '@tabler/icons-react';
 import { useTranslation } from 'react-i18next';
+import { NodeSaveActions } from './NodeSaveActions';
 
 interface NodeAspectsProps {
   aspects: AlfrescoNodeDetails['aspects'];
@@ -30,6 +31,9 @@ interface NodeAspectsProps {
   onRequestAspects?: () => void;
   onAdd?: (name: string) => void;
   onRemove?: (name: string) => void;
+  saving?: boolean;
+  onSave?: () => void;
+  onCancelEdits?: () => void;
 }
 
 export function NodeAspects({
@@ -43,8 +47,12 @@ export function NodeAspects({
   onRequestAspects,
   onAdd,
   onRemove,
+  saving = false,
+  onSave,
+  onCancelEdits,
 }: NodeAspectsProps) {
   const { t } = useTranslation(['nodeBrowser', 'common']);
+  const hasAspectEdits = pendingAdd.length > 0 || pendingRemove.length > 0;
 
   const currentNames = aspects.map(aspect => aspect.prefixedName);
   const visibleCurrent = currentNames.filter(name => !pendingRemove.includes(name));
@@ -172,7 +180,14 @@ export function NodeAspects({
     <Stack gap="md" p="md">
       <Paper withBorder p="md">
         <Stack gap="md">
-          {editor}
+          {editable ? (
+            <Group justify="space-between" align="center" wrap="nowrap">
+              {editor}
+              {hasAspectEdits ? (
+                <NodeSaveActions saving={saving} onSave={onSave} onCancel={onCancelEdits} />
+              ) : null}
+            </Group>
+          ) : null}
           {content}
         </Stack>
       </Paper>
