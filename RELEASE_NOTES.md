@@ -1,1 +1,1 @@
-Signing in again after a **password change** works now. NodeRef used to send the new password together with the old session, so Alfresco rejected it. The sign-in dialog now checks your password with Alfresco before saving it, and you can leave the username empty to keep the saved one. Copy and paste (**Ctrl/Cmd+C, V, X, A**) also works in this dialog in the desktop app.
+You can now **edit node metadata** in the Node Browser. Change property values, add or remove aspects, and stage a type change, then save when you are ready.
