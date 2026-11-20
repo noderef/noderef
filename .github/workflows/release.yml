@@ -15,7 +15,7 @@ permissions:
 jobs:
   # 1) Build all binaries once on macOS
   build-binaries:
-    runs-on: macos-14
+    runs-on: macos-15
     env:
       PRISMA_CLI_BINARY_TARGETS: darwin,darwin-arm64,windows,debian-openssl-3.0.x,linux-arm64-openssl-3.0.x
 
@@ -75,7 +75,7 @@ jobs:
 
   # 2) Package macOS DMG on macOS
   package-mac:
-    runs-on: macos-14
+    runs-on: macos-15
     needs: build-binaries
 
     steps:

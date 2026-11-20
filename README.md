@@ -105,6 +105,27 @@ Desktop dev mode opens:
 
 If you prefer to run NodeRef inside your infrastructure instead of a local desktop shell, see [Docker](#-docker).
 
+### ⌨️ **Command line (CLI)**
+
+The desktop app ships a `noderef` command that talks to the running NodeRef. You name a saved server; NodeRef authenticates with the credentials it already stores.
+
+| Package | How to get `noderef` |
+| ------- | -------------------- |
+| Windows MSI | On PATH after install (new terminal). |
+| Linux `.deb` | `/usr/bin/noderef` |
+| macOS | Settings → About → Install command |
+| Windows ZIP / Linux `.tar.gz` | Add `node-src/cli` inside the app folder to PATH |
+| From this repo | `node cli/noderef.mjs …` or `pnpm cli …` |
+
+```bash
+# NodeRef must be running
+noderef servers
+noderef js localhost -e 'print(companyhome.name)'
+noderef scripts list TEST
+```
+
+See [docs/cli.md](./docs/cli.md) for commands, options, and troubleshooting. Point AI tools at a test server rather than production.
+
 ### 🐳 **Docker**
 
 Deploy inside your infrastructure when network policies block the desktop app or when teams prefer a browser-based rollout:

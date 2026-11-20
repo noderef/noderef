@@ -208,10 +208,18 @@ export async function getAuthenticatedClient(
     return client;
   }
 
-  // Basic Auth: get client and call login()
+  // Basic Auth: always start from a fresh client. Cached instances keep the
+  // previous ticket on Authorization, and Alfresco then rejects POST /tickets
+  // with 403 Login failed even when the new password is correct.
+  dropClient(baseUrl);
   const api = getClient(baseUrl);
-  await api.login(creds.username || '', creds.token!);
-  return api;
+  try {
+    await api.login(creds.username || '', creds.token!);
+    return api;
+  } catch (error) {
+    dropClient(baseUrl);
+    throw error;
+  }
 }
 
 /**
@@ -229,19 +237,16 @@ export function dropClient(baseUrl: string, auth?: AuthDescriptor): void {
   }
 
   if (auth) {
-    // Drop specific client
     const cacheKey = getCacheKey(normalizedUrl, auth);
     clientCache.delete(cacheKey);
     authCache.delete(cacheKey);
-  } else {
-    // Drop all clients for this baseUrl
-    const keysToDelete: string[] = [];
-    for (const key of clientCache.keys()) {
-      if (key.startsWith(normalizedUrl + ':')) {
-        keysToDelete.push(key);
-      }
-    }
-    for (const key of keysToDelete) {
+    return;
+  }
+
+  // Drop the default (no-auth / basic login) key and any auth-specific keys.
+  // The default key is the normalized URL itself, not `${url}:...`.
+  for (const key of [...clientCache.keys()]) {
+    if (key === normalizedUrl || key.startsWith(`${normalizedUrl}:`)) {
       clientCache.delete(key);
       authCache.delete(key);
     }
@@ -292,7 +297,7 @@ export function updateOAuth2Token(
  * Note: For a desktop app with limited servers this is typically not needed,
  * but helps prevent unbounded cache growth in long-running processes
  */
-function clearAllClients(): void {
+export function clearAllClients(): void {
   clientCache.clear();
   authCache.clear();
 }

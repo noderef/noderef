@@ -1,5 +1,1 @@
-This release makes nodeRefs easier to open and copy. 🚀
-
-Paste a nodeRef or UUID in the search bar to open it in **Node Browser**. Tabs now show the file name instead of a QName.
-
-Copy the nodeRef from **Info** with the button next to **Reference**.
+Signing in again after a **password change** works now. NodeRef used to send the new password together with the old session, so Alfresco rejected it. The sign-in dialog now checks your password with Alfresco before saving it, and you can leave the username empty to keep the saved one. Copy and paste (**Ctrl/Cmd+C, V, X, A**) also works in this dialog in the desktop app.

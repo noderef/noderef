@@ -25,7 +25,13 @@ import {
   type LlmMaskingConfig,
   type TextRegexRule,
 } from '@/core/ipc/aiSettings';
-import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
+import {
+  CLI_LINK_PATH,
+  ensureNeutralinoReady,
+  installCliCommand,
+  isCliCommandInstalled,
+  isNeutralinoMode,
+} from '@/core/ipc/neutralino';
 import { MODAL_KEYS } from '@/core/store/keys';
 import { useUIStore } from '@/core/store/ui';
 import { UpdateActionButton } from '@/components/updates/UpdateActionButton';
@@ -39,6 +45,7 @@ import {
   Autocomplete,
   Box,
   Button,
+  Code,
   Group,
   Loader,
   Modal,
@@ -52,6 +59,7 @@ import {
   Text,
   TextInput,
   Textarea,
+  ThemeIcon,
   Title,
   Tooltip,
   UnstyledButton,
@@ -72,6 +80,7 @@ import {
   IconLanguage,
   IconSettings,
   IconSparkles,
+  IconTerminal2,
   IconTrash,
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -189,6 +198,8 @@ export function SettingsModal() {
   } | null>(null);
   const [maskingTestRunning, setMaskingTestRunning] = useState(false);
   const [testModalOpen, setTestModalOpen] = useState(false);
+  const [cliInstalling, setCliInstalling] = useState(false);
+  const [cliInstalled, setCliInstalled] = useState(false);
 
   const modalContentRef = useRef<HTMLDivElement | null>(null);
   const testModalContentRef = useRef<HTMLDivElement | null>(null);
@@ -197,6 +208,13 @@ export function SettingsModal() {
   const maskingTestScrollSyncingRef = useRef(false);
   const isDesktopMode = useMemo(
     () => typeof window !== 'undefined' && isNeutralinoMode() && !!(window as any).Neutralino,
+    []
+  );
+  const isMacDesktop = useMemo(
+    () =>
+      typeof window !== 'undefined' &&
+      isNeutralinoMode() &&
+      (window as Window & { NL_OS?: string }).NL_OS === 'Darwin',
     []
   );
   const handleInsertText = useCallback(
@@ -508,6 +526,23 @@ export function SettingsModal() {
     void checkForUpdates();
   }, [isOpen, activeSection, checkForUpdates]);
 
+  useEffect(() => {
+    if (!isOpen || activeSection !== 'about' || !isMacDesktop) {
+      return;
+    }
+    let cancelled = false;
+    isCliCommandInstalled()
+      .then(installed => {
+        if (!cancelled) setCliInstalled(installed);
+      })
+      .catch(() => {
+        if (!cancelled) setCliInstalled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeSection, isMacDesktop]);
+
   const handleAiSave = useCallback(async () => {
     setAiSaving(true);
     try {
@@ -681,6 +716,34 @@ export function SettingsModal() {
       };
     });
   }, []);
+
+  const handleInstallCli = useCallback(async () => {
+    setCliInstalling(true);
+    try {
+      if ((await installCliCommand()) === 'cancelled') return;
+      setCliInstalled(true);
+      notifications.show({
+        title: t('common:success'),
+        message: t('settings:cliInstallSuccess'),
+        color: 'green',
+      });
+    } catch (error) {
+      const raw = error instanceof Error ? error.message : '';
+      const message =
+        raw === 'MOVE_APP'
+          ? t('settings:cliInstallMoveApp')
+          : raw && raw !== 'INSTALL_FAILED'
+            ? raw
+            : t('settings:cliInstallError');
+      notifications.show({
+        title: t('common:error'),
+        message,
+        color: 'red',
+      });
+    } finally {
+      setCliInstalling(false);
+    }
+  }, [t]);
 
   const handleValidateToken = useCallback(async () => {
     const trimmed = aiTokenInput.trim();
@@ -1650,6 +1713,45 @@ export function SettingsModal() {
                           </Tooltip>
                         </Group>
                       </Box>
+
+                      {isMacDesktop && (
+                        <Box
+                          style={{
+                            width: '100%',
+                            marginTop: 'var(--mantine-spacing-xl)',
+                            paddingTop: 'var(--mantine-spacing-xl)',
+                            borderTop: '1px solid var(--mantine-color-gray-3)',
+                          }}
+                        >
+                          <Stack gap="sm" align="center">
+                            <ThemeIcon variant="light" size={40} radius="md">
+                              <IconTerminal2 size={22} />
+                            </ThemeIcon>
+                            <Text size="xs" c="dimmed" ta="center" maw={600}>
+                              {t('settings:cliDescription')}
+                            </Text>
+                            {cliInstalled && (
+                              <Group gap={6} justify="center">
+                                <IconCheck size={14} color="var(--mantine-color-green-6)" />
+                                <Text size="xs" c="dimmed">
+                                  {t('settings:cliInstalledAt')} <Code>{CLI_LINK_PATH}</Code>
+                                </Text>
+                              </Group>
+                            )}
+                            <Button
+                              size="xs"
+                              variant={cliInstalled ? 'default' : 'filled'}
+                              leftSection={<IconTerminal2 size={14} />}
+                              onClick={handleInstallCli}
+                              loading={cliInstalling}
+                            >
+                              {cliInstalled
+                                ? t('settings:cliReinstallButton')
+                                : t('settings:cliInstallButton')}
+                            </Button>
+                          </Stack>
+                        </Box>
+                      )}
 
                       {/* OOTBee Support Tools Section */}
                       <Box

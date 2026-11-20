@@ -149,6 +149,16 @@ export const backendRpc = {
     },
 
     /**
+     * Validate and store new basic-auth credentials. An empty username keeps the stored one.
+     */
+    async reauthBasic(
+      id: number,
+      credentials: { username?: string; password: string }
+    ): Promise<AppServer> {
+      return rpc<AppServer>('backend.servers.reauthBasic', { id, ...credentials });
+    },
+
+    /**
      * Re-check Alfresco admin status for a server and persist it
      */
     async refreshAdminStatus(id: number): Promise<{ isAdmin: boolean }> {
