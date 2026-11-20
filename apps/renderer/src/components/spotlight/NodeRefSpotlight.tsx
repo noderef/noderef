@@ -16,6 +16,8 @@
 
 import type { RepositoryNode } from '@/core/ipc/backend';
 import { rpc } from '@/core/ipc/rpc';
+import { getAlfrescoLandingPage } from '@/core/serverLanding';
+import { useAgentStore } from '@/core/store/agent';
 import { useFileFolderBrowserActionsStore } from '@/core/store/fileFolderBrowserActions';
 import { useFileFolderBrowserTabsStore } from '@/core/store/fileFolderBrowserTabs';
 import { MODAL_KEYS } from '@/core/store/keys';
@@ -164,7 +166,11 @@ export function NodeRefSpotlight() {
           onClick: () => {
             setActiveServer(server.id);
             if (server.serverType === 'alfresco') {
-              navigate('repo');
+              const landingPage = getAlfrescoLandingPage(server.capabilities);
+              if (landingPage === 'agentPage') {
+                useAgentStore.getState().setActiveChatId(null);
+              }
+              navigate(landingPage);
             } else {
               navigate('dashboard');
             }

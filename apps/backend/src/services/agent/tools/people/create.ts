@@ -46,6 +46,7 @@ export const peopleCreateTool: ToolDefinition = {
   },
   requiresConfirmation: true,
   confirmation: { phrase: 'CONFIRM' },
+  requires: ['admin'],
 
   async execute(ctx: AgentExecutionContext, args: Record<string, unknown>): Promise<ToolResult> {
     try {

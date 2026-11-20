@@ -58,5 +58,11 @@
   "success": "Succes",
   "serverUpdated": "Server \"{{name}}\" bijgewerkt",
   "updateError": "Fout",
-  "updateErrorMessage": "Kan server niet bijwerken"
+  "updateErrorMessage": "Kan server niet bijwerken",
+  "adminAccess": "Toegang",
+  "adminBadge": "Beheerder",
+  "restrictedBadge": "Beperkt",
+  "refreshCapabilities": "Rechten opnieuw controleren",
+  "refreshCapabilitiesSuccess": "Rechten zijn vernieuwd",
+  "refreshCapabilitiesError": "Rechten vernieuwen is mislukt"
 }

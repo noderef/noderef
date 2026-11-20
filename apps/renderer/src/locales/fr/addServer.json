@@ -1,7 +1,7 @@
 {
   "addServer": "Ajouter un serveur",
   "selectServerType": "Sélectionnez le type de serveur à ajouter à votre espace de travail",
-  "moreServerTypesComing": "Seuls les administrateurs Alfresco peuvent ajouter des serveurs. Cela pourra être modifié dans les versions futures.",
+  "moreServerTypesComing": "D’autres types de serveur seront disponibles dans les versions futures.",
   "configureAlfrescoServer": "Configurer Alfresco",
   "serverName": "Nom du serveur",
   "serverNamePlaceholder": "Mon serveur",
@@ -25,5 +25,18 @@
   "oidcClientId": "Client ID",
   "oidcClientIdPlaceholder": "alfresco-client",
   "authenticated": "Authentifié",
-  "loginWithOidc": "Connexion OIDC"
+  "loginWithOidc": "Connexion OIDC",
+  "validCredentials": "Identifiants valides",
+  "nonAdminInfo": "Ce n’est pas un compte administrateur. Toutes les fonctionnalités ne sont pas disponibles.",
+  "restrictedAccessTitle": "Accès limité",
+  "invalidCredentials": "Identifiants invalides",
+  "failedToValidateCredentials": "Échec de la validation des identifiants",
+  "validationFailedTitle": "Échec de la validation",
+  "serverAdded": "Serveur « {{name}} » ajouté",
+  "failedToAddServer": "Impossible d’ajouter le serveur",
+  "validationErrorTitle": "Erreur de validation",
+  "invalidServerUrl": "Veuillez saisir une URL de serveur valide",
+  "enterUsernamePassword": "Veuillez saisir le nom d’utilisateur et le mot de passe pour l’authentification basique",
+  "authenticationRequiredTitle": "Authentification requise",
+  "oidcLoginRequired": "Veuillez vous connecter avec OIDC avant d’ajouter le serveur"
 }

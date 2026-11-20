@@ -36,6 +36,7 @@ export function sendAppError(res: Response, err: unknown): void {
   const statusMap: Record<string, number> = {
     [ErrorCode.UNAUTHORIZED]: 401,
     [ErrorCode.FORBIDDEN]: 403,
+    [ErrorCode.PERMISSION_DENIED]: 403,
     [ErrorCode.NOT_FOUND]: 404,
     [ErrorCode.VALIDATION_ERROR]: 400,
     [ErrorCode.INVALID_INPUT]: 400,

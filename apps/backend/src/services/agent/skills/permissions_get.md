@@ -19,6 +19,7 @@ Read a node's current ACL state, including local and inherited permissions.
 - `localPermissions` are direct ACL entries set on this node.
 - `inheritedPermissions` are inherited from parent hierarchy.
 - `settablePermissions` lists role names that can be assigned.
+- Reading ACLs can still return 403 when this user cannot see permissions on that node — explain that, do not retry.
 
 ## Examples
 ```json

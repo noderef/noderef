@@ -92,6 +92,9 @@ const compactSearchSampleEntryForModel = (value: unknown): unknown => {
     path: value.path ?? null,
     mimeType: value.mimeType ?? null,
     modifiedAt: value.modifiedAt ?? null,
+    allowableOperations: Array.isArray(value.allowableOperations)
+      ? value.allowableOperations
+      : null,
   };
 };
 

@@ -14,10 +14,13 @@
  * limitations under the License.
  */
 
+import { FeatureMenuItem } from '@/components/capabilities/FeatureGate';
+import { applyRefreshedCapabilities } from '@/core/capabilities';
 import { backendRpc, refreshWorkspace } from '@/core/ipc/backend';
 import { ensureNeutralinoReady, isNeutralinoMode } from '@/core/ipc/neutralino';
 import { MODAL_KEYS } from '@/core/store/keys';
-import { useServersStore } from '@/core/store/servers';
+import { useServerCapabilities, useServersStore } from '@/core/store/servers';
+import { Feature, isFeatureAvailable } from '@app/contracts';
 import { useModal } from '@/hooks/useModal';
 import { useActiveServerId, useNavigation } from '@/hooks/useNavigation';
 import { Avatar, Group, Loader, Menu, Stack, Text, TextInput, UnstyledButton } from '@mantine/core';
@@ -73,6 +76,7 @@ export function SubmenuHeader() {
   const { open: openLogsModal } = useModal(MODAL_KEYS.LOGS);
   const { open: openUsersGroupsModal } = useModal(MODAL_KEYS.USERS_GROUPS);
   const getServerById = useServersStore(state => state.getServerById);
+  const capabilities = useServerCapabilities(activeServerId);
   const { setActiveServer, navigate } = useNavigation();
   const [spaceTitle, setSpaceTitle] = useState<string>('');
   const [spaceTitleDraft, setSpaceTitleDraft] = useState<string>('');
@@ -160,6 +164,15 @@ export function SubmenuHeader() {
   const server = getServerById(activeServerId);
   const title = server?.name ?? (spaceTitle || t('submenu:nodeRefSpace'));
   const subtitle = server ? server.baseUrl : t('submenu:noServerSelected');
+  const hasAlfrescoHeaderItems =
+    !server ||
+    server.serverType !== 'alfresco' ||
+    [
+      Feature.RepoAdmin,
+      Feature.UsersGroups,
+      Feature.ModelExplorer,
+      Feature.Logs,
+    ].some(feature => isFeatureAvailable(capabilities, feature));
 
   useEffect(() => {
     if (!activeServerId) {
@@ -173,18 +186,11 @@ export function SubmenuHeader() {
 
     let cancelled = false;
 
-    backendRpc.servers
-      .refreshAdminStatus(activeServerId)
-      .then(result => {
-        if (cancelled) return;
-        const current = useServersStore.getState().getServerById(activeServerId);
-        if (current && current.isAdmin !== result.isAdmin) {
-          useServersStore.getState().updateServer(activeServerId, { isAdmin: result.isAdmin });
-        }
-      })
-      .catch(error => {
-        console.error('Failed to refresh admin status:', error);
-      });
+    applyRefreshedCapabilities(activeServerId).catch(error => {
+      if (!cancelled) {
+        console.error('Failed to refresh server capabilities:', error);
+      }
+    });
 
     return () => {
       cancelled = true;
@@ -705,38 +711,51 @@ export function SubmenuHeader() {
         </UnstyledButton>
       </Menu.Target>
       <Menu.Dropdown>
-        {server.serverType === 'alfresco' && server.isAdmin && (
-          <Menu.Item
+        {server.serverType === 'alfresco' && (
+          <FeatureMenuItem
+            feature={Feature.RepoAdmin}
             leftSection={<IconSettings size={14} />}
             rightSection={<IconExternalLink size={12} />}
             onClick={handleOpenRepoAdmin}
           >
             {t('submenu:repoAdmin')}
-          </Menu.Item>
+          </FeatureMenuItem>
         )}
 
-        {server.serverType === 'alfresco' && server.isAdmin && (
-          <Menu.Item
+        {server.serverType === 'alfresco' && (
+          <FeatureMenuItem
+            feature={Feature.UsersGroups}
             leftSection={<IconUsersGroup size={14} />}
             onClick={() => openUsersGroupsModal({ serverId: server.id })}
           >
             {t('submenu:usersAndGroups')}
-          </Menu.Item>
+          </FeatureMenuItem>
         )}
 
-        {server.serverType === 'alfresco' && server.isAdmin && (
-          <Menu.Item
+        {server.serverType === 'alfresco' && (
+          <FeatureMenuItem
+            feature={Feature.ModelExplorer}
             leftSection={<IconSitemap size={14} />}
             onClick={() => navigate('model-explorer')}
           >
             {t('submenu:modelExplorer')}
-          </Menu.Item>
+          </FeatureMenuItem>
         )}
 
-        <Menu.Item leftSection={<IconFileText size={14} />} onClick={openLogsModal}>
-          {t('submenu:logs')}
-        </Menu.Item>
-        <Menu.Divider />
+        {server.serverType === 'alfresco' ? (
+          <FeatureMenuItem
+            feature={Feature.Logs}
+            leftSection={<IconFileText size={14} />}
+            onClick={openLogsModal}
+          >
+            {t('submenu:logs')}
+          </FeatureMenuItem>
+        ) : (
+          <Menu.Item leftSection={<IconFileText size={14} />} onClick={openLogsModal}>
+            {t('submenu:logs')}
+          </Menu.Item>
+        )}
+        {hasAlfrescoHeaderItems && <Menu.Divider />}
         <Menu.Item leftSection={<IconEdit size={14} />} onClick={handleEdit}>
           {t('server:edit')}
         </Menu.Item>

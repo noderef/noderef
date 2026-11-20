@@ -26,6 +26,8 @@ export interface MenuItem {
   badgeLabel?: string;
   badgeColor?: string;
   metaLabel?: string;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 export interface MenuSection {

@@ -58,5 +58,11 @@
   "success": "Success",
   "serverUpdated": "Server \"{{name}}\" updated",
   "updateError": "Error",
-  "updateErrorMessage": "Failed to update server"
+  "updateErrorMessage": "Failed to update server",
+  "adminAccess": "Access",
+  "adminBadge": "Admin",
+  "restrictedBadge": "Restricted",
+  "refreshCapabilities": "Recheck permissions",
+  "refreshCapabilitiesSuccess": "Permissions were refreshed",
+  "refreshCapabilitiesError": "Failed to refresh permissions"
 }

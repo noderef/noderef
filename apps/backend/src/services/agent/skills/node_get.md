@@ -17,7 +17,7 @@ Use this to verify node properties before or after mutations.
 ## Output reading rules (critical)
 - Primary fields: `id`, `name`, `nodeType`, `isFolder`, `isFile`, `path`, `mimeType`.
 - `properties` can be large; reference only returned values.
-- `allowableOperations` indicates available operations for this node.
+- `allowableOperations` is the list of mutations this user may perform on this node (`create`, `update`, `delete`, `updatePermissions`). If a needed operation is missing, do not call the corresponding mutate tool; explain that this account cannot do that on this node.
 
 ## Examples
 ```json

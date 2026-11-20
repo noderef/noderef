@@ -19,7 +19,7 @@
  * Enforces required fields, enums, defaults, and business rules
  */
 
-import { ErrorCode, createRPCError } from '@app/contracts';
+import { CapabilityProfileSchema, ErrorCode, createRPCError } from '@app/contracts';
 import { z } from 'zod';
 import { InsightRangeDaysSchema } from '../constants/insights.js';
 
@@ -110,7 +110,8 @@ const ServerBaseValidationSchema = z
     baseUrl: z.string().url(),
     serverType: z.enum(SERVER_TYPES).default('alfresco'),
     authType: z.enum(AUTH_TYPES).nullable().optional(),
-    isAdmin: z.boolean().default(true),
+    isAdmin: z.boolean().default(false),
+    capabilities: CapabilityProfileSchema.nullable().optional().default(null),
     username: z.string().nullable().optional(),
     token: z.string().nullable().optional(),
     refreshToken: z.string().nullable().optional(),

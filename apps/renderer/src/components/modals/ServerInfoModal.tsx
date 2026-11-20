@@ -18,6 +18,7 @@ import { Modal, Stack, Text, Code, Group, Avatar, Badge } from '@mantine/core';
 import { useModal } from '@/hooks/useModal';
 import { MODAL_KEYS } from '@/core/store/keys';
 import { useServersStore } from '@/core/store/servers';
+import { hasCapability } from '@app/contracts';
 import { useTranslation } from 'react-i18next';
 
 export function ServerInfoModal() {
@@ -94,9 +95,11 @@ export function ServerInfoModal() {
           </Group>
           <Group>
             <Text fw={500} size="sm" style={{ minWidth: '120px' }}>
-              Admin:
+              {t('adminAccess')}:
             </Text>
-            <Badge color={server.isAdmin ? 'green' : 'gray'}>{server.isAdmin ? 'Yes' : 'No'}</Badge>
+            <Badge color={hasCapability(server.capabilities, 'admin') ? 'green' : 'gray'}>
+              {hasCapability(server.capabilities, 'admin') ? t('adminBadge') : t('restrictedBadge')}
+            </Badge>
           </Group>
           {server.jsconsoleEndpoint && (
             <Group>

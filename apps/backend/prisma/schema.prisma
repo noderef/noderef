@@ -42,7 +42,8 @@ model Server {
   baseUrl           String
   serverType        String    @default("alfresco")
   authType          String?
-  isAdmin           Boolean   @default(true)
+  isAdmin           Boolean   @default(false)
+  capabilities      String?   // JSON CapabilityProfile; NULL = never checked
   username          String?
   token             String?   // Encrypted: password for basic auth OR access_token for OAuth
   refreshToken      String?   // Encrypted: OAuth refresh token

@@ -19,6 +19,7 @@
  * Manages server list loaded from backend workspace
  */
 
+import type { CapabilityProfile } from '@app/contracts';
 import { create } from 'zustand';
 import type { AppServer } from '@/core/ipc/backend';
 
@@ -81,3 +82,12 @@ export const useServersStore = create<ServersState & ServersActions>((set, get) 
     return servers.sort((a, b) => a.displayOrder - b.displayOrder);
   },
 }));
+
+export function useServerCapabilities(serverId: number | null | undefined): CapabilityProfile | null {
+  return useServersStore(state => {
+    if (!serverId) {
+      return null;
+    }
+    return state.servers.find(server => server.id === serverId)?.capabilities ?? null;
+  });
+}

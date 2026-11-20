@@ -14,13 +14,16 @@
  * limitations under the License.
  */
 
+import { FeatureMenuItem } from '@/components/capabilities/FeatureGate';
 import { DeleteConfirmationForm } from '@/components/common/DeleteConfirmationForm';
+import { getRpcErrorCode, refreshCapabilitiesDebounced } from '@/core/capabilities';
 import {
   backendRpc,
   type RepositoryNode,
   type RepositoryPaginationInfo,
   type SiteVisibility,
 } from '@/core/ipc/backend';
+import { ErrorCode, Feature, hasCapability } from '@app/contracts';
 import { rpc } from '@/core/ipc/rpc';
 import { useFileFolderBrowserTabsStore } from '@/core/store/fileFolderBrowserTabs';
 import { useJsConsoleStore } from '@/core/store/jsConsole';
@@ -72,7 +75,13 @@ import { useCallback, useEffect, useRef, useState, type ComponentPropsWithoutRef
 import { useTranslation } from 'react-i18next';
 import { CreateSiteForm } from './CreateSiteForm';
 import { getFileIconByMimeType } from './fileIconUtils';
-import { getAvailableActions, type NodeActionContext } from './nodeActionEvaluators';
+import {
+  canCreate,
+  canManagePermissions,
+  getAvailableActions,
+  hasOperation,
+  type NodeActionContext,
+} from './nodeActionEvaluators';
 
 interface RepositorySectionProps {
   label: string;
@@ -90,6 +99,7 @@ interface TreeNode {
   isFile?: boolean;
   mimeType?: string;
   path?: string;
+  allowableOperations?: string[];
   children?: TreeNode[];
   isLoadMorePlaceholder?: boolean;
   parentId?: string;
@@ -336,6 +346,7 @@ export function RepositorySection({
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [rootLoadAttempts, setRootLoadAttempts] = useState(0);
   const [loadedNodes, setLoadedNodes] = useState<Set<string>>(new Set());
   const [loadingNodes, setLoadingNodes] = useState<Set<string>>(new Set());
@@ -355,6 +366,7 @@ export function RepositorySection({
   );
   const canReauth =
     activeServer?.authType === 'openid_connect' || activeServer?.authType === 'basic';
+  const nodeBrowserAvailable = hasCapability(activeServer?.capabilities, 'nodeBrowser');
   const [headerHovered, setHeaderHovered] = useState(false);
   const openNodeTab = useNodeBrowserTabsStore(state => state.openTab);
   const openFolderTab = useFileFolderBrowserTabsStore(state => state.openTab);
@@ -887,6 +899,7 @@ export function RepositorySection({
 
     setLoading(true);
     setError(null);
+    setErrorCode(null);
     const attemptNumber = rootLoadAttempts + 1;
     setRootLoadAttempts(attemptNumber);
 
@@ -917,6 +930,11 @@ export function RepositorySection({
       }
 
       console.error('Failed to load root nodes:', err);
+      const code = getRpcErrorCode(err) ?? null;
+      setErrorCode(code);
+      if (code === ErrorCode.PERMISSION_DENIED) {
+        void refreshCapabilitiesDebounced(requestServerId);
+      }
       if (attemptNumber >= MAX_ROOT_LOAD_ATTEMPTS) {
         const baseMessage = err instanceof Error ? err.message : t('submenu:loadError');
         setError(
@@ -943,6 +961,7 @@ export function RepositorySection({
       isFile: node.isFile,
       mimeType: node.mimeType,
       path: node.path,
+      allowableOperations: node.allowableOperations,
       children: node.isFolder ? [] : undefined, // Empty array for folders to show expand icon
     }));
   }, []);
@@ -1360,7 +1379,7 @@ export function RepositorySection({
                   >
                     {t('common:retry')}
                   </Button>
-                  {canReauth && (
+                  {canReauth && errorCode === ErrorCode.UNAUTHORIZED && (
                     <Button
                       variant="filled"
                       size="xs"
@@ -1409,11 +1428,14 @@ export function RepositorySection({
                       isFolder: treeNode.isFolder || false,
                       isFile: treeNode.isFile || false,
                       path: treeNode.path,
+                      mimeType: treeNode.mimeType,
+                      allowableOperations: treeNode.allowableOperations,
                     };
                     const actions = getAvailableActions(context);
                     const canOpenContextMenu =
                       actions.length > 0 ||
                       treeNode.isFolder ||
+                      treeNode.isFile ||
                       treeNode.nodeType === 'st:sites' ||
                       treeNode.nodeType === 'st:site';
 
@@ -1554,6 +1576,20 @@ export function RepositorySection({
                       (() => {
                         const isSitesRoot = selectedNode.nodeType === 'st:sites';
                         const isSiteNode = selectedNode.nodeType === 'st:site';
+                        const actionContext: NodeActionContext = {
+                          nodeId: selectedNode.value,
+                          nodeName: selectedNode.label,
+                          nodeType: selectedNode.nodeType || '',
+                          isFolder: selectedNode.isFolder || false,
+                          isFile: selectedNode.isFile || false,
+                          path: selectedNode.path,
+                          mimeType: selectedNode.mimeType,
+                          allowableOperations: selectedNode.allowableOperations,
+                        };
+                        const showPermissions = canManagePermissions(actionContext);
+                        const showCreateSite = isSitesRoot && canCreate(actionContext);
+                        const showEditSite = isSiteNode && hasOperation(actionContext, 'update');
+                        const showDeleteSite = isSiteNode && hasOperation(actionContext, 'delete');
                         const sections: React.ReactNode[][] = [];
 
                         if (!selectedNode.isFolder && !isSitesRoot && !isSiteNode) {
@@ -1570,136 +1606,178 @@ export function RepositorySection({
                             );
                           }
                           fileSection.push(
-                            <Menu.Item
+                            <FeatureMenuItem
                               key="open-js"
+                              feature={Feature.JsConsole}
                               leftSection={<IconCode size={14} />}
                               onClick={handleOpenInJsConsole}
                             >
                               {t('submenu:jsConsole')}
-                            </Menu.Item>
+                            </FeatureMenuItem>
                           );
-                          fileSection.push(
-                            <Menu.Item
-                              key="open-node-browser"
-                              leftSection={<IconFileSearch size={14} />}
-                              onClick={handleOpenInNodeBrowser}
-                            >
-                              {t('submenu:nodeBrowser')}
-                            </Menu.Item>
-                          );
-                          sections.push(fileSection);
-                          sections.push([
-                            <Menu.Item
-                              key="manage-permissions"
-                              leftSection={<IconLock size={14} />}
-                              onClick={handleManagePermissions}
-                            >
-                              {t('submenu:managePermissionsAction')}
-                            </Menu.Item>,
-                          ]);
+                          if (nodeBrowserAvailable) {
+                            fileSection.push(
+                              <Menu.Item
+                                key="open-node-browser"
+                                leftSection={<IconFileSearch size={14} />}
+                                onClick={handleOpenInNodeBrowser}
+                              >
+                                {t('submenu:nodeBrowser')}
+                              </Menu.Item>
+                            );
+                          }
+                          if (fileSection.length > 0) {
+                            sections.push(fileSection);
+                          }
+                          if (showPermissions) {
+                            sections.push([
+                              <Menu.Item
+                                key="manage-permissions"
+                                leftSection={<IconLock size={14} />}
+                                onClick={handleManagePermissions}
+                              >
+                                {t('submenu:managePermissionsAction')}
+                              </Menu.Item>,
+                            ]);
+                          }
                         }
 
                         if (selectedNode.isFolder && !isSitesRoot && !isSiteNode) {
-                          sections.push([
-                            <Menu.Item
-                              key="folder-node-browser"
-                              leftSection={<IconFileSearch size={14} />}
-                              onClick={handleOpenInNodeBrowser}
-                            >
-                              {t('submenu:nodeBrowser')}
-                            </Menu.Item>,
-                            <Menu.Item
+                          const folderSection: React.ReactNode[] = [];
+                          if (nodeBrowserAvailable) {
+                            folderSection.push(
+                              <Menu.Item
+                                key="folder-node-browser"
+                                leftSection={<IconFileSearch size={14} />}
+                                onClick={handleOpenInNodeBrowser}
+                              >
+                                {t('submenu:nodeBrowser')}
+                              </Menu.Item>
+                            );
+                          }
+                          folderSection.push(
+                            <FeatureMenuItem
                               key="folder-js"
+                              feature={Feature.JsConsole}
                               leftSection={<IconCode size={14} />}
                               onClick={handleOpenInJsConsole}
                             >
                               {t('submenu:jsConsole')}
-                            </Menu.Item>,
-                          ]);
-                          sections.push([
-                            <Menu.Item
-                              key="folder-manage-permissions"
-                              leftSection={<IconLock size={14} />}
-                              onClick={handleManagePermissions}
-                            >
-                              {t('submenu:managePermissionsAction')}
-                            </Menu.Item>,
-                          ]);
+                            </FeatureMenuItem>
+                          );
+                          if (folderSection.length > 0) {
+                            sections.push(folderSection);
+                          }
+                          if (showPermissions) {
+                            sections.push([
+                              <Menu.Item
+                                key="folder-manage-permissions"
+                                leftSection={<IconLock size={14} />}
+                                onClick={handleManagePermissions}
+                              >
+                                {t('submenu:managePermissionsAction')}
+                              </Menu.Item>,
+                            ]);
+                          }
                         }
 
                         if (isSitesRoot) {
-                          sections.push([
-                            <Menu.Item
-                              key="sites-node-browser"
-                              leftSection={<IconFileSearch size={14} />}
-                              onClick={handleOpenInNodeBrowser}
-                            >
-                              {t('submenu:nodeBrowser')}
-                            </Menu.Item>,
-                            <Menu.Item
-                              key="sites-manage-permissions"
-                              leftSection={<IconLock size={14} />}
-                              onClick={handleManagePermissions}
-                            >
-                              {t('submenu:managePermissionsAction')}
-                            </Menu.Item>,
-                          ]);
-                          sections.push([
-                            <Menu.Item
-                              key="create-site"
-                              leftSection={<IconWorldPlus size={14} />}
-                              onClick={handleCreateSite}
-                            >
-                              {t('submenu:createSiteAction')}
-                            </Menu.Item>,
-                          ]);
+                          const sitesSection: React.ReactNode[] = [];
+                          if (nodeBrowserAvailable) {
+                            sitesSection.push(
+                              <Menu.Item
+                                key="sites-node-browser"
+                                leftSection={<IconFileSearch size={14} />}
+                                onClick={handleOpenInNodeBrowser}
+                              >
+                                {t('submenu:nodeBrowser')}
+                              </Menu.Item>
+                            );
+                          }
+                          if (showPermissions) {
+                            sitesSection.push(
+                              <Menu.Item
+                                key="sites-manage-permissions"
+                                leftSection={<IconLock size={14} />}
+                                onClick={handleManagePermissions}
+                              >
+                                {t('submenu:managePermissionsAction')}
+                              </Menu.Item>
+                            );
+                          }
+                          if (sitesSection.length > 0) {
+                            sections.push(sitesSection);
+                          }
+                          if (showCreateSite) {
+                            sections.push([
+                              <Menu.Item
+                                key="create-site"
+                                leftSection={<IconWorldPlus size={14} />}
+                                onClick={handleCreateSite}
+                              >
+                                {t('submenu:createSiteAction')}
+                              </Menu.Item>,
+                            ]);
+                          }
                         }
 
                         if (isSiteNode) {
-                          sections.push([
-                            <Menu.Item
-                              key="site-node-browser"
-                              leftSection={<IconFileSearch size={14} />}
-                              onClick={handleOpenInNodeBrowser}
-                            >
-                              {t('submenu:nodeBrowser')}
-                            </Menu.Item>,
-                            <Menu.Item
-                              key="site-manage-permissions"
-                              leftSection={<IconLock size={14} />}
-                              onClick={handleManagePermissions}
-                            >
-                              {t('submenu:managePermissionsAction')}
-                            </Menu.Item>,
-                          ]);
-                          sections.push([
-                            <Menu.Item
-                              key="edit-site"
-                              leftSection={<IconEdit size={14} />}
-                              onClick={handleEditSite}
-                            >
-                              {t('submenu:editSiteAction')}
-                            </Menu.Item>,
-                            <Menu.Item
-                              key="delete-site"
-                              leftSection={<IconWorldX size={14} />}
-                              color="red"
-                              onClick={handleDeleteSite}
-                            >
-                              {t('submenu:deleteSiteAction')}
-                            </Menu.Item>,
-                          ]);
+                          const siteSection: React.ReactNode[] = [];
+                          if (nodeBrowserAvailable) {
+                            siteSection.push(
+                              <Menu.Item
+                                key="site-node-browser"
+                                leftSection={<IconFileSearch size={14} />}
+                                onClick={handleOpenInNodeBrowser}
+                              >
+                                {t('submenu:nodeBrowser')}
+                              </Menu.Item>
+                            );
+                          }
+                          if (showPermissions) {
+                            siteSection.push(
+                              <Menu.Item
+                                key="site-manage-permissions"
+                                leftSection={<IconLock size={14} />}
+                                onClick={handleManagePermissions}
+                              >
+                                {t('submenu:managePermissionsAction')}
+                              </Menu.Item>
+                            );
+                          }
+                          if (siteSection.length > 0) {
+                            sections.push(siteSection);
+                          }
+                          const siteMutate: React.ReactNode[] = [];
+                          if (showEditSite) {
+                            siteMutate.push(
+                              <Menu.Item
+                                key="edit-site"
+                                leftSection={<IconEdit size={14} />}
+                                onClick={handleEditSite}
+                              >
+                                {t('submenu:editSiteAction')}
+                              </Menu.Item>
+                            );
+                          }
+                          if (showDeleteSite) {
+                            siteMutate.push(
+                              <Menu.Item
+                                key="delete-site"
+                                leftSection={<IconWorldX size={14} />}
+                                color="red"
+                                onClick={handleDeleteSite}
+                              >
+                                {t('submenu:deleteSiteAction')}
+                              </Menu.Item>
+                            );
+                          }
+                          if (siteMutate.length > 0) {
+                            sections.push(siteMutate);
+                          }
                         }
 
-                        const availableActions = getAvailableActions({
-                          nodeId: selectedNode.value,
-                          nodeName: selectedNode.label,
-                          nodeType: selectedNode.nodeType || '',
-                          isFolder: selectedNode.isFolder || false,
-                          isFile: selectedNode.isFile || false,
-                          path: selectedNode.path,
-                          mimeType: selectedNode.mimeType,
-                        });
+                        const availableActions = getAvailableActions(actionContext);
 
                         const otherActions = availableActions.filter(
                           action =>
@@ -1745,7 +1823,9 @@ export function RepositorySection({
                           );
                         }
 
-                        const flattened = sections.flatMap((section, index) => {
+                        const flattened = sections
+                          .filter(section => section.length > 0)
+                          .flatMap((section, index) => {
                           const divider =
                             index > 0 ? [<Menu.Divider key={`divider-${index}`} />] : [];
                           return [...divider, ...section];

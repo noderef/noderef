@@ -108,6 +108,7 @@ export function registerAlfrescoRpc(
         return {
           valid: false,
           isAdmin: false,
+          capabilities: null,
           error: 'Authentication failed',
         };
       }
@@ -126,6 +127,7 @@ export function registerAlfrescoRpc(
         return {
           valid: false,
           isAdmin: false,
+          capabilities: null,
           error: 'Authentication failed',
         };
       }

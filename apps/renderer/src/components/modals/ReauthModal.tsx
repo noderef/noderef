@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import { applyRefreshedCapabilities } from '@/core/capabilities';
 import { backendRpc } from '@/core/ipc/backend';
 import { alfrescoRpc } from '@/core/ipc/alfresco';
 import { isNeutralinoMode } from '@/core/ipc/neutralino';
@@ -240,6 +241,7 @@ export function ReauthModal() {
         });
 
         updateServer(serverId, updatedServer);
+        await applyRefreshedCapabilities(serverId);
         setAuthenticated(true);
         setAuthenticating(false);
 
@@ -409,11 +411,13 @@ export function ReauthModal() {
               });
 
               let nextServer = updatedServer;
-              try {
-                const adminStatus = await backendRpc.servers.refreshAdminStatus(serverId);
-                nextServer = { ...updatedServer, isAdmin: adminStatus.isAdmin };
-              } catch (adminError) {
-                console.error('Failed to refresh admin status after reauth:', adminError);
+              const profile = await applyRefreshedCapabilities(serverId);
+              if (profile) {
+                nextServer = {
+                  ...updatedServer,
+                  capabilities: profile,
+                  isAdmin: profile.isAdmin,
+                };
               }
 
               // eslint-disable-next-line no-console

@@ -84,7 +84,8 @@ export async function bootstrapServerFromEnv(serverService: ServerService): Prom
       username: username,
       token: password,
       jsconsoleEndpoint: jsconsoleEndpoint,
-      isAdmin: true,
+      isAdmin: false,
+      capabilities: null,
     });
 
     log.info(

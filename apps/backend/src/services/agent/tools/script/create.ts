@@ -76,6 +76,7 @@ export const scriptCreateTool: ToolDefinition = {
     required: ['request'],
   },
   requiresConfirmation: false,
+  requires: ['jsConsole'],
 
   async execute(ctx: AgentExecutionContext, args: Record<string, unknown>): Promise<ToolResult> {
     try {

@@ -95,7 +95,14 @@ import {
   compactToolDataForModel,
   MAX_TOOL_RESULT_JSON_CHARS_FOR_MODEL,
 } from './toolResultCompaction.js';
-import { getAllToolSchemas, getToolByName, resolveToolName } from './tools/registry.js';
+import { clarifyToolErrorPayload } from './tools/helpers/toolError.js';
+import {
+  getToolByName,
+  getToolSchemasFor,
+  isToolAllowed,
+  resolveToolName,
+  toolCapabilityDeniedMessage,
+} from './tools/registry.js';
 import type { AgentExecutionContext, ResolvedAiRuntime, RunInput } from './types.js';
 
 const log = createLogger('agent.engine');
@@ -283,8 +290,12 @@ export class AgentRunEngine {
     await this.maybeGenerateInitialChatPresentation(input, recentMessages.length > 0);
 
     // ── Build initial message list ─────────────────────────────────────────────
-    const systemPrompt = await buildSystemPrompt(mentionContext, input.preferredLanguage);
-    const allTools = getAllToolSchemas();
+    const systemPrompt = await buildSystemPrompt(
+      mentionContext,
+      input.preferredLanguage,
+      this.execCtx.capabilityProfile
+    );
+    const allTools = getToolSchemasFor(this.execCtx.capabilityProfile);
     const allowScriptExecution = isExplicitScriptExecutionRequested(input.content);
     const tools = allowScriptExecution
       ? allTools
@@ -550,6 +561,21 @@ export class AgentRunEngine {
           continue;
         }
 
+        if (!isToolAllowed(call.name, this.execCtx.capabilityProfile)) {
+          const deniedMessage = `${toolCapabilityDeniedMessage(call.name)} Do not retry. Explain this limitation to the user.`;
+          log.info(
+            { name: call.name, canonicalOperation },
+            'Blocked tool call that exceeds capability profile'
+          );
+          toolResultContents.push({
+            type: 'tool_result',
+            tool_use_id: call.id,
+            content: JSON.stringify({ error: deniedMessage }),
+            is_error: true,
+          });
+          continue;
+        }
+
         const scriptExecutionBlocked =
           canonicalOperation === SCRIPT_TOOL_NAME && !allowScriptExecution;
         if (scriptExecutionBlocked) {
@@ -678,7 +704,7 @@ export class AgentRunEngine {
         const durationMs = Date.now() - executionStartedAt;
         const modelPayload = toolResult.ok
           ? compactToolDataForModel(toolResult.data)
-          : { error: toolResult.error };
+          : clarifyToolErrorPayload(toolResult.error);
         let resultStr = JSON.stringify(modelPayload);
         if (resultStr.length > MAX_TOOL_RESULT_JSON_CHARS_FOR_MODEL) {
           resultStr = `${resultStr.slice(0, MAX_TOOL_RESULT_JSON_CHARS_FOR_MODEL)}\n... [truncated ${resultStr.length - MAX_TOOL_RESULT_JSON_CHARS_FOR_MODEL} chars for model context]`;

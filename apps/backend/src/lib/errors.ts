@@ -56,6 +56,9 @@ export const AppErrors = {
 
   forbidden: (message = 'Forbidden') => throwAppError(ErrorCode.FORBIDDEN, message),
 
+  permissionDenied: (message = 'Permission denied') =>
+    throwAppError(ErrorCode.PERMISSION_DENIED, message),
+
   validationError: (message: string, details?: Record<string, unknown>) =>
     throwAppError(ErrorCode.VALIDATION_ERROR, message, details),
 

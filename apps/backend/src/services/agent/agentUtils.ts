@@ -15,12 +15,14 @@
  */
 
 import type { AgentMention, AgentRunEvent, AgentRunSummary } from '@app/contracts';
+import { hasCapability } from '@app/contracts';
 import type { PrismaClient } from '@prisma/client';
 import { getAiProvider, isBaseUrlMissing, resolveProviderEndpoint } from '../../ai/providers.js';
 import { AppErrors } from '../../lib/errors.js';
 import type { AgentRepository } from '../../repositories/agentRepository.js';
 import { resolveUserAiConfig, resolveUserAiConfigForProvider } from '../ai/userSettingsService.js';
 import { getAuthenticatedClientWithRefresh } from '../alfresco/authenticationHelper.js';
+import { ensureCapabilityProfile } from '../alfresco/capabilityPersistence.js';
 import type { ServerService } from '../serverService.js';
 import { getAiAssistantEnabled } from '../userSettings.js';
 import { agentRunStreamBroker } from './AgentRunStreamBroker.js';
@@ -110,11 +112,22 @@ export async function createExecutionContext(
     return AppErrors.unauthorized('Failed to authenticate against server');
   }
 
+  const resolved = await ensureCapabilityProfile(
+    serverService,
+    userId,
+    serverId,
+    api,
+    server
+  );
+  const profile = resolved.capabilities ?? null;
   return {
     api,
     serverId,
-    serverBaseUrl: server.baseUrl,
-    jsconsoleEndpoint: server.jsconsoleEndpoint ?? null,
+    serverBaseUrl: resolved.baseUrl,
+    jsconsoleEndpoint: hasCapability(profile, 'jsConsole')
+      ? (resolved.jsconsoleEndpoint ?? null)
+      : null,
+    capabilityProfile: profile,
     authType: credentials.authType,
     username: credentials.username,
     token: credentials.token,

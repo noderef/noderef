@@ -19,7 +19,7 @@
  */
 
 import type { AlfrescoApi } from '@alfresco/js-api';
-import type { AgentMention } from '@app/contracts';
+import type { AgentMention, CapabilityProfile } from '@app/contracts';
 
 // ── Manifest types (used by agentManifest.ts) ─────────────────────────────────
 
@@ -77,6 +77,7 @@ export interface AgentExecutionContext {
   serverId: number;
   serverBaseUrl: string;
   jsconsoleEndpoint: string | null;
+  capabilityProfile: CapabilityProfile | null;
   authType: string | null;
   username: string | null;
   token: string | null;

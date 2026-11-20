@@ -14,8 +14,11 @@
  * limitations under the License.
  */
 
+import { FeatureMenuItem } from '@/components/capabilities/FeatureGate';
 import { DeleteConfirmationForm } from '@/components/common/DeleteConfirmationForm';
+import { getRpcErrorCode, refreshCapabilitiesDebounced } from '@/core/capabilities';
 import { backendRpc } from '@/core/ipc/backend';
+import { ErrorCode, Feature } from '@app/contracts';
 import { rpc } from '@/core/ipc/rpc';
 import { useJsConsoleStore } from '@/core/store/jsConsole';
 import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
@@ -106,6 +109,7 @@ export function SystemTreeSection({
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [rootLoadAttempts, setRootLoadAttempts] = useState(0);
   const [loadedNodes, setLoadedNodes] = useState<Set<string>>(new Set());
   const [loadingNodes, setLoadingNodes] = useState<Set<string>>(new Set());
@@ -457,6 +461,7 @@ export function SystemTreeSection({
 
     setLoading(true);
     setError(null);
+    setErrorCode(null);
     const attemptNumber = rootLoadAttempts + 1;
     setRootLoadAttempts(attemptNumber);
 
@@ -478,6 +483,11 @@ export function SystemTreeSection({
       }
 
       console.error('Failed to load system tree:', err);
+      const code = getRpcErrorCode(err) ?? null;
+      setErrorCode(code);
+      if (code === ErrorCode.PERMISSION_DENIED) {
+        void refreshCapabilitiesDebounced(requestServerId);
+      }
       if (attemptNumber >= MAX_ROOT_LOAD_ATTEMPTS) {
         const baseMessage = err instanceof Error ? err.message : t('submenu:loadError');
         setError(
@@ -926,7 +936,7 @@ export function SystemTreeSection({
                   >
                     {t('common:retry')}
                   </Button>
-                  {canReauth && (
+                  {canReauth && errorCode === ErrorCode.UNAUTHORIZED && (
                     <Button
                       variant="filled"
                       size="xs"
@@ -1099,12 +1109,13 @@ export function SystemTreeSection({
                             {t('submenu:textEditor')}
                           </Menu.Item>
                         )}
-                        <Menu.Item
+                        <FeatureMenuItem
+                          feature={Feature.JsConsole}
                           leftSection={<IconCode size={14} />}
                           onClick={handleOpenInJsConsole}
                         >
                           {t('submenu:jsConsole')}
-                        </Menu.Item>
+                        </FeatureMenuItem>
                         <Menu.Item
                           leftSection={<IconFileSearch size={14} />}
                           onClick={handleOpenInNodeBrowser}
@@ -1122,12 +1133,13 @@ export function SystemTreeSection({
                         >
                           {t('submenu:nodeBrowser')}
                         </Menu.Item>
-                        <Menu.Item
+                        <FeatureMenuItem
+                          feature={Feature.JsConsole}
                           leftSection={<IconCode size={14} />}
                           onClick={handleOpenInJsConsole}
                         >
                           {t('submenu:jsConsole')}
-                        </Menu.Item>
+                        </FeatureMenuItem>
                         <Menu.Divider />
                       </>
                     )}
