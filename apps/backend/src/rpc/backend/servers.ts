@@ -22,16 +22,14 @@
 import type { CapabilityProfile, CreateServer, UpdateServer } from '@app/contracts';
 import { CapabilityProfileSchema, RESTRICTED_PROFILE } from '@app/contracts';
 import { z } from 'zod';
+import { InsightRangeDaysSchema } from '../../constants/insights.js';
+import { AppErrors } from '../../lib/errors.js';
+import { validateCredentials } from '../../services/alfresco/authService.js';
 import { persistCapabilityProfile } from '../../services/alfresco/capabilityPersistence.js';
 import { resolveCapabilityProfile } from '../../services/alfresco/capabilities.js';
 import { exchangeOidcTokenForTicket } from '../../services/alfresco/oidcTicketService.js';
-import { InsightRangeDaysSchema } from '../../constants/insights.js';
 import type { Routes, RpcContext } from './types.js';
-import {
-  getCurrentUserId,
-  withAuth,
-  withAuthAndCredentials,
-} from './withAuth.js';
+import { getCurrentUserId, withAuth, withAuthAndCredentials } from './withAuth.js';
 
 type RpcCreateServerInput = Omit<CreateServer, 'userId' | 'insightRangeDays'> & {
   insightRangeDays?: number;
@@ -245,6 +243,44 @@ export function registerServersHandlers(routes: Routes, ctx: RpcContext): void {
     handler: async params => {
       const { id } = params as { id: number };
       return refreshCapabilities(id);
+    },
+  };
+
+  routes['backend.servers.reauthBasic'] = {
+    schema: z.object({
+      id: z.number(),
+      username: z.string().optional(),
+      password: z.string().min(1),
+    }),
+    handler: async params => {
+      const userId = await getCurrentUserId();
+      const { id, username, password } = params as {
+        id: number;
+        username?: string;
+        password: string;
+      };
+
+      const server = await serverService.findById(userId, id);
+      if (!server) AppErrors.notFound('Server', id);
+
+      const creds = await serverService.getCredentialsForBackend(userId, id);
+      const effectiveUsername = username?.trim() || creds?.username || '';
+      if (!effectiveUsername) AppErrors.validationError('Username is required');
+
+      const validation = await validateCredentials({
+        baseUrl: server!.baseUrl,
+        username: effectiveUsername,
+        password,
+      });
+      if (!validation.valid) {
+        AppErrors.unauthorized(validation.error || 'Invalid username or password');
+      }
+
+      return serverService.update(userId, id, {
+        username: effectiveUsername,
+        token: password,
+        isAdmin: validation.isAdmin,
+      });
     },
   };
 

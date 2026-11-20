@@ -138,10 +138,11 @@ async function packageMac() {
       }
     });
 
-    // Fix permissions for backend node binary and server.js
+    // Fix permissions for backend node binary, server.js, and CLI launcher
     const resourcesDir = path.join(appPath, 'Contents', 'Resources');
     const nodeBinary = path.join(resourcesDir, 'node');
     const serverJs = path.join(resourcesDir, 'node-src', 'dist', 'server.js');
+    const cliLauncher = path.join(resourcesDir, 'node-src', 'cli', 'noderef');
 
     if (fs.existsSync(nodeBinary)) {
       run(`chmod +x "${nodeBinary}"`);
@@ -155,6 +156,13 @@ async function packageMac() {
       console.log('Fixed permissions for server.js');
     } else {
       console.warn(`Warning: server.js not found at ${serverJs}`);
+    }
+
+    if (fs.existsSync(cliLauncher)) {
+      run(`chmod +x "${cliLauncher}"`);
+      console.log('Fixed permissions for CLI launcher');
+    } else {
+      console.warn(`Warning: CLI launcher not found at ${cliLauncher}`);
     }
 
     console.log('Copying .app to temporary staging area...');
@@ -297,12 +305,18 @@ function generateWixXml(buildPath, arch, version, iconPath, licensePath, useHeat
     <Feature Id="ProductFeature" Title="NodeRef" Level="1">
 ${componentRefs}
       <ComponentRef Id="ApplicationShortcut" />
+      <ComponentRef Id="CliPath" />
     </Feature>
     
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFilesFolder">
         <Directory Id="APPLICATIONFOLDER" Name="NodeRef">
 ${directoryStructure}
+          <Component Id="CliPath" Guid="{A3F8C1D2-4E5B-4A67-9C81-2B7D4E6F8A90}">
+            <Environment Id="NodeRefCliPath" Name="PATH" Value="[APPLICATIONFOLDER]node-src\\cli"
+                         Part="last" Action="set" System="no" Permanent="no" />
+            <RegistryValue Root="HKCU" Key="Software\\NodeRef" Name="cliPath" Type="integer" Value="1" KeyPath="yes" />
+          </Component>
         </Directory>
       </Directory>
       <Directory Id="ProgramMenuFolder">
@@ -777,7 +791,7 @@ Categories=Utility;Development;
     const binLink = path.join(binDir, appName.toLowerCase());
     // We'll create a wrapper script instead of a symlink for better compatibility
     const wrapperScript = `#!/bin/bash
-exec "${appExec}" "$@"
+exec "${appPath}/node-src/cli/noderef" "$@"
 `;
     fs.writeFileSync(binLink, wrapperScript, 'utf8');
     run(`chmod +x "${binLink}"`);
@@ -855,6 +869,7 @@ async function packageLinux() {
 
       const nodeBinary = path.join(appDir, 'node');
       const serverJs = path.join(appDir, 'node-src', 'dist', 'server.js');
+      const cliLauncher = path.join(appDir, 'node-src', 'cli', 'noderef');
 
       if (fs.existsSync(nodeBinary)) {
         run(`chmod +x "${nodeBinary}"`);
@@ -864,6 +879,11 @@ async function packageLinux() {
       if (fs.existsSync(serverJs)) {
         run(`chmod +x "${serverJs}"`);
         console.log('Fixed permissions for Linux server.js');
+      }
+
+      if (fs.existsSync(cliLauncher)) {
+        run(`chmod +x "${cliLauncher}"`);
+        console.log('Fixed permissions for Linux CLI launcher');
       }
     }
 

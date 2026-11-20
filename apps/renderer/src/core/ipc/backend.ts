@@ -157,6 +157,16 @@ export const backendRpc = {
     },
 
     /**
+     * Validate and store new basic-auth credentials. An empty username keeps the stored one.
+     */
+    async reauthBasic(
+      id: number,
+      credentials: { username?: string; password: string }
+    ): Promise<AppServer> {
+      return rpc<AppServer>('backend.servers.reauthBasic', { id, ...credentials });
+    },
+
+    /**
      * Alias of refreshCapabilities that only returns isAdmin.
      */
     async refreshAdminStatus(id: number): Promise<{ isAdmin: boolean }> {
@@ -569,6 +579,42 @@ export const backendRpc = {
         nodeId,
         newName,
       });
+    },
+
+    /**
+     * Update node properties, type and/or aspects
+     */
+    async updateNode(
+      serverId: number,
+      nodeId: string,
+      updates: {
+        properties?: Record<string, unknown | null>;
+        nodeType?: string;
+        addAspects?: string[];
+        removeAspects?: string[];
+      }
+    ): Promise<{ success: boolean; node: any }> {
+      console.log('✏️ Updating node:', { serverId, nodeId, updates });
+      return rpc<{ success: boolean; node: any }>('backend.repository.updateNode', {
+        serverId,
+        nodeId,
+        ...updates,
+      });
+    },
+
+    /**
+     * Load dictionary metadata used by the node property/aspect/type editors
+     */
+    async getNodeEditMetadata(serverId: number, nodeId: string): Promise<NodeEditMetadata> {
+      console.log('📘 Fetching node edit metadata:', { serverId, nodeId });
+      return rpc<NodeEditMetadata>(
+        'backend.repository.getNodeEditMetadata',
+        {
+          serverId,
+          nodeId,
+        },
+        { timeoutMs: 30000 }
+      );
     },
 
     /**
@@ -1104,6 +1150,21 @@ interface SiteEntry {
   visibility?: SiteVisibility | string;
   preset?: string;
   role?: string;
+}
+
+export interface EditablePropertyDefinition {
+  name: string;
+  dataType?: string;
+  multiValued?: boolean;
+  mandatory?: boolean;
+  protected?: boolean;
+  allowedValues?: string[];
+}
+
+export interface NodeEditMetadata {
+  nodeType: string;
+  aspectNames: string[];
+  properties: EditablePropertyDefinition[];
 }
 
 export interface AlfrescoNodeDetails {

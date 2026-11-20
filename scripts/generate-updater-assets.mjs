@@ -147,6 +147,10 @@ function buildBackendTarball(outDir, version) {
   if (fs.existsSync(nodeSrcSkills)) {
     copyDir(nodeSrcSkills, path.join(stagingRoot, 'node-src', 'skills'));
   }
+  const nodeSrcCli = path.join(root, 'resources', 'node-src', 'cli');
+  if (fs.existsSync(nodeSrcCli)) {
+    copyDir(nodeSrcCli, path.join(stagingRoot, 'node-src', 'cli'));
+  }
   copyDir(prismaDir, path.join(stagingRoot, 'node-src', 'prisma'));
 
   // Generate build-meta.json from the validated release version rather than

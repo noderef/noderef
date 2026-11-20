@@ -33,4 +33,11 @@ export class DiscoveryApi {
   constructor(_api: unknown) {}
 }
 
-export type AlfrescoApi = Record<string, unknown>;
+export class AlfrescoApi {
+  config: unknown;
+  login = vi.fn().mockResolvedValue(undefined);
+
+  constructor(config: unknown) {
+    this.config = config;
+  }
+}

@@ -59,6 +59,33 @@ function copyAgentSkills() {
   console.log(`✓ Copied ${skillFiles.length} agent skill(s) to resources/node-src/skills`);
 }
 
+function copyCli() {
+  const cliSrcDir = path.join(projectRoot, 'cli');
+  const cliOutDir = path.join(projectRoot, 'resources', 'node-src', 'cli');
+
+  if (!fs.existsSync(cliSrcDir)) {
+    throw new Error(`Missing CLI source directory: ${cliSrcDir}`);
+  }
+
+  fs.rmSync(cliOutDir, { recursive: true, force: true });
+  fs.mkdirSync(cliOutDir, { recursive: true });
+
+  const cliFiles = fs
+    .readdirSync(cliSrcDir, { withFileTypes: true })
+    .filter(entry => entry.isFile());
+
+  for (const entry of cliFiles) {
+    fs.copyFileSync(path.join(cliSrcDir, entry.name), path.join(cliOutDir, entry.name));
+  }
+
+  const launcher = path.join(cliOutDir, 'noderef');
+  if (fs.existsSync(launcher)) {
+    fs.chmodSync(launcher, 0o755);
+  }
+
+  console.log(`✓ Copied CLI to resources/node-src/cli`);
+}
+
 esbuild
   .build({
     entryPoints: [entryPoint],
@@ -104,6 +131,7 @@ require('./server.bundle.js');
 
     console.log('✓ Created server.js entry point');
     copyAgentSkills();
+    copyCli();
   })
   .catch(error => {
     console.error('❌ Bundling failed:', error);

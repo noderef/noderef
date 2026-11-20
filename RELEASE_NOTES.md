@@ -1,5 +1,1 @@
-This release makes nodeRefs easier to open and copy. 🚀
-
-Paste a nodeRef or UUID in the search bar to open it in **Node Browser**. Tabs now show the file name instead of a QName.
-
-Copy the nodeRef from **Info** with the button next to **Reference**.
+You can now **edit node metadata** in the Node Browser. Change property values, add or remove aspects, and stage a type change, then save when you are ready.

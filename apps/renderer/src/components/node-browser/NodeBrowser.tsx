@@ -19,6 +19,8 @@ import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
 import { useServersStore } from '@/core/store/servers';
 import { getNodeDisplayName } from '@/utils/nodeRef';
 import { Accordion, Loader, Stack, Text, ThemeIcon } from '@mantine/core';
+import type { NotificationData, NotificationsProps } from '@mantine/notifications';
+import { notifications } from '@mantine/notifications';
 import {
   IconArrowLeft,
   IconArrowsLeftRight,
@@ -38,6 +40,7 @@ import { NodeInfo } from './NodeInfo';
 import { NodeParents } from './NodeParents';
 import { NodePermissions } from './NodePermissions';
 import { NodeProperties } from './NodeProperties';
+import { useNodeEdits } from './useNodeEdits';
 
 interface NodeBrowserProps {
   tabId: string;
@@ -138,6 +141,103 @@ export function NodeBrowser({ tabId, serverId, nodeId, nodeName: _nodeName }: No
   }
 
   return (
+    <NodeBrowserContent
+      tabId={tabId}
+      serverId={serverId}
+      nodeId={nodeId}
+      nodeName={_nodeName}
+      nodeData={nodeData}
+      onPermissionsUpdated={handlePermissionsUpdated}
+      onReload={() => setRefreshToken(token => token + 1)}
+    />
+  );
+}
+
+function NodeBrowserContent({
+  tabId,
+  serverId,
+  nodeId,
+  nodeName,
+  nodeData,
+  onPermissionsUpdated,
+  onReload,
+}: {
+  tabId: string;
+  serverId: number;
+  nodeId: string;
+  nodeName: string;
+  nodeData: AlfrescoNodeDetails;
+  onPermissionsUpdated: () => void;
+  onReload: () => void;
+}) {
+  const { t } = useTranslation(['common', 'nodeBrowser']);
+  const setTabDirty = useNodeBrowserTabsStore(state => state.setTabDirty);
+  const edits = useNodeEdits({ serverId, nodeId, nodeData });
+  const notificationPosition: NotificationsProps['position'] = 'bottom-center';
+  const showNotification = (data: NotificationData) =>
+    notifications.show({
+      position: notificationPosition,
+      withCloseButton: true,
+      autoClose: 6000,
+      ...data,
+    });
+
+  useEffect(() => {
+    setTabDirty(tabId, edits.isDirty);
+    return () => setTabDirty(tabId, false);
+  }, [edits.isDirty, setTabDirty, tabId]);
+
+  useEffect(() => {
+    if (!edits.isDirty) {
+      return;
+    }
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [edits.isDirty]);
+
+  const loadDictionary = async () => {
+    try {
+      await edits.ensureDictionary();
+    } catch (error) {
+      showNotification({
+        title: t('nodeBrowser:saveError'),
+        message: error instanceof Error ? error.message : t('nodeBrowser:editMetadataError'),
+        color: 'red',
+      });
+    }
+  };
+
+  const handleSave = async (section: 'properties' | 'aspects') => {
+    try {
+      await edits.save();
+      showNotification({
+        title:
+          section === 'aspects'
+            ? t('nodeBrowser:saveAspectsSuccess')
+            : t('nodeBrowser:savePropertiesSuccess'),
+        message:
+          section === 'aspects'
+            ? t('nodeBrowser:saveAspectsSuccessMessage')
+            : t('nodeBrowser:savePropertiesSuccessMessage'),
+        color: 'green',
+      });
+      onReload();
+    } catch (error) {
+      showNotification({
+        title: t('nodeBrowser:saveError'),
+        message: error instanceof Error ? error.message : t('nodeBrowser:saveError'),
+        color: 'red',
+      });
+    }
+  };
+
+  const displayName = getNodeDisplayName(nodeData) || nodeName;
+
+  return (
     <Stack style={{ height: '100%', overflow: 'hidden' }}>
       <Accordion
         multiple
@@ -157,7 +257,16 @@ export function NodeBrowser({ tabId, serverId, nodeId, nodeName: _nodeName }: No
             {t('nodeBrowser:info')}
           </Accordion.Control>
           <Accordion.Panel>
-            <NodeInfo nodeData={nodeData} serverId={serverId} />
+            <NodeInfo
+              nodeData={nodeData}
+              serverId={serverId}
+              pendingNodeType={edits.edits.nodeType}
+              availableTypes={edits.availableTypes}
+              dictionaryClasses={edits.dictionaryClasses}
+              typesLoading={edits.dictionaryLoading}
+              onRequestTypes={() => void loadDictionary()}
+              onChangeType={edits.setNodeType}
+            />
           </Accordion.Panel>
         </Accordion.Item>
 
@@ -177,7 +286,17 @@ export function NodeBrowser({ tabId, serverId, nodeId, nodeName: _nodeName }: No
               properties={nodeData.properties}
               serverId={serverId}
               nodeId={nodeId}
-              nodeName={getNodeDisplayName(nodeData) || _nodeName}
+              nodeName={displayName}
+              stagedProperties={edits.edits.properties}
+              propertyDefinitions={edits.propertyDefinitions}
+              onStartEditing={async () => {
+                await Promise.all([edits.ensureMetadata(), edits.ensureDictionary()]);
+              }}
+              onSetProperty={edits.setPropertyValue}
+              onUndoProperty={edits.undoProperty}
+              saving={edits.saving}
+              onSave={() => void handleSave('properties')}
+              onCancelEdits={edits.resetProperties}
             />
           </Accordion.Panel>
         </Accordion.Item>
@@ -194,7 +313,20 @@ export function NodeBrowser({ tabId, serverId, nodeId, nodeName: _nodeName }: No
             {t('nodeBrowser:aspects')}
           </Accordion.Control>
           <Accordion.Panel>
-            <NodeAspects aspects={nodeData.aspects} />
+            <NodeAspects
+              aspects={nodeData.aspects}
+              editable
+              pendingAdd={edits.edits.addAspects}
+              pendingRemove={edits.edits.removeAspects}
+              availableAspects={edits.availableAspects}
+              aspectsLoading={edits.dictionaryLoading}
+              onRequestAspects={() => void loadDictionary()}
+              onAdd={edits.addAspect}
+              onRemove={edits.removeAspect}
+              saving={edits.saving}
+              onSave={() => void handleSave('aspects')}
+              onCancelEdits={edits.resetAspects}
+            />
           </Accordion.Panel>
         </Accordion.Item>
 
@@ -282,8 +414,8 @@ export function NodeBrowser({ tabId, serverId, nodeId, nodeName: _nodeName }: No
               permissions={nodeData.permissions}
               serverId={serverId}
               nodeId={nodeId}
-              nodeName={getNodeDisplayName(nodeData) || _nodeName}
-              onPermissionsUpdated={handlePermissionsUpdated}
+              nodeName={displayName}
+              onPermissionsUpdated={onPermissionsUpdated}
             />
           </Accordion.Panel>
         </Accordion.Item>

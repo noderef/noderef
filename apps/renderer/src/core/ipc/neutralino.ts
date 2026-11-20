@@ -567,3 +567,71 @@ export async function ensureBackendStarted(): Promise<void> {
     console.error('[Neutralino] Failed to start backend:', error);
   }
 }
+
+export const CLI_LINK_PATH = '/usr/local/bin/noderef';
+
+async function getCliLauncherPath(): Promise<string> {
+  await ensureNeutralinoReady();
+  const nlPath = (await getNLPath()).replace(/\/+$/, '');
+  return `${nlPath}/node-src/cli/noderef`;
+}
+
+function posixShellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function commandExitCode(result: unknown): number {
+  if (typeof result === 'object' && result !== null && 'exitCode' in result) {
+    const code = (result as { exitCode?: unknown }).exitCode;
+    return typeof code === 'number' ? code : 1;
+  }
+  return 0;
+}
+
+function commandErrorText(result: unknown): string {
+  if (typeof result === 'object' && result !== null) {
+    const { stdErr, stdOut } = result as { stdErr?: unknown; stdOut?: unknown };
+    const text =
+      `${typeof stdErr === 'string' ? stdErr : ''}${typeof stdOut === 'string' ? stdOut : ''}`.trim();
+    if (text) return text;
+  }
+  if (typeof result === 'string' && result.trim()) return result.trim();
+  return '';
+}
+
+/** Whether `/usr/local/bin/noderef` links to this app's CLI launcher. */
+export async function isCliCommandInstalled(): Promise<boolean> {
+  const target = await getCliLauncherPath();
+  const result = await os.execCommand(`readlink ${posixShellQuote(CLI_LINK_PATH)}`, {
+    background: false,
+  });
+  return commandExitCode(result) === 0 && (result.stdOut ?? '').trim() === target;
+}
+
+/**
+ * Install `/usr/local/bin/noderef` as a symlink to the CLI launcher in the app bundle.
+ * macOS only. Refuses when the app still runs from the NodeRef DMG or an App Translocation path.
+ * Resolves without changes when the user cancels the administrator prompt.
+ */
+export async function installCliCommand(): Promise<'installed' | 'cancelled'> {
+  const target = await getCliLauncherPath();
+  if (target.startsWith('/Volumes/NodeRef') || target.includes('/AppTranslocation/')) {
+    throw new Error('MOVE_APP');
+  }
+
+  const cmd = `mkdir -p /usr/local/bin && ln -sf ${posixShellQuote(target)} ${posixShellQuote(CLI_LINK_PATH)}`;
+  const result = await os.execCommand(cmd, { background: false });
+  if (commandExitCode(result) === 0) return 'installed';
+
+  const appleScript = `do shell script ${JSON.stringify(cmd)} with administrator privileges`;
+  const elevated = await os.execCommand(`osascript -e ${posixShellQuote(appleScript)}`, {
+    background: false,
+  });
+  if (commandExitCode(elevated) === 0) return 'installed';
+
+  const elevatedError = commandErrorText(elevated);
+  // osascript reports a cancelled authentication dialog as error -128.
+  if (elevatedError.includes('(-128)')) return 'cancelled';
+
+  throw new Error(elevatedError || commandErrorText(result) || 'INSTALL_FAILED');
+}

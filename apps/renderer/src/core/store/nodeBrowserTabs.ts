@@ -31,6 +31,7 @@ interface NodeBrowserTabsState {
   activeTabId: string | null;
   previewTabId: string | null; // The tab that gets replaced on single click
   refreshRequests: Record<string, number>;
+  dirtyTabIds: string[];
 }
 
 interface NodeBrowserTabsActions {
@@ -48,6 +49,8 @@ interface NodeBrowserTabsActions {
   ) => void;
   pruneTabsForServers: (validServerIds: number[]) => void;
   requestRefresh: (tabId: string) => void;
+  setTabDirty: (tabId: string, dirty: boolean) => void;
+  isTabDirty: (tabId: string) => boolean;
 }
 
 export const useNodeBrowserTabsStore = create<NodeBrowserTabsState & NodeBrowserTabsActions>()(
@@ -56,6 +59,7 @@ export const useNodeBrowserTabsStore = create<NodeBrowserTabsState & NodeBrowser
     activeTabId: null,
     previewTabId: null,
     refreshRequests: {},
+    dirtyTabIds: [],
 
     openTab: (tab, options = {}) => {
       const { tabs, previewTabId } = get();
@@ -70,10 +74,11 @@ export const useNodeBrowserTabsStore = create<NodeBrowserTabsState & NodeBrowser
         return;
       }
 
-      // If not pinned and there's a preview tab, replace it
+      // If not pinned and there's a preview tab, replace it (unless it has unsaved edits)
       if (!isPinned && previewTabId) {
         const previewTab = tabs.find(t => t.id === previewTabId);
-        if (previewTab && !previewTab.isPinned) {
+        const previewIsDirty = get().dirtyTabIds.includes(previewTabId);
+        if (previewTab && !previewTab.isPinned && !previewIsDirty) {
           // Replace the preview tab
           const updatedTabs = tabs.map(t =>
             t.id === previewTabId
@@ -113,9 +118,10 @@ export const useNodeBrowserTabsStore = create<NodeBrowserTabsState & NodeBrowser
     },
 
     closeTab: tabId => {
-      const { tabs, activeTabId, previewTabId, refreshRequests } = get();
+      const { tabs, activeTabId, previewTabId, refreshRequests, dirtyTabIds } = get();
       const newTabs = tabs.filter(t => t.id !== tabId);
       const { [tabId]: _removed, ...remainingRefreshRequests } = refreshRequests;
+      const remainingDirtyTabIds = dirtyTabIds.filter(id => id !== tabId);
 
       let newActiveTabId = activeTabId;
       let newPreviewTabId = previewTabId;
@@ -143,6 +149,7 @@ export const useNodeBrowserTabsStore = create<NodeBrowserTabsState & NodeBrowser
         activeTabId: newActiveTabId,
         previewTabId: newPreviewTabId,
         refreshRequests: remainingRefreshRequests,
+        dirtyTabIds: remainingDirtyTabIds,
       });
     },
 
@@ -157,7 +164,13 @@ export const useNodeBrowserTabsStore = create<NodeBrowserTabsState & NodeBrowser
     },
 
     clearAllTabs: () => {
-      set({ tabs: [], activeTabId: null, previewTabId: null, refreshRequests: {} });
+      set({
+        tabs: [],
+        activeTabId: null,
+        previewTabId: null,
+        refreshRequests: {},
+        dirtyTabIds: [],
+      });
     },
 
     updateTabMetadata: (tabId, metadata) => {
@@ -195,9 +208,27 @@ export const useNodeBrowserTabsStore = create<NodeBrowserTabsState & NodeBrowser
           activeTabId,
           previewTabId,
           refreshRequests,
+          dirtyTabIds: state.dirtyTabIds.filter(tabId =>
+            filteredTabs.some(tab => tab.id === tabId)
+          ),
         };
       });
     },
+
+    setTabDirty: (tabId, dirty) => {
+      set(state => {
+        const isDirty = state.dirtyTabIds.includes(tabId);
+        if (dirty && !isDirty) {
+          return { dirtyTabIds: [...state.dirtyTabIds, tabId] };
+        }
+        if (!dirty && isDirty) {
+          return { dirtyTabIds: state.dirtyTabIds.filter(id => id !== tabId) };
+        }
+        return {};
+      });
+    },
+
+    isTabDirty: tabId => get().dirtyTabIds.includes(tabId),
 
     requestRefresh: tabId => {
       set(state => ({

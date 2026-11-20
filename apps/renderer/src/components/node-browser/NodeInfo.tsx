@@ -23,25 +23,44 @@ import {
   ActionIcon,
   Anchor,
   Badge,
+  Button,
   Group,
   Menu,
+  Modal,
   Paper,
+  Select,
   Stack,
   Table,
   Text,
   Tooltip,
 } from '@mantine/core';
-import { IconCheck, IconCopy, IconFileSearch, IconFolder } from '@tabler/icons-react';
-import { useEffect, useRef, useState } from 'react';
+import { IconCheck, IconCopy, IconFileSearch, IconFolder, IconPencil } from '@tabler/icons-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { getSubtypeNames } from './dictionaryClasses';
 
 interface NodeInfoProps {
   nodeData: AlfrescoNodeDetails;
   serverId: number;
+  pendingNodeType?: string | null;
+  availableTypes?: string[];
+  dictionaryClasses?: unknown[];
+  typesLoading?: boolean;
+  onRequestTypes?: () => void;
+  onChangeType?: (nodeType: string | null) => void;
 }
 
-export function NodeInfo({ nodeData, serverId }: NodeInfoProps) {
-  const { t } = useTranslation(['nodeBrowser', 'submenu']);
+export function NodeInfo({
+  nodeData,
+  serverId,
+  pendingNodeType = null,
+  availableTypes = [],
+  dictionaryClasses = [],
+  typesLoading = false,
+  onRequestTypes,
+  onChangeType,
+}: NodeInfoProps) {
+  const { t } = useTranslation(['nodeBrowser', 'submenu', 'common']);
   const { openTab } = useNodeBrowserTabsStore();
   const { openTab: openFolderTab } = useFileFolderBrowserTabsStore();
   const { navigate } = useNavigationStore();
@@ -49,7 +68,12 @@ export function NodeInfo({ nodeData, serverId }: NodeInfoProps) {
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
   const [selectedNodeRef, setSelectedNodeRef] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [typeModalOpened, setTypeModalOpened] = useState(false);
+  const [selectedType, setSelectedType] = useState<string | null>(null);
   const copiedTimeoutRef = useRef<number | null>(null);
+  const currentType = nodeData.type.prefixedName;
+  const displayedType = pendingNodeType || currentType;
+  const canChangeType = Boolean(onChangeType);
 
   useEffect(() => {
     return () => {
@@ -140,6 +164,30 @@ export function NodeInfo({ nodeData, serverId }: NodeInfoProps) {
   const primaryPath = nodeData.qnamePath.prefixedName;
   const isSystemNode = primaryPath.startsWith('/sys:system');
 
+  const subtypeNames = useMemo(
+    () => getSubtypeNames(dictionaryClasses, currentType),
+    [currentType, dictionaryClasses]
+  );
+
+  const typeOptions = useMemo(() => {
+    const all = availableTypes
+      .filter(name => name !== currentType)
+      .map(name => ({ value: name, label: name }));
+    if (subtypeNames.length === 0) {
+      return all;
+    }
+    const subtypeSet = new Set(subtypeNames);
+    const subtypes = all.filter(option => subtypeSet.has(option.value));
+    const others = all.filter(option => !subtypeSet.has(option.value));
+    if (subtypes.length === 0) {
+      return all;
+    }
+    return [
+      { group: t('nodeBrowser:subtypes'), items: subtypes },
+      ...(others.length > 0 ? [{ group: t('nodeBrowser:allTypes'), items: others }] : []),
+    ];
+  }, [availableTypes, currentType, subtypeNames, t]);
+
   const infoRows = [
     {
       label: t('nodeBrowser:reference'),
@@ -213,15 +261,38 @@ export function NodeInfo({ nodeData, serverId }: NodeInfoProps) {
                       </Anchor>
                     )
                   ) : row.label === t('nodeBrowser:type') ? (
-                    <Badge
-                      variant="light"
-                      color="blue"
-                      size="sm"
-                      radius="sm"
-                      style={{ textTransform: 'none' }}
-                    >
-                      {row.value}
-                    </Badge>
+                    <Group gap="xs" wrap="nowrap">
+                      <Badge
+                        variant={pendingNodeType ? 'outline' : 'light'}
+                        color={pendingNodeType ? 'orange' : 'blue'}
+                        size="sm"
+                        radius="sm"
+                        style={{ textTransform: 'none' }}
+                      >
+                        {displayedType}
+                      </Badge>
+                      {pendingNodeType && (
+                        <Text size="xs" c="dimmed">
+                          {t('nodeBrowser:pendingType')}
+                        </Text>
+                      )}
+                      {canChangeType && (
+                        <Tooltip label={t('nodeBrowser:changeType')}>
+                          <ActionIcon
+                            size="sm"
+                            variant="subtle"
+                            onClick={() => {
+                              setSelectedType(pendingNodeType || currentType);
+                              setTypeModalOpened(true);
+                              onRequestTypes?.();
+                            }}
+                            aria-label={t('nodeBrowser:changeType')}
+                          >
+                            <IconPencil size={14} />
+                          </ActionIcon>
+                        </Tooltip>
+                      )}
+                    </Group>
                   ) : (
                     <Text size="sm" style={{ wordBreak: 'break-all' }}>
                       {row.value}
@@ -281,6 +352,38 @@ export function NodeInfo({ nodeData, serverId }: NodeInfoProps) {
           </Menu.Item>
         </Menu.Dropdown>
       </Menu>
+
+      <Modal
+        opened={typeModalOpened}
+        onClose={() => setTypeModalOpened(false)}
+        title={t('nodeBrowser:changeTypeTitle')}
+      >
+        <Stack gap="md">
+          <Text size="sm">{t('nodeBrowser:changeTypeWarning')}</Text>
+          <Select
+            searchable
+            data={typeOptions}
+            value={selectedType}
+            onChange={setSelectedType}
+            placeholder={t('nodeBrowser:changeTypePlaceholder')}
+            nothingFoundMessage={t('common:nothingFound')}
+            disabled={typesLoading && typeOptions.length === 0}
+          />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setTypeModalOpened(false)}>
+              {t('common:cancel')}
+            </Button>
+            <Button
+              onClick={() => {
+                onChangeType?.(selectedType && selectedType !== currentType ? selectedType : null);
+                setTypeModalOpened(false);
+              }}
+            >
+              {t('nodeBrowser:changeTypeConfirm')}
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Stack>
   );
 }

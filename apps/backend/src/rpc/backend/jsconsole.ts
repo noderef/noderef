@@ -660,17 +660,48 @@ export function registerJsConsoleHandlers(routes: Routes, ctx: RpcContext): void
       serverId: z.number(),
       nodeId: z.string(),
       content: z.string(),
+      // When set, the save is recorded as a new (minor) version in the node's version history.
+      createVersion: z.boolean().optional(),
+      versionComment: z.string().max(1024).optional(),
     }),
     handler: async params => {
-      const { serverId, nodeId, content } = params as {
+      const { serverId, nodeId, content, createVersion, versionComment } = params as {
         serverId: number;
         nodeId: string;
         content: string;
+        createVersion?: boolean;
+        versionComment?: string;
       };
 
       return withCapability(ctx, serverId, 'jsConsole', async api => {
         try {
           const nodesApi = new NodesApi(api);
+
+          if (createVersion) {
+            // Making the node versionable first snapshots the current content as the initial
+            // version, so the content being replaced is never lost.
+            const current: any = await nodesApi.getNode(nodeId, { fields: ['aspectNames'] });
+            const aspectNames: string[] = current?.entry?.aspectNames ?? [];
+            if (!aspectNames.includes('cm:versionable')) {
+              await nodesApi.updateNode(nodeId, {
+                aspectNames: [...aspectNames, 'cm:versionable'],
+              });
+            }
+
+            const updated: any = await nodesApi.updateNodeContent(nodeId, content, {
+              majorVersion: false,
+              ...(versionComment ? { comment: versionComment } : {}),
+              fields: ['properties'],
+            });
+
+            log.debug({ serverId, nodeId, contentLength: content.length }, 'Script version saved');
+
+            return {
+              success: true,
+              message: 'Script saved successfully',
+              versionLabel: updated?.entry?.properties?.['cm:versionLabel'] ?? null,
+            };
+          }
 
           await nodesApi.updateNodeContent(nodeId, content);
 

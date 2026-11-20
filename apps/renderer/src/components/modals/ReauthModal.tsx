@@ -21,6 +21,10 @@ import { isNeutralinoMode } from '@/core/ipc/neutralino';
 import { getRpcBaseUrl } from '@/core/ipc/rpc';
 import { MODAL_KEYS } from '@/core/store/keys';
 import { useServersStore } from '@/core/store/servers';
+import {
+  useDesktopClipboardHandlers,
+  type EditableTarget,
+} from '@/hooks/useDesktopClipboardHandlers';
 import { useModal } from '@/hooks/useModal';
 import type { PublicServer } from '@app/contracts';
 import {
@@ -48,13 +52,19 @@ import {
 import { notifications } from '@mantine/notifications';
 import { os } from '@neutralinojs/lib';
 import { IconAlertCircle, IconLock, IconRefresh } from '@tabler/icons-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface ReauthModalPayload {
   serverId: number;
   serverName?: string;
 }
+
+const getFieldName = (element: HTMLElement): string =>
+  element.getAttribute('data-field') ||
+  element.getAttribute('name') ||
+  element.closest('[data-field]')?.getAttribute('data-field') ||
+  '';
 
 /**
  * Modal for re-authenticating with an OIDC server when tokens have expired.
@@ -72,7 +82,70 @@ export function ReauthModal() {
   const pollingIntervalRef = useRef<number | null>(null);
   const popupCheckIntervalRef = useRef<number | null>(null);
   const authTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const modalContentRef = useRef<HTMLDivElement | null>(null);
   const updateServer = useServersStore(state => state.updateServer);
+  const isDesktopMode = useMemo(
+    () => typeof window !== 'undefined' && isNeutralinoMode() && !!(window as any).Neutralino,
+    []
+  );
+
+  const readFieldValue = (field: 'username' | 'password'): string => {
+    const fromState = field === 'username' ? username : password;
+    if (fromState) return fromState;
+    return (
+      modalContentRef.current?.querySelector<HTMLInputElement>(`input[name="${field}"]`)?.value ??
+      ''
+    );
+  };
+
+  const handleInsertText = useCallback((editableTarget: EditableTarget, text: string) => {
+    if (
+      editableTarget instanceof HTMLInputElement ||
+      editableTarget instanceof HTMLTextAreaElement
+    ) {
+      const { selectionStart, selectionEnd, value } = editableTarget;
+      const start = selectionStart ?? value.length;
+      const end = selectionEnd ?? value.length;
+      const newValue = value.slice(0, start) + text + value.slice(end);
+      const cursorPos = start + text.length;
+      const fieldName = getFieldName(editableTarget);
+
+      const nativeSetter = Object.getOwnPropertyDescriptor(
+        editableTarget instanceof HTMLTextAreaElement
+          ? HTMLTextAreaElement.prototype
+          : HTMLInputElement.prototype,
+        'value'
+      )?.set;
+      nativeSetter?.call(editableTarget, newValue);
+      editableTarget.dispatchEvent(new Event('input', { bubbles: true }));
+
+      if (fieldName === 'password' || editableTarget.type === 'password') {
+        setPassword(newValue);
+      } else if (fieldName === 'username' || editableTarget.type === 'text') {
+        setUsername(newValue);
+      }
+
+      setTimeout(() => {
+        try {
+          if (document.activeElement === editableTarget) {
+            editableTarget.setSelectionRange(cursorPos, cursorPos);
+          }
+        } catch {
+          // Password inputs in some webviews do not support selection ranges.
+        }
+      }, 0);
+    } else if (editableTarget.isContentEditable) {
+      document.execCommand('insertText', false, text);
+    }
+  }, []);
+
+  useDesktopClipboardHandlers({
+    isEnabled: isOpen && isDesktopMode,
+    containerRef: modalContentRef,
+    onInsertText: handleInsertText,
+    enableCopyCut: true,
+    enableReadOnlyCopy: true,
+  });
 
   const modalPayload = payload as ReauthModalPayload | undefined;
   const serverId = modalPayload?.serverId;
@@ -118,7 +191,7 @@ export function ReauthModal() {
           .finally(() => setServerLoading(false));
       }
     }
-  }, [isOpen, serverId, t]);
+  }, [isOpen, serverId]);
 
   const handleClose = useCallback(() => {
     if (pollingIntervalRef.current) {
@@ -148,10 +221,12 @@ export function ReauthModal() {
     }
 
     if (isBasicFlow) {
-      if (!username.trim() || !password.trim()) {
+      const submittedUsername = readFieldValue('username').trim();
+      const submittedPassword = readFieldValue('password').trim();
+      if (!submittedPassword) {
         notifications.show({
           title: t('common:error'),
-          message: 'Please enter username and password.',
+          message: 'Please enter your password.',
           color: 'red',
         });
         return;
@@ -160,9 +235,9 @@ export function ReauthModal() {
       setAuthenticating(true);
 
       try {
-        const updatedServer = await backendRpc.servers.update(serverId, {
-          username: username.trim(),
-          token: password,
+        const updatedServer = await backendRpc.servers.reauthBasic(serverId, {
+          username: submittedUsername || undefined,
+          password: submittedPassword,
         });
 
         updateServer(serverId, updatedServer);
@@ -467,70 +542,78 @@ export function ReauthModal() {
       size="md"
       centered
     >
-      <Stack gap="md">
-        <Alert icon={<IconAlertCircle size={16} />} color="orange" variant="light">
-          <Text size="sm">{t('settings:reauthDescription', { serverName })}</Text>
-        </Alert>
-
-        {serverLoading ? (
-          <Group justify="center" py="md">
-            <Loader size="sm" />
-            <Text size="sm" c="dimmed">
-              {t('common:loading')}
-            </Text>
-          </Group>
-        ) : authenticated ? (
-          <Alert icon={<IconRefresh size={16} />} color="green" variant="light">
-            <Text size="sm" fw={500}>
-              {t('settings:reauthSuccessMessage')}
-            </Text>
+      <div ref={modalContentRef} style={{ display: 'contents' }}>
+        <Stack gap="md">
+          <Alert icon={<IconAlertCircle size={16} />} color="orange" variant="light">
+            <Text size="sm">{t('settings:reauthDescription', { serverName })}</Text>
           </Alert>
-        ) : authenticating ? (
-          <Group justify="center" py="xl">
-            <Loader size="md" />
-            <Text size="sm" c="dimmed">
-              {t('settings:waitingForAuth')}
-            </Text>
-          </Group>
-        ) : isBasicFlow ? (
-          <Stack gap="sm">
-            <Text size="sm" c="dimmed">
-              Enter your Alfresco credentials to refresh access for {serverName}.
-            </Text>
-            <TextInput
-              label={t('addServer:username')}
-              placeholder={t('addServer:usernamePlaceholder')}
-              value={username}
-              onChange={e => setUsername(e.currentTarget.value)}
-              disabled={authenticating}
-            />
-            <PasswordInput
-              label={t('addServer:password')}
-              value={password}
-              onChange={e => setPassword(e.currentTarget.value)}
-              disabled={authenticating}
-            />
-          </Stack>
-        ) : (
-          <Text size="sm" c="dimmed">
-            {t('settings:reauthInstructions')}
-          </Text>
-        )}
 
-        <Group justify="flex-end" mt="md">
-          <Button variant="subtle" onClick={handleClose} disabled={authenticating}>
-            {t('common:cancel')}
-          </Button>
-          <Button
-            leftSection={<IconLock size={16} />}
-            onClick={handleReauthenticate}
-            loading={authenticating}
-            disabled={authenticated || serverLoading}
-          >
-            {t('settings:signInAgain')}
-          </Button>
-        </Group>
-      </Stack>
+          {serverLoading ? (
+            <Group justify="center" py="md">
+              <Loader size="sm" />
+              <Text size="sm" c="dimmed">
+                {t('common:loading')}
+              </Text>
+            </Group>
+          ) : authenticated ? (
+            <Alert icon={<IconRefresh size={16} />} color="green" variant="light">
+              <Text size="sm" fw={500}>
+                {t('settings:reauthSuccessMessage')}
+              </Text>
+            </Alert>
+          ) : authenticating ? (
+            <Group justify="center" py="xl">
+              <Loader size="md" />
+              <Text size="sm" c="dimmed">
+                {t('settings:waitingForAuth')}
+              </Text>
+            </Group>
+          ) : isBasicFlow ? (
+            <Stack gap="sm">
+              <Text size="sm" c="dimmed">
+                Enter your Alfresco credentials to refresh access for {serverName}.
+              </Text>
+              <TextInput
+                label={t('addServer:username')}
+                placeholder="Leeg laten om de opgeslagen gebruikersnaam te gebruiken"
+                name="username"
+                autoComplete="username"
+                value={username}
+                onChange={e => setUsername(e.currentTarget.value)}
+                disabled={authenticating}
+                data-field="username"
+              />
+              <PasswordInput
+                label={t('addServer:password')}
+                name="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={e => setPassword(e.currentTarget.value)}
+                disabled={authenticating}
+                data-field="password"
+              />
+            </Stack>
+          ) : (
+            <Text size="sm" c="dimmed">
+              {t('settings:reauthInstructions')}
+            </Text>
+          )}
+
+          <Group justify="flex-end" mt="md">
+            <Button variant="subtle" onClick={handleClose} disabled={authenticating}>
+              {t('common:cancel')}
+            </Button>
+            <Button
+              leftSection={<IconLock size={16} />}
+              onClick={handleReauthenticate}
+              loading={authenticating}
+              disabled={authenticated || serverLoading}
+            >
+              {t('settings:signInAgain')}
+            </Button>
+          </Group>
+        </Stack>
+      </div>
     </Modal>
   );
 }

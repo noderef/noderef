@@ -16,6 +16,11 @@
 
 import { AlfrescoApi, AspectsApi, SitesApi, TypesApi, WebscriptApi } from '@alfresco/js-api';
 import { createLogger } from '../../lib/logger.js';
+import {
+  mergeEditablePropertyDefinitions,
+  parseEditablePropertiesFromClass,
+  type EditablePropertyDefinition,
+} from './editableProperties.js';
 
 const log = createLogger('alfresco.dictionary');
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
@@ -608,4 +613,41 @@ export async function getDictionaryClassPropertyDetails(
   );
 
   return details.filter((detail): detail is DictionaryPropertyDetail => detail !== null);
+}
+
+export type { EditablePropertyDefinition };
+
+/**
+ * Fetch property definitions used by the Node Browser editors.
+ * Reads /api/classes/{class} for each type/aspect and merges the properties.
+ * LIST allowedValues are taken from the class payload when present.
+ */
+export async function getEditablePropertyDefinitions(
+  api: AlfrescoApi,
+  classNames: string[]
+): Promise<EditablePropertyDefinition[]> {
+  const webscriptApi = new WebscriptApi(api);
+  const uniqueNames = Array.from(
+    new Set(classNames.map(name => name?.trim()).filter((name): name is string => Boolean(name)))
+  );
+
+  const groups = await Promise.all(
+    uniqueNames.map(async className => {
+      try {
+        const classDef = await webscriptApi.executeWebScript(
+          'GET',
+          `api/classes/${toDictionaryPathSegment(className)}`,
+          {},
+          'alfresco',
+          'service'
+        );
+        return parseEditablePropertiesFromClass(classDef);
+      } catch (error) {
+        log.warn({ className, error }, 'Failed to fetch class for node edit metadata');
+        return [] as EditablePropertyDefinition[];
+      }
+    })
+  );
+
+  return mergeEditablePropertyDefinitions(groups);
 }
