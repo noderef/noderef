@@ -153,3 +153,4 @@ export * from './localFile.js';
 // ============================================================================
 
 export * from './agent.js';
+export * from './agentGateway.js';

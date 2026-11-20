@@ -52,6 +52,9 @@ export function resolveToolSkillPath(ref: ToolSkillRef, baseUrl: URL | string): 
 }
 
 export async function loadToolSkill(ref: ToolSkillRef): Promise<string> {
+  if (ref.kind === 'mcp') {
+    return '';
+  }
   const resolvedPath = resolveToolSkillPath(ref, TOOLS_DIR_URL);
   return readFile(resolvedPath, 'utf8');
 }

@@ -58,5 +58,33 @@
   "success": "Erfolgreich",
   "serverUpdated": "Server \"{{name}}\" aktualisiert",
   "updateError": "Fehler",
-  "updateErrorMessage": "Server konnte nicht aktualisiert werden"
+  "updateErrorMessage": "Server konnte nicht aktualisiert werden",
+  "agentGateway": {
+    "title": "Agent Gateway",
+    "description": "Verbinden Sie diesen Alfresco Server mit einem NodeRef Agent Gateway für zusätzliche Tools und Prompts.",
+    "enable": "Agent Gateway aktivieren",
+    "endpointUrl": "Gateway URL",
+    "apiKey": "Gateway API Schlüssel",
+    "apiKeyPlaceholder": "Gateway API Schlüssel",
+    "apiKeySavedPlaceholder": "Schlüssel gespeichert — leer lassen, um ihn zu behalten",
+    "removeKey": "Entfernen",
+    "undoKey": "Rückgängig",
+    "counts": "{{tools}} Tools · {{prompts}} Prompts",
+    "test": "Verbindung testen",
+    "testFailed": "Verbindungstest fehlgeschlagen",
+    "saved": "Agent Gateway Einstellungen gespeichert",
+    "status": {
+      "not_configured": "Nicht konfiguriert",
+      "configured": "Konfiguriert",
+      "disabled": "Deaktiviert",
+      "connected": "Verbunden",
+      "unauthorized": "Nicht autorisiert",
+      "forbidden": "Verboten",
+      "unreachable": "Nicht erreichbar",
+      "redirect_blocked": "Weiterleitung blockiert",
+      "protocol_error": "Protokollfehler",
+      "missing_alfresco_credentials": "Alfresco-Anmeldedaten fehlen",
+      "environment_mismatch": "Umgebung stimmt nicht überein"
+    }
+  }
 }

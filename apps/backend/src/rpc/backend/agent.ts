@@ -64,11 +64,21 @@ export function registerAgentHandlers(routes: Routes, ctx: RpcContext): void {
     schema: z.object({
       serverId: z.number().int().positive(),
       title: z.string().optional(),
+      mcp: z
+        .object({
+          enabled: z.boolean(),
+          tools: z.array(z.string()),
+        })
+        .optional(),
     }),
     handler: async params => {
       const userId = await getCurrentUserId();
-      const { serverId, title } = params as { serverId: number; title?: string };
-      return agentService.createChat(userId, serverId, title);
+      const { serverId, title, mcp } = params as {
+        serverId: number;
+        title?: string;
+        mcp?: { enabled: boolean; tools: string[] };
+      };
+      return agentService.createChat(userId, serverId, title, mcp);
     },
   };
 
@@ -170,6 +180,23 @@ export function registerAgentHandlers(routes: Routes, ctx: RpcContext): void {
     handler: async params => {
       const userId = await getCurrentUserId();
       return agentService.confirmStep(userId, params as any);
+    },
+  };
+
+  routes['backend.agent.setChatMcpSettings'] = {
+    schema: z.object({
+      chatId: z.number().int().positive(),
+      enabled: z.boolean(),
+      tools: z.array(z.string()),
+    }),
+    handler: async params => {
+      const userId = await getCurrentUserId();
+      const { chatId, enabled, tools } = params as {
+        chatId: number;
+        enabled: boolean;
+        tools: string[];
+      };
+      return agentService.setChatMcpSettings(userId, chatId, { enabled, tools });
     },
   };
 

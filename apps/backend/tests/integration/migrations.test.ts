@@ -73,6 +73,7 @@ describe('applyPendingPrismaMigrations', () => {
         '20260216213900_agent',
         '20260311161342_insight',
         '20260402093000_insight_date_range',
+        '20261013180000_agent_gateway',
       ]);
 
       const tables = await prisma.$queryRawUnsafe<Array<{ name: string }>>(
@@ -97,6 +98,7 @@ describe('applyPendingPrismaMigrations', () => {
         '20260216213900_agent',
         '20260311161342_insight',
         '20260402093000_insight_date_range',
+        '20261013180000_agent_gateway',
       ]);
     } finally {
       await prisma.$disconnect();

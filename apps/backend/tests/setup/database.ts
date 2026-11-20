@@ -43,6 +43,7 @@ export const prisma = new PrismaClient({
  */
 export async function cleanupTables(): Promise<void> {
   // Delete in correct order to respect foreign key constraints
+  await prisma.agentGatewayConfig.deleteMany();
   await prisma.agentOperationAudit.deleteMany();
   await prisma.agentRunEvent.deleteMany();
   await prisma.agentRunStep.deleteMany();

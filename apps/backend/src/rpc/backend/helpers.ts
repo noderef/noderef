@@ -367,10 +367,7 @@ async function tryListSystemChild(
   try {
     return await listSystemChildId(nodesApi, parentId, assocType);
   } catch (err) {
-    log.warn(
-      { err, parentId, assocType },
-      'Failed to list children while resolving sys:system'
-    );
+    log.warn({ err, parentId, assocType }, 'Failed to list children while resolving sys:system');
     return undefined;
   }
 }

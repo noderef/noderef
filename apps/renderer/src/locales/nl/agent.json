@@ -96,5 +96,66 @@
   "loadingMoreResults": "Meer resultaten laden...",
   "qnameGroupTypes": "Types",
   "qnameGroupAspects": "Aspecten",
-  "qnameGroupProperties": "Eigenschappen"
+  "qnameGroupProperties": "Eigenschappen",
+  "mcp": {
+    "button": "Agent Gateway",
+    "useInChat": "MCP gebruiken in deze chat",
+    "tools": "Tools",
+    "prompts": "Prompts",
+    "searchTools": "Tools zoeken",
+    "selectTools": "Tools selecteren",
+    "selectReadOnly": "Alleen lezen",
+    "groupsByPrefix": "Groepen",
+    "selectNone": "Geen",
+    "selectedCount": "{{selected}} van {{total}} tools geselecteerd",
+    "noTools": "Geen tools beschikbaar.",
+    "noPrompts": "Geen prompts beschikbaar.",
+    "noDescription": "Geen beschrijving",
+    "insertPrompt": "Klaarzetten als concept",
+    "refresh": "Vernieuwen",
+    "serverSettings": "Serverinstellingen",
+    "saveFailed": "MCP-instellingen opslaan mislukt",
+    "promptFailed": "Prompt laden mislukt",
+    "requiredArgs": "Verplichte velden: {{names}}",
+    "replaceDraft": "Het huidige concept vervangen door deze prompt?",
+    "policy": {
+      "read": "alleen lezen",
+      "write": "schrijven",
+      "destructive_or_unknown": "destructief of onbekend"
+    },
+    "empty": {
+      "notConfigured": "Agent Gateway is niet geconfigureerd voor deze server.",
+      "disabled": "Agent Gateway is uitgeschakeld voor deze server.",
+      "unauthorized": "De gateway weigerde de API-sleutel.",
+      "forbidden": "De gateway weigerde dit verzoek.",
+      "unreachable": "De gateway is niet bereikbaar.",
+      "redirectBlocked": "De gateway stuurde een redirect, die is geblokkeerd.",
+      "protocolError": "De protocolhandshake met de gateway is mislukt.",
+      "missingCredentials": "Alfresco-inloggegevens ontbreken voor deze server.",
+      "environmentMismatch": "De gatewayomgeving komt niet overeen met deze Alfresco-server.",
+      "connected": "Verbonden met Agent Gateway."
+    },
+    "promptCatalog": {
+      "alfresco_search_and_analyze": {
+        "title": "Zoeken en analyseren",
+        "description": "Zoekt documenten in Alfresco en maakt een onderbouwde analyse van wat er gevonden is.",
+        "args": {
+          "query": {
+            "label": "Zoekopdracht",
+            "description": "AFTS-query, bijvoorbeeld TYPE:\"cm:content\" AND cm:name:\"rapport*\""
+          },
+          "analysisType": {
+            "label": "Soort analyse",
+            "description": "Standaard: samenvatting",
+            "options": {
+              "summary": "Samenvatting",
+              "detailed": "Gedetailleerd",
+              "trends": "Trends",
+              "compliance": "Compliance"
+            }
+          }
+        }
+      }
+    }
+  }
 }

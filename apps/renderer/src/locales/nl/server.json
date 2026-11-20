@@ -58,5 +58,33 @@
   "success": "Succes",
   "serverUpdated": "Server \"{{name}}\" bijgewerkt",
   "updateError": "Fout",
-  "updateErrorMessage": "Kan server niet bijwerken"
+  "updateErrorMessage": "Kan server niet bijwerken",
+  "agentGateway": {
+    "title": "Agent Gateway",
+    "description": "Koppel deze Alfresco server aan een NodeRef Agent Gateway voor extra tools en prompts.",
+    "enable": "Agent Gateway inschakelen",
+    "endpointUrl": "Gateway URL",
+    "apiKey": "Gateway API sleutel",
+    "apiKeyPlaceholder": "Gateway API sleutel",
+    "apiKeySavedPlaceholder": "Sleutel ingesteld — laat leeg om te behouden",
+    "removeKey": "Verwijderen",
+    "undoKey": "Ongedaan maken",
+    "counts": "{{tools}} tools · {{prompts}} prompts",
+    "test": "Verbinding testen",
+    "testFailed": "Verbindingstest mislukt",
+    "saved": "Agent Gateway instellingen opgeslagen",
+    "status": {
+      "not_configured": "Niet geconfigureerd",
+      "configured": "Geconfigureerd",
+      "disabled": "Uitgeschakeld",
+      "connected": "Verbonden",
+      "unauthorized": "Niet geautoriseerd",
+      "forbidden": "Geen toegang",
+      "unreachable": "Onbereikbaar",
+      "redirect_blocked": "Redirect geblokkeerd",
+      "protocol_error": "Protocolfout",
+      "missing_alfresco_credentials": "Alfresco-inloggegevens ontbreken",
+      "environment_mismatch": "Omgeving komt niet overeen"
+    }
+  }
 }

@@ -59,6 +59,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SearchableModelSelect } from '../components/common/SearchableModelSelect';
+import { McpComposerButton } from '../components/agent/mcp/McpComposerButton';
 import { AgentChatInput, AgentChatInputRef } from '../components/agent/AgentChatInput';
 import { AgentEmptyState } from '../components/agent/AgentEmptyState';
 import { AgentMessageBubble, parseNodeBrowserLink } from '../components/agent/AgentMessageBubble';
@@ -91,10 +92,33 @@ type ConversationTimelineItem =
       run: AgentRunSummary;
     };
 
-const MODEL_SELECT_WIDTH = 260;
-const MODEL_DROPDOWN_WIDTH = 300;
-const SERVER_SELECT_WIDTH = 160;
-const SERVER_DROPDOWN_WIDTH = 220;
+const COMPOSER_SELECT_MIN_WIDTH = 80;
+const COMPOSER_SELECT_MAX_WIDTH = 360;
+const COMPOSER_SELECT_CHROME_PX = 44;
+const COMPOSER_DROPDOWN_MAX_WIDTH = 380;
+
+let textMeasureContext: CanvasRenderingContext2D | null = null;
+
+function measureComposerText(text: string): number {
+  if (typeof document === 'undefined') return text.length * 7;
+  textMeasureContext ??= document.createElement('canvas').getContext('2d');
+  if (!textMeasureContext) return text.length * 7;
+  const fontFamily = getComputedStyle(document.body).fontFamily || 'sans-serif';
+  textMeasureContext.font = `500 13px ${fontFamily}`;
+  return Math.ceil(textMeasureContext.measureText(text).width);
+}
+function composerSelectWidth(label: string, minWidth = COMPOSER_SELECT_MIN_WIDTH): number {
+  const width = measureComposerText(label) + COMPOSER_SELECT_CHROME_PX;
+  return Math.min(Math.max(width, minWidth), COMPOSER_SELECT_MAX_WIDTH);
+}
+
+function composerDropdownWidth(labels: string[], closedWidth: number): number {
+  const longest = labels.reduce((max, label) => {
+    const width = measureComposerText(label) + COMPOSER_SELECT_CHROME_PX;
+    return Math.max(max, width);
+  }, closedWidth);
+  return Math.min(Math.max(longest, closedWidth), COMPOSER_DROPDOWN_MAX_WIDTH);
+}
 const COMPOSER_SELECT_STYLES = {
   input: {
     border: 'none',
@@ -137,6 +161,8 @@ export function AgentPage() {
   const upsertChat = useAgentStore(state => state.upsertChat);
   const setActiveChatId = useAgentStore(state => state.setActiveChatId);
   const setChatAutoConfirm = useAgentStore(state => state.setChatAutoConfirm);
+  const setChatMcp = useAgentStore(state => state.setChatMcp);
+  const setPendingMcp = useAgentStore(state => state.setPendingMcp);
 
   const [loadingConversation, setLoadingConversation] = useState(false);
   const [sending, setSending] = useState(false);
@@ -179,6 +205,7 @@ export function AgentPage() {
     [servers]
   );
   const modelSelectionServerId = activeChat?.serverId || activeServerId || composerServerId || null;
+  const mcpServerId = activeChat?.serverId || activeServerId || composerServerId || null;
   const {
     aiModelOptions,
     selectedAiModelOption,
@@ -195,6 +222,26 @@ export function AgentPage() {
     activeChatId,
     isSettingsOpen,
   });
+  const modelSelectWidth = useMemo(() => {
+    const label =
+      aiModelOptions.find(option => option.value === selectedAiModelOption)?.label ??
+      t('modelPlaceholder');
+    return composerSelectWidth(label, 120);
+  }, [aiModelOptions, selectedAiModelOption, t]);
+  const serverSelectWidth = useMemo(() => {
+    const label =
+      composerServerOptions.find(option => option.value === String(composerServerId))?.label ??
+      t('serverSelectorPlaceholder');
+    return composerSelectWidth(label);
+  }, [composerServerId, composerServerOptions, t]);
+  const serverDropdownWidth = useMemo(
+    () =>
+      composerDropdownWidth(
+        composerServerOptions.map(option => option.label),
+        serverSelectWidth
+      ),
+    [composerServerOptions, serverSelectWidth]
+  );
 
   const [qnameQuery, setQnameQuery] = useState<string | null>(null);
   const [qnamePropertiesByPrefix, setQNamePropertiesByPrefix] = useState<Record<string, string[]>>(
@@ -906,10 +953,18 @@ export function AgentPage() {
           return;
         }
 
-        const chat = await backendRpc.agent.createChat({ serverId });
+        const pendingMcp = useAgentStore.getState().pendingMcp;
+        const chat = await backendRpc.agent.createChat({
+          serverId,
+          mcp: pendingMcp ?? undefined,
+        });
         upsertChat(chat);
         setActiveChatId(chat.id);
         chatId = chat.id;
+        if (pendingMcp) {
+          setChatMcp(chat.id, pendingMcp);
+          setPendingMcp(null);
+        }
 
         // Preserve the currently selected model as this chat's explicit model.
         if (aiProvider && aiModel) {
@@ -1284,7 +1339,10 @@ export function AgentPage() {
                         size="xs"
                         placeholder={t('modelPlaceholder')}
                         data={aiModelOptions}
-                        comboboxProps={{ width: MODEL_DROPDOWN_WIDTH }}
+                        comboboxProps={{
+                          width: COMPOSER_DROPDOWN_MAX_WIDTH,
+                          position: 'top-start',
+                        }}
                         value={selectedAiModelOption}
                         disabled={aiModelOptions.length === 0 || aiModelsLoading}
                         variant="unstyled"
@@ -1318,14 +1376,14 @@ export function AgentPage() {
                         leftSectionWidth={18}
                         rightSectionWidth={18}
                         styles={COMPOSER_SELECT_STYLES}
-                        w={MODEL_SELECT_WIDTH}
+                        w={modelSelectWidth}
                       />
                       {activeServerId === null && activeChatId === null ? (
                         <Select
                           size="xs"
                           placeholder={t('serverSelectorPlaceholder')}
                           data={composerServerOptions}
-                          comboboxProps={{ width: SERVER_DROPDOWN_WIDTH }}
+                          comboboxProps={{ width: serverDropdownWidth, position: 'top-start' }}
                           value={composerServerId ? String(composerServerId) : null}
                           variant="unstyled"
                           onChange={value => {
@@ -1341,7 +1399,7 @@ export function AgentPage() {
                           rightSection={<IconChevronDown size={14} />}
                           rightSectionWidth={18}
                           styles={COMPOSER_SELECT_STYLES}
-                          w={SERVER_SELECT_WIDTH}
+                          w={serverSelectWidth}
                           aria-label={t('selectServer')}
                         />
                       ) : null}
@@ -1371,6 +1429,12 @@ export function AgentPage() {
                           </ActionIcon>
                         </Tooltip>
                       ) : null}
+                      <McpComposerButton
+                        serverId={mcpServerId}
+                        chatId={activeChatId}
+                        draftEmpty={!draft.trim()}
+                        onInsertDraft={setDraft}
+                      />
                     </Group>
 
                     {hasActiveRuns ? (

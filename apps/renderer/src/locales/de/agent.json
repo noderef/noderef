@@ -95,5 +95,66 @@
   "loadingMoreResults": "Weitere Ergebnisse laden...",
   "qnameGroupTypes": "Typen",
   "qnameGroupAspects": "Aspekte",
-  "qnameGroupProperties": "Eigenschaften"
+  "qnameGroupProperties": "Eigenschaften",
+  "mcp": {
+    "button": "Agent Gateway",
+    "useInChat": "MCP in diesem Chat verwenden",
+    "tools": "Tools",
+    "prompts": "Prompts",
+    "searchTools": "Tools suchen",
+    "selectTools": "Tools auswählen",
+    "selectReadOnly": "Nur lesen",
+    "groupsByPrefix": "Gruppen",
+    "selectNone": "Keine",
+    "selectedCount": "{{selected}} von {{total}} Tools ausgewählt",
+    "noTools": "Keine Tools verfügbar.",
+    "noPrompts": "Keine Prompts verfügbar.",
+    "noDescription": "Keine Beschreibung",
+    "insertPrompt": "Als Entwurf einfügen",
+    "refresh": "Aktualisieren",
+    "serverSettings": "Servereinstellungen",
+    "saveFailed": "MCP-Einstellungen konnten nicht gespeichert werden",
+    "promptFailed": "Prompt konnte nicht geladen werden",
+    "requiredArgs": "Pflichtfelder: {{names}}",
+    "replaceDraft": "Den aktuellen Entwurf durch diesen Prompt ersetzen?",
+    "policy": {
+      "read": "nur lesen",
+      "write": "schreiben",
+      "destructive_or_unknown": "destruktiv oder unbekannt"
+    },
+    "empty": {
+      "notConfigured": "Agent Gateway ist für diesen Server nicht konfiguriert.",
+      "disabled": "Agent Gateway ist für diesen Server deaktiviert.",
+      "unauthorized": "Das Gateway hat den API-Schlüssel abgelehnt.",
+      "forbidden": "Das Gateway hat diese Anfrage abgelehnt.",
+      "unreachable": "Das Gateway ist nicht erreichbar.",
+      "redirectBlocked": "Das Gateway hat umgeleitet; die Weiterleitung wurde blockiert.",
+      "protocolError": "Der Protokoll-Handshake mit dem Gateway ist fehlgeschlagen.",
+      "missingCredentials": "Alfresco-Anmeldedaten fehlen für diesen Server.",
+      "environmentMismatch": "Die Gateway-Umgebung stimmt nicht mit diesem Alfresco-Server überein.",
+      "connected": "Mit Agent Gateway verbunden."
+    },
+    "promptCatalog": {
+      "alfresco_search_and_analyze": {
+        "title": "Suchen und analysieren",
+        "description": "Sucht Dokumente in Alfresco und erstellt eine belegte Analyse der Ergebnisse.",
+        "args": {
+          "query": {
+            "label": "Suchanfrage",
+            "description": "AFTS-Abfrage, z. B. TYPE:\"cm:content\" AND cm:name:\"bericht*\""
+          },
+          "analysisType": {
+            "label": "Analyseart",
+            "description": "Standard: Zusammenfassung",
+            "options": {
+              "summary": "Zusammenfassung",
+              "detailed": "Detailliert",
+              "trends": "Trends",
+              "compliance": "Compliance"
+            }
+          }
+        }
+      }
+    }
+  }
 }
