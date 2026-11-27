@@ -850,7 +850,7 @@ export function AddServerModal() {
             </Stack>
 
             <Alert icon={<IconInfoCircle size={16} />} color="blue" mt="md">
-              <Text size="sm">{t('addServer:moreServerTypesComing')}</Text>
+              <Text size="sm">{t('addServer:supportedAccountsInfo')}</Text>
             </Alert>
           </Stack>
         ) : (

@@ -1,7 +1,7 @@
 {
   "addServer": "Agregar servidor",
   "selectServerType": "Selecciona el tipo de servidor que quieres agregar a tu espacio de trabajo",
-  "moreServerTypesComing": "Habrá más tipos de servidor en versiones futuras.",
+  "supportedAccountsInfo": "Tanto administradores como usuarios normales pueden iniciar sesión.",
   "configureAlfrescoServer": "Configurar Alfresco",
   "serverName": "Nombre del servidor",
   "serverNamePlaceholder": "Mi servidor",

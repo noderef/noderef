@@ -1,7 +1,7 @@
 {
   "addServer": "Add Server",
   "selectServerType": "Select the type of server you want to add to your workspace",
-  "moreServerTypesComing": "More server types will be available in future releases.",
+  "supportedAccountsInfo": "Both administrators and regular users can sign in.",
   "configureAlfrescoServer": "Configure Alfresco",
   "serverName": "Server Name",
   "serverNamePlaceholder": "My Server",

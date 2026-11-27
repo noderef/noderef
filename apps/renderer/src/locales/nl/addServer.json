@@ -1,7 +1,7 @@
 {
   "addServer": "Server toevoegen",
   "selectServerType": "Selecteer het type server dat u aan uw werkruimte wilt toevoegen",
-  "moreServerTypesComing": "Meer servertypen komen beschikbaar in toekomstige releases.",
+  "supportedAccountsInfo": "Zowel beheerders als reguliere gebruikers kunnen inloggen.",
   "configureAlfrescoServer": "Alfresco configureren",
   "serverName": "Servernaam",
   "serverNamePlaceholder": "Mijn server",

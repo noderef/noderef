@@ -638,7 +638,14 @@ export function registerRepositoryHandlers(routes: Routes, ctx: RpcContext): voi
           const loadViaRest = async () => {
             const nodesApi = new NodesApi(api);
             const node = await nodesApi.getNode(nodeId, {
-              include: ['properties', 'aspectNames', 'path', 'permissions', 'isLink'],
+              include: [
+                'properties',
+                'aspectNames',
+                'path',
+                'permissions',
+                'isLink',
+                'allowableOperations',
+              ],
             });
             let childEntries: Array<Record<string, unknown>> = [];
             try {

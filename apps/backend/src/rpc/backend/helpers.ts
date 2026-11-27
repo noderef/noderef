@@ -686,5 +686,6 @@ export function mapNodeEntryToBrowserNode(
       inherit: permissions?.isInheritanceEnabled !== false,
       owner,
     },
+    allowableOperations: normalizeRepositoryAllowableOperations(entry.allowableOperations),
   };
 }

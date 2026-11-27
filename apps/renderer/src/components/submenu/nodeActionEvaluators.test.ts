@@ -19,6 +19,7 @@ import {
   canDelete,
   canManagePermissions,
   canRename,
+  hasAllowableOperation,
   type NodeActionContext,
 } from './nodeActionEvaluators';
 
@@ -64,5 +65,13 @@ describe('nodeActionEvaluators allowableOperations', () => {
     expect(canRename(unknown)).toBe(true);
     expect(canDelete(unknown)).toBe(true);
     expect(canManagePermissions(unknown)).toBe(true);
+  });
+
+  it('evaluates hasAllowableOperation for node browser permissions', () => {
+    expect(hasAllowableOperation([], 'update')).toBe(false);
+    expect(hasAllowableOperation(['update'], 'update')).toBe(true);
+    expect(hasAllowableOperation(['update'], 'updatePermissions')).toBe(false);
+    expect(hasAllowableOperation(['update', 'updatePermissions'], 'updatePermissions')).toBe(true);
+    expect(hasAllowableOperation(undefined, 'update')).toBe(true);
   });
 });

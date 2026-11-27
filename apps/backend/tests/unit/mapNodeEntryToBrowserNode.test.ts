@@ -85,4 +85,25 @@ describe('mapNodeEntryToBrowserNode', () => {
       'mimetype=text/plain|size=2048|encoding=UTF-8'
     );
   });
+
+  it('keeps allowableOperations when Alfresco returns them', () => {
+    const mapped = mapNodeEntryToBrowserNode({
+      id: 'abc-123',
+      name: 'Report.pdf',
+      nodeType: 'cm:content',
+      allowableOperations: ['update', 'updatePermissions'],
+    });
+
+    expect(mapped.allowableOperations).toEqual(['update', 'updatePermissions']);
+  });
+
+  it('maps omitted allowableOperations to an empty list', () => {
+    const mapped = mapNodeEntryToBrowserNode({
+      id: 'abc-123',
+      name: 'activities_email_de.ftl',
+      nodeType: 'cm:content',
+    });
+
+    expect(mapped.allowableOperations).toEqual([]);
+  });
 });

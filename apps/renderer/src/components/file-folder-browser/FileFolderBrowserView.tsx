@@ -42,7 +42,7 @@ import { useNavigationStore } from '@/core/store/navigation';
 import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
 import { useServersStore } from '@/core/store/servers';
 import { useTextEditorStore } from '@/core/store/textEditor';
-import { Feature, hasCapability, isFeatureAvailable } from '@app/contracts';
+import { Feature, isFeatureAvailable } from '@app/contracts';
 import { isTextLikeFile } from '@/features/text-editor/language';
 import { useColumnResize } from '@/hooks/useColumnResize';
 import { useModal } from '@/hooks/useModal';
@@ -1882,7 +1882,7 @@ export function FileFolderBrowserView({
   }, [visibleBreadcrumb, visibleBreadcrumbStart, effectiveBreadcrumb, handleBreadcrumbClick, t]);
 
   const jsConsoleAvailable = isFeatureAvailable(server?.capabilities, Feature.JsConsole);
-  const nodeBrowserAvailable = hasCapability(server?.capabilities, 'nodeBrowser');
+  const nodeBrowserAvailable = isFeatureAvailable(server?.capabilities, Feature.NodeBrowser);
   const selectedActionContext = selectedItem ? toActionContext(selectedItem) : null;
   const selectedCanRename = selectedActionContext ? canRename(selectedActionContext) : false;
   const selectedCanDelete = selectedActionContext ? canDelete(selectedActionContext) : false;

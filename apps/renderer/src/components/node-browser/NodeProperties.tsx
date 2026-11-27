@@ -554,7 +554,7 @@ export function NodeProperties({
               </Combobox>
             )}
           </Group>
-          {hasPropertyEdits ? (
+          {canEdit && hasPropertyEdits ? (
             <NodeSaveActions
               saving={saving}
               onSave={onSave}
@@ -615,17 +615,19 @@ export function NodeProperties({
                   </Group>
                 </UnstyledButton>
               </Table.Th>
-              <Table.Th style={{ width: '12%' }}>
-                <Text fw={700} size="sm">
-                  {t('nodeBrowser:editability')}
-                </Text>
-              </Table.Th>
+              {canEdit && (
+                <Table.Th style={{ width: '12%' }}>
+                  <Text fw={700} size="sm">
+                    {t('nodeBrowser:editability')}
+                  </Text>
+                </Table.Th>
+              )}
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
             {filteredAndSortedProperties.length === 0 ? (
               <Table.Tr>
-                <Table.Td colSpan={4} style={{ textAlign: 'center' }}>
+                <Table.Td colSpan={canEdit ? 4 : 3} style={{ textAlign: 'center' }}>
                   <Text c="dimmed" size="sm">
                     {filterText.trim()
                       ? t('nodeBrowser:noMatchingProperties')
@@ -717,7 +719,7 @@ export function NodeProperties({
                                 : formatValue(prop.values, propertyName)}
                             </Box>
                             <Group gap={4} wrap="nowrap">
-                              {isChanged && (
+                              {canEdit && isChanged && (
                                 <Tooltip label={t('nodeBrowser:undoChange')}>
                                   <ActionIcon
                                     variant="subtle"
@@ -750,11 +752,13 @@ export function NodeProperties({
                         </Box>
                       )}
                     </Table.Td>
-                    <Table.Td>
-                      <Badge color={editable ? 'teal' : 'gray'} size="sm" radius="sm">
-                        {editable ? t('nodeBrowser:editable') : t('nodeBrowser:protected')}
-                      </Badge>
-                    </Table.Td>
+                    {canEdit && (
+                      <Table.Td>
+                        <Badge color={editable ? 'teal' : 'gray'} size="sm" radius="sm">
+                          {editable ? t('nodeBrowser:editable') : t('nodeBrowser:protected')}
+                        </Badge>
+                      </Table.Td>
+                    )}
                   </Table.Tr>
                 );
               })

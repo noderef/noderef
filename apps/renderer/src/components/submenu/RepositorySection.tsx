@@ -23,7 +23,7 @@ import {
   type RepositoryPaginationInfo,
   type SiteVisibility,
 } from '@/core/ipc/backend';
-import { ErrorCode, Feature, hasCapability } from '@app/contracts';
+import { ErrorCode, Feature, isFeatureAvailable } from '@app/contracts';
 import { rpc } from '@/core/ipc/rpc';
 import { useFileFolderBrowserTabsStore } from '@/core/store/fileFolderBrowserTabs';
 import { useJsConsoleStore } from '@/core/store/jsConsole';
@@ -366,7 +366,7 @@ export function RepositorySection({
   );
   const canReauth =
     activeServer?.authType === 'openid_connect' || activeServer?.authType === 'basic';
-  const nodeBrowserAvailable = hasCapability(activeServer?.capabilities, 'nodeBrowser');
+  const nodeBrowserAvailable = isFeatureAvailable(activeServer?.capabilities, Feature.NodeBrowser);
   const [headerHovered, setHeaderHovered] = useState(false);
   const openNodeTab = useNodeBrowserTabsStore(state => state.openTab);
   const openFolderTab = useFileFolderBrowserTabsStore(state => state.openTab);

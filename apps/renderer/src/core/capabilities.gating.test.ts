@@ -24,6 +24,8 @@ describe('renderer capability gating', () => {
     expect(isFeatureAvailable(profile, Feature.Search)).toBe(true);
     expect(isFeatureAvailable(profile, Feature.Insights)).toBe(true);
     expect(isFeatureAvailable(profile, Feature.RepoBrowser)).toBe(true);
+    expect(isFeatureAvailable(profile, Feature.NodeBrowser)).toBe(true);
+    expect(isFeatureAvailable(profile, Feature.SystemTree)).toBe(false);
     expect(isFeatureAvailable(profile, Feature.Logs)).toBe(false);
     expect(isFeatureAvailable(profile, Feature.RepoAdmin)).toBe(false);
     expect(isFeatureAvailable(profile, Feature.UsersGroups)).toBe(false);

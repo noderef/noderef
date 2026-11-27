@@ -1255,6 +1255,7 @@ export interface AlfrescoNodeDetails {
     inherit: boolean;
     owner: string;
   };
+  allowableOperations?: string[];
 }
 
 export interface AlfrescoNodeAssociation {

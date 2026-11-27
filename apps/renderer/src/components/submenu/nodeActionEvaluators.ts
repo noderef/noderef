@@ -37,11 +37,18 @@ export interface NodeActionContext {
  * Alfresco field to `[]` because Alfresco omits allowableOperations when the
  * user has none.
  */
-export function hasOperation(ctx: NodeActionContext, op: string): boolean {
-  if (ctx.allowableOperations == null) {
+export function hasAllowableOperation(
+  allowableOperations: string[] | undefined,
+  op: string
+): boolean {
+  if (allowableOperations == null) {
     return true;
   }
-  return ctx.allowableOperations.includes(op);
+  return allowableOperations.includes(op);
+}
+
+export function hasOperation(ctx: NodeActionContext, op: string): boolean {
+  return hasAllowableOperation(ctx.allowableOperations, op);
 }
 
 export interface NodeAction {

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import { hasAllowableOperation } from '@/components/submenu/nodeActionEvaluators';
 import { backendRpc, type AlfrescoNodeDetails } from '@/core/ipc/backend';
 import { useNodeBrowserTabsStore } from '@/core/store/nodeBrowserTabs';
 import { useServersStore } from '@/core/store/servers';
@@ -236,6 +237,11 @@ function NodeBrowserContent({
   };
 
   const displayName = getNodeDisplayName(nodeData) || nodeName;
+  const canUpdate = hasAllowableOperation(nodeData.allowableOperations, 'update');
+  const canManagePermissions = hasAllowableOperation(
+    nodeData.allowableOperations,
+    'updatePermissions'
+  );
 
   return (
     <Stack style={{ height: '100%', overflow: 'hidden' }}>
@@ -260,12 +266,12 @@ function NodeBrowserContent({
             <NodeInfo
               nodeData={nodeData}
               serverId={serverId}
-              pendingNodeType={edits.edits.nodeType}
-              availableTypes={edits.availableTypes}
-              dictionaryClasses={edits.dictionaryClasses}
-              typesLoading={edits.dictionaryLoading}
-              onRequestTypes={() => void loadDictionary()}
-              onChangeType={edits.setNodeType}
+              pendingNodeType={canUpdate ? edits.edits.nodeType : null}
+              availableTypes={canUpdate ? edits.availableTypes : undefined}
+              dictionaryClasses={canUpdate ? edits.dictionaryClasses : undefined}
+              typesLoading={canUpdate ? edits.dictionaryLoading : false}
+              onRequestTypes={canUpdate ? () => void loadDictionary() : undefined}
+              onChangeType={canUpdate ? edits.setNodeType : undefined}
             />
           </Accordion.Panel>
         </Accordion.Item>
@@ -287,16 +293,20 @@ function NodeBrowserContent({
               serverId={serverId}
               nodeId={nodeId}
               nodeName={displayName}
-              stagedProperties={edits.edits.properties}
-              propertyDefinitions={edits.propertyDefinitions}
-              onStartEditing={async () => {
-                await Promise.all([edits.ensureMetadata(), edits.ensureDictionary()]);
-              }}
-              onSetProperty={edits.setPropertyValue}
-              onUndoProperty={edits.undoProperty}
+              stagedProperties={canUpdate ? edits.edits.properties : undefined}
+              propertyDefinitions={canUpdate ? edits.propertyDefinitions : undefined}
+              onStartEditing={
+                canUpdate
+                  ? async () => {
+                      await Promise.all([edits.ensureMetadata(), edits.ensureDictionary()]);
+                    }
+                  : undefined
+              }
+              onSetProperty={canUpdate ? edits.setPropertyValue : undefined}
+              onUndoProperty={canUpdate ? edits.undoProperty : undefined}
               saving={edits.saving}
-              onSave={() => void handleSave('properties')}
-              onCancelEdits={edits.resetProperties}
+              onSave={canUpdate ? () => void handleSave('properties') : undefined}
+              onCancelEdits={canUpdate ? edits.resetProperties : undefined}
             />
           </Accordion.Panel>
         </Accordion.Item>
@@ -315,17 +325,17 @@ function NodeBrowserContent({
           <Accordion.Panel>
             <NodeAspects
               aspects={nodeData.aspects}
-              editable
-              pendingAdd={edits.edits.addAspects}
-              pendingRemove={edits.edits.removeAspects}
-              availableAspects={edits.availableAspects}
-              aspectsLoading={edits.dictionaryLoading}
-              onRequestAspects={() => void loadDictionary()}
-              onAdd={edits.addAspect}
-              onRemove={edits.removeAspect}
+              editable={canUpdate}
+              pendingAdd={canUpdate ? edits.edits.addAspects : undefined}
+              pendingRemove={canUpdate ? edits.edits.removeAspects : undefined}
+              availableAspects={canUpdate ? edits.availableAspects : undefined}
+              aspectsLoading={canUpdate ? edits.dictionaryLoading : false}
+              onRequestAspects={canUpdate ? () => void loadDictionary() : undefined}
+              onAdd={canUpdate ? edits.addAspect : undefined}
+              onRemove={canUpdate ? edits.removeAspect : undefined}
               saving={edits.saving}
-              onSave={() => void handleSave('aspects')}
-              onCancelEdits={edits.resetAspects}
+              onSave={canUpdate ? () => void handleSave('aspects') : undefined}
+              onCancelEdits={canUpdate ? edits.resetAspects : undefined}
             />
           </Accordion.Panel>
         </Accordion.Item>
@@ -415,6 +425,7 @@ function NodeBrowserContent({
               serverId={serverId}
               nodeId={nodeId}
               nodeName={displayName}
+              canManagePermissions={canManagePermissions}
               onPermissionsUpdated={onPermissionsUpdated}
             />
           </Accordion.Panel>

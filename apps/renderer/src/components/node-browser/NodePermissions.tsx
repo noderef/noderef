@@ -26,6 +26,7 @@ interface NodePermissionsProps {
   serverId: number;
   nodeId: string;
   nodeName: string;
+  canManagePermissions?: boolean;
   onPermissionsUpdated?: () => void;
 }
 
@@ -34,6 +35,7 @@ export function NodePermissions({
   serverId,
   nodeId,
   nodeName,
+  canManagePermissions = true,
   onPermissionsUpdated,
 }: NodePermissionsProps) {
   const { t } = useTranslation(['nodeBrowser']);
@@ -45,21 +47,23 @@ export function NodePermissions({
       <Paper withBorder p="md">
         <Group justify="space-between" align="center" mb="md">
           <Title order={5}>{t('nodeBrowser:rights')}</Title>
-          <Button
-            size="xs"
-            variant="light"
-            leftSection={<IconLock size={14} />}
-            onClick={() =>
-              open({
-                serverId,
-                nodeId,
-                nodeName,
-                onUpdated: onPermissionsUpdated,
-              })
-            }
-          >
-            {t('nodeBrowser:managePermissions')}
-          </Button>
+          {canManagePermissions && (
+            <Button
+              size="xs"
+              variant="light"
+              leftSection={<IconLock size={14} />}
+              onClick={() =>
+                open({
+                  serverId,
+                  nodeId,
+                  nodeName,
+                  onUpdated: onPermissionsUpdated,
+                })
+              }
+            >
+              {t('nodeBrowser:managePermissions')}
+            </Button>
+          )}
         </Group>
         <Group gap="xs" mb="md">
           <Text size="sm">
